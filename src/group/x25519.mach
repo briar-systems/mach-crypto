@@ -1,0 +1,17 @@
+# x25519 key agreement contracts
+
+use crypto.contracts;
+use std.types.size.usize;
+
+pub val PRIVATE_KEY_SIZE:   usize = 32;
+pub val PUBLIC_KEY_SIZE:    usize = 32;
+pub val SHARED_SECRET_SIZE: usize = 32;
+
+pub def DerivePublicFun: fun(contracts.SecretBytes, contracts.Buffer) contracts.Operation;
+pub def AgreeFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
+
+test "x25519: every wire and key value is 32 bytes" {
+    if (PRIVATE_KEY_SIZE != 32 || PUBLIC_KEY_SIZE != 32) { ret 1; }
+    if (SHARED_SECRET_SIZE != 32) { ret 1; }
+    ret 0;
+}

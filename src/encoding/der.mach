@@ -1,0 +1,34 @@
+# bounded der reader and writer contracts
+
+use crypto.contracts;
+use std.types.size.usize;
+
+pub def Tag: u8;
+
+pub val BOOLEAN:         Tag = 0x01;
+pub val INTEGER:         Tag = 0x02;
+pub val BIT_STRING:      Tag = 0x03;
+pub val OCTET_STRING:    Tag = 0x04;
+pub val NULL:            Tag = 0x05;
+pub val OBJECT_ID:       Tag = 0x06;
+pub val SEQUENCE:        Tag = 0x30;
+
+pub rec Element {
+    tag:     Tag;
+    content: contracts.Bytes;
+    encoded: contracts.Bytes;
+}
+
+pub rec Cursor {
+    input:  contracts.Bytes;
+    offset: usize;
+    depth:  usize;
+}
+
+pub def NextFun: fun(*Cursor, *Element) contracts.Error;
+pub def WriteFun: fun(*Element, contracts.Buffer) contracts.Operation;
+
+test "der: sequence is constructed and universal" {
+    if (SEQUENCE != 0x30) { ret 1; }
+    ret 0;
+}

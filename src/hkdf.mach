@@ -1,0 +1,19 @@
+# hkdf contracts
+
+use crypto.contracts;
+use std.types.size.usize;
+
+pub val SHA256_PRK_SIZE: usize = 32;
+pub val SHA384_PRK_SIZE: usize = 48;
+pub val MAX_BLOCKS:      usize = 255;
+
+# extract writes one pseudorandom key to secret output
+pub def ExtractFun: fun(contracts.SecretBytes, contracts.SecretBytes, contracts.SecretBuffer) contracts.Operation;
+
+# expand writes caller-sized secret key material
+pub def ExpandFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
+
+test "hkdf: output expansion is bounded by the rfc block counter" {
+    if (MAX_BLOCKS != 255) { ret 1; }
+    ret 0;
+}

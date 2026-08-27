@@ -1,0 +1,11 @@
+# bounded pem decoding and encoding contracts
+
+use crypto.contracts;
+
+pub rec Block {
+    label: contracts.Bytes;
+    der:   contracts.Bytes;
+}
+
+pub def DecodeFun: fun(contracts.Bytes, contracts.Buffer, *Block) contracts.Error;
+pub def EncodeFun: fun(*Block, contracts.Buffer) contracts.Operation;

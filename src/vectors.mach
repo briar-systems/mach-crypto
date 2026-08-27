@@ -1,0 +1,26 @@
+# common schema for official and differential test vectors
+
+use crypto.contracts;
+use std.types.size.usize;
+use std.types.string.str;
+
+pub def Disposition: u8;
+
+pub val VALID:   Disposition = 0;
+pub val INVALID: Disposition = 1;
+
+pub rec Vector {
+    suite:       str;
+    case_id:     u64;
+    input:       contracts.Bytes;
+    expected:    contracts.Bytes;
+    disposition: Disposition;
+}
+
+# a runner returns the number of failed cases
+pub def Runner: fun(*Vector, usize) usize;
+
+test "vectors: valid and invalid cases are distinct" {
+    if (VALID == INVALID) { ret 1; }
+    ret 0;
+}

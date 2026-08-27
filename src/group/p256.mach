@@ -1,0 +1,20 @@
+# secp256r1 key agreement contracts
+
+use crypto.contracts;
+use std.types.size.usize;
+
+pub val SCALAR_SIZE:              usize = 32;
+pub val PUBLIC_UNCOMPRESSED_SIZE: usize = 65;
+pub val SHARED_SECRET_SIZE:       usize = 32;
+
+# derive_public writes an uncompressed sec1 point
+pub def DerivePublicFun: fun(contracts.SecretBytes, contracts.Buffer) contracts.Operation;
+
+# agree validates the peer point and writes an x-coordinate secret
+pub def AgreeFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
+
+test "p256: scalar and shared secret dimensions match the field size" {
+    if (SCALAR_SIZE != 32 || SHARED_SECRET_SIZE != 32) { ret 1; }
+    if (PUBLIC_UNCOMPRESSED_SIZE != 65) { ret 1; }
+    ret 0;
+}

@@ -1,0 +1,49 @@
+# shared buffer, status, and algorithm contracts
+
+use std.types.size.usize;
+
+pub def Error: u8;
+
+pub val OK:                 Error = 0;
+pub val INVALID_INPUT:      Error = 1;
+pub val OUTPUT_TOO_SMALL:   Error = 2;
+pub val INVALID_KEY:        Error = 3;
+pub val AUTH_FAILED:        Error = 4;
+pub val UNSUPPORTED:        Error = 5;
+pub val ENTROPY_UNAVAILABLE: Error = 6;
+
+# public bytes with a stable address for an operation's duration
+pub rec Bytes {
+    data: *u8;
+    len:  usize;
+}
+
+# mutable public storage with a caller-owned capacity
+pub rec Buffer {
+    data:     *u8;
+    capacity: usize;
+}
+
+# secret bytes with a stable public address
+pub rec SecretBytes {
+    data: *^u8;
+    len:  usize;
+}
+
+# mutable secret storage with a caller-owned capacity
+pub rec SecretBuffer {
+    data:     *^u8;
+    capacity: usize;
+}
+
+# result shared by fixed-buffer operations
+pub rec Operation {
+    error:   Error;
+    written: usize;
+}
+
+test "contracts: error values are distinct" {
+    if (OK == INVALID_INPUT) { ret 1; }
+    if (AUTH_FAILED == UNSUPPORTED) { ret 1; }
+    ret 0;
+}

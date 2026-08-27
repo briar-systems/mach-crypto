@@ -1,0 +1,20 @@
+# assurance evidence published independently from algorithm availability
+
+pub def Level: u8;
+
+pub val SCAFFOLD:               Level = 0;
+pub val FUNCTIONAL:             Level = 1;
+pub val VECTORS_VERIFIED:       Level = 2;
+pub val DIFFERENTIAL_VERIFIED:  Level = 3;
+pub val LEAKAGE_TESTED:         Level = 4;
+pub val INDEPENDENTLY_REVIEWED: Level = 5;
+
+# this value advances only when the repository carries the required evidence
+pub val CURRENT: Level = SCAFFOLD;
+
+test "assurance: levels are ordered by accumulated evidence" {
+    if (SCAFFOLD >= FUNCTIONAL) { ret 1; }
+    if (FUNCTIONAL >= VECTORS_VERIFIED) { ret 1; }
+    if (LEAKAGE_TESTED >= INDEPENDENTLY_REVIEWED) { ret 1; }
+    ret 0;
+}

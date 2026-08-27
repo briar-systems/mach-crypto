@@ -1,0 +1,23 @@
+# signature contracts needed by tls certificates and handshakes
+
+use crypto.contracts;
+
+pub def Algorithm: u16;
+
+pub val ECDSA_P256_SHA256: Algorithm = 0x0403;
+pub val ED25519:           Algorithm = 0x0807;
+pub val RSA_PSS_RSAE_SHA256: Algorithm = 0x0804;
+pub val RSA_PSS_RSAE_SHA384: Algorithm = 0x0805;
+
+# verification returns auth_failed for an invalid signature
+pub def VerifyFun: fun(contracts.Bytes, contracts.Bytes, contracts.Bytes) contracts.Error;
+
+# signing writes a wire-format signature with explicit capacity
+pub def SignFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Buffer) contracts.Operation;
+
+test "signature: algorithm ids match the tls registry" {
+    if (ECDSA_P256_SHA256 != 0x0403) { ret 1; }
+    if (ED25519 != 0x0807) { ret 1; }
+    if (RSA_PSS_RSAE_SHA256 != 0x0804) { ret 1; }
+    ret 0;
+}

@@ -1,0 +1,19 @@
+# chacha20-poly1305 contracts
+
+use crypto.contracts;
+use std.types.size.usize;
+
+pub val KEY_SIZE:   usize = 32;
+pub val NONCE_SIZE: usize = 12;
+pub val TAG_SIZE:   usize = 16;
+
+# seal declassifies authenticated ciphertext into public output
+pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes, contracts.SecretBytes, contracts.Buffer) contracts.Operation;
+
+# open authenticates before releasing plaintext to secret output
+pub def OpenFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes, contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
+
+test "chacha20-poly1305: key, nonce, and tag dimensions are fixed" {
+    if (KEY_SIZE != 32 || NONCE_SIZE != 12 || TAG_SIZE != 16) { ret 1; }
+    ret 0;
+}

@@ -1,0 +1,18 @@
+# hmac contracts
+
+use crypto.contracts;
+use std.types.size.usize;
+
+pub val SHA256_BLOCK_SIZE: usize = 64;
+pub val SHA256_TAG_SIZE:   usize = 32;
+pub val SHA384_BLOCK_SIZE: usize = 128;
+pub val SHA384_TAG_SIZE:   usize = 48;
+
+# one-shot hmac callback with a secret key and public message
+pub def MacFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Buffer) contracts.Operation;
+
+test "hmac: sha-2 dimensions match their hash functions" {
+    if (SHA256_BLOCK_SIZE != 64 || SHA256_TAG_SIZE != 32) { ret 1; }
+    if (SHA384_BLOCK_SIZE != 128 || SHA384_TAG_SIZE != 48) { ret 1; }
+    ret 0;
+}

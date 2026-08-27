@@ -1,0 +1,4 @@
+# key agreement module surface
+
+fwd crypto.group.p256;
+fwd crypto.group.x25519;

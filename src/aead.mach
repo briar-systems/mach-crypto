@@ -1,0 +1,4 @@
+# authenticated encryption module surface
+
+fwd crypto.aead.aes_gcm;
+fwd crypto.aead.chacha20_poly1305;
