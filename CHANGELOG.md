@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Fail-closed cryptographic release evidence with independent test layers.
+- Reproducible six-target debug and release builds with verified IR, assembly,
+  provenance, and machine-readable artifact hashes.
+- Compiler secret-flow negative controls and generated zeroization inspection.
+
+### Security
+
+- Assurance reports cannot advance from missing, failed, modified, or stale
+  evidence. Functional availability and independent review remain separate.
+
 ## [0.4.0] - 2026-08-28
 
 ### Added

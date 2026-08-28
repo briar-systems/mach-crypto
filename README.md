@@ -289,11 +289,24 @@ not expressiveness. The package will use Mach secret types and oblivious code,
 official vectors, differential tests, generated-code inspection, leakage tests,
 and independent review as distinct evidence layers.
 
-The package-wide assurance level remains `assurance.SCAFFOLD` while the other
-algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, P-256,
-ECDSA, Ed25519, RSA-PSS, SHA-256, SHA-384, HMAC, HKDF, and key encoding have
-functional and vector evidence, but package-wide leakage and independent
-review layers have not yet advanced.
+`tools/assurance run` is the fail-closed release evidence gate. It runs the
+functional, official-vector, differential, invalid-input, leakage, and
+zeroization layers independently. It then performs two clean builds of every
+project for all six targets in debug and release mode with verified IR and
+emitted assembly. The two artifact sets must be byte-for-byte identical.
+
+A successful run publishes an immutable machine-readable evidence directory
+under `out/assurance/` and updates `out/assurance/current`. The report records
+the exact Git commit, compiler binary hash, compiler version, dependency lock,
+target, profile, algorithm, vector source, logs, generated-code samples, and
+artifact hashes. `tools/assurance verify` rejects missing, modified, or stale
+evidence. See [the assurance guide](doc/assurance.md) for the complete contract.
+
+The source-only floor remains `assurance.SCAFFOLD` because generated evidence
+is deliberately not trusted merely because a source constant says it exists.
+The gate advances the automated level in `state.tsv` only after every required
+artifact passes. Callable algorithm availability and independent review status
+are separate fields. Independent review is currently `NOT_RECORDED`.
 
 ## Local development
 
@@ -304,4 +317,6 @@ directory inside this repository.
 mach dep pull .
 mach build .
 mach test .
+tools/assurance run
+tools/assurance verify
 ```
