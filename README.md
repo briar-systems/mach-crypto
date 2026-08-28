@@ -12,7 +12,7 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
-- `crypto.aead.chacha20_poly1305` defines the ChaCha20-Poly1305 contract.
+- `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
 - `crypto.group.p256` and `crypto.group.x25519` cover TLS key agreement.
 - `crypto.signature` covers certificate signature algorithms.
 - `crypto.encoding.der` and `crypto.encoding.pem` cover cryptographic containers.
@@ -85,14 +85,41 @@ algebraic AES S-box and fixed-position GHASH multiplication rather than memory
 lookups indexed by secret values. Expanded keys, cipher state, hash products,
 authentication tags, and stream blocks are explicitly zeroized.
 
+## ChaCha20-Poly1305
+
+`aead.chacha20_poly1305.seal` accepts an exact 32-byte secret key, an exact
+12-byte public nonce, public additional authenticated data, secret plaintext,
+and caller-owned public output. It writes ciphertext followed by the complete
+16-byte tag. Nonce and additional data may overlap output because both are
+consumed before the first output write.
+
+`aead.chacha20_poly1305.open` authenticates the complete ciphertext and tag
+before decrypting any byte. Authentication failure returns `AUTH_FAILED` and
+zeroizes exactly the ciphertext-length prefix of secret output. Validation and
+capacity failures do not change output. Successful output may overlap the
+secret key because the ChaCha20 context snapshots it before plaintext release.
+
+Plaintext is bounded to 274,877,906,880 bytes, or `2^32 - 1` payload blocks.
+Counter zero is reserved for the Poly1305 one-time key and payload counters run
+from one through `0xffffffff`. Additional-data and ciphertext byte lengths are
+encoded as the complete 64-bit RFC 8439 length fields. ChaCha20 uses fixed
+rotations and positions. Poly1305 uses fixed-position limb arithmetic without
+secret-dependent table accesses or hardware multiplication. Keys, stream
+state, one-time keys, accumulators, authentication tags, and stream blocks are
+explicitly zeroized.
+
+This module protects TLS records and QUIC packet payloads. QUIC header
+protection remains a separate primitive contract because it consumes a packet
+sample to generate a five-byte mask rather than an AEAD nonce and payload.
+
 ## Status
 
 The repository combines callable primitives with contracts for algorithms that
-are still being built. AES-128-GCM, AES-256-GCM, HMAC-SHA-256, HMAC-SHA-384,
-HKDF-Extract, and HKDF-Expand are callable in this revision. Their tests include
-NIST, RFC 4231, and RFC 5869 vectors, independent differential vectors, tamper
-cases, counter and output limits, invalid inputs, fixed-buffer failures, and
-supported overlap.
+are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305,
+HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, and HKDF-Expand are callable in this
+revision. Their tests include NIST, RFC 4231, RFC 5869, and RFC 8439 vectors,
+independent differential vectors, tamper cases, counter and output limits,
+invalid inputs, fixed-buffer failures, and supported overlap.
 
 Mach constant-time support is functional. Its current limitation is assurance,
 not expressiveness. The package will use Mach secret types and oblivious code,
@@ -100,9 +127,9 @@ official vectors, differential tests, generated-code inspection, leakage tests,
 and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
-algorithm modules are scaffolds. AES-GCM, HMAC, and HKDF have functional and
-vector evidence, but package-wide leakage and independent review layers have not
-yet advanced.
+algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, HMAC, and HKDF have
+functional and vector evidence, but package-wide leakage and independent review
+layers have not yet advanced.
 
 ## Local development
 
