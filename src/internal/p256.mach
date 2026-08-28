@@ -311,7 +311,7 @@ pub fun reduce_scalar_once(value: *UInt) {
 pub fun decode_secret(output: *UInt, input: *^u8) {
     var word: usize = 0;
     for (word < 8) {
-        val offset: usize = 28 - word * 4;
+        val offset: usize = 28 - (word << 2);
         output.limb[word] = (input[offset]::^u64 << 24) |
             (input[offset + 1]::^u64 << 16) |
             (input[offset + 2]::^u64 << 8) | input[offset + 3]::^u64;
@@ -323,7 +323,7 @@ pub fun decode_secret(output: *UInt, input: *^u8) {
 pub fun decode_public(output: *UInt, input: *u8, base: usize) {
     var word: usize = 0;
     for (word < 8) {
-        val offset: usize = 28 - word * 4;
+        val offset: usize = 28 - (word << 2);
         output.limb[word] = (input[base + offset]::u64 << 24) |
             (input[base + offset + 1]::u64 << 16) |
             (input[base + offset + 2]::u64 << 8) | input[base + offset + 3]::u64;
@@ -335,7 +335,7 @@ pub fun decode_public(output: *UInt, input: *u8, base: usize) {
 pub fun encode_secret(output: *^u8, input: *UInt) {
     var word: usize = 0;
     for (word < 8) {
-        val offset: usize = 28 - word * 4;
+        val offset: usize = 28 - (word << 2);
         val value: ^u64 = input.limb[word];
         output[offset] = (value >> 24)::^u8;
         output[offset + 1] = (value >> 16)::^u8;
@@ -349,7 +349,7 @@ pub fun encode_secret(output: *^u8, input: *UInt) {
 pub fun encode_public(output: *u8, base: usize, input: *UInt) {
     var word: usize = 0;
     for (word < 8) {
-        val offset: usize = 28 - word * 4;
+        val offset: usize = 28 - (word << 2);
         val value: ^u64 = input.limb[word];
         output[base + offset] = (value >> 24)::^u8:^;
         output[base + offset + 1] = (value >> 16)::^u8:^;
