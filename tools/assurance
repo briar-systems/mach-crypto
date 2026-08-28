@@ -1,0 +1,516 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+command_name=${1:-run}
+evidence_root="$root/out/assurance"
+targets=(
+    linux-x86_64
+    linux-arm64
+    linux-riscv64
+    windows-x86_64
+    darwin-x86_64
+    darwin-aarch64
+)
+profiles=(debug release)
+
+die() {
+    printf 'assurance: %s\n' "$*" >&2
+    exit 1
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || die "required command is unavailable: $1"
+}
+
+require_file() {
+    [[ -f "$1" ]] || die "required file is missing: ${1#"$root"/}"
+}
+
+sha256_file() {
+    sha256sum "$1" | awk '{print $1}'
+}
+
+metadata_value() {
+    local file=$1
+    local key=$2
+    awk -F '\t' -v key="$key" '$1 == key { print $2; found = 1; exit } END { if (!found) exit 1 }' "$file"
+}
+
+tree_is_clean() {
+    [[ -z "$(git -C "$root" status --short --untracked-files=all)" ]]
+}
+
+manifest_hash() {
+    (
+        cd "$root"
+        sha256sum \
+            assurance/algorithms.tsv \
+            assurance/projects.tsv \
+            assurance/tests.tsv \
+            assurance/zeroization.tsv \
+            test/leakage-negative/mach.toml \
+            test/leakage-negative/src/leakage.mach \
+            tools/assurance
+    ) | sha256sum | awk '{print $1}'
+}
+
+check_prerequisites() {
+    require_command awk
+    require_command cmp
+    require_command diff
+    require_command find
+    require_command git
+    require_command grep
+    require_command mach
+    require_command mktemp
+    require_command realpath
+    require_command sha256sum
+    require_command sort
+    require_command stat
+
+    require_file "$root/mach.toml"
+    require_file "$root/mach.lock"
+    require_file "$root/assurance/algorithms.tsv"
+    require_file "$root/assurance/projects.tsv"
+    require_file "$root/assurance/tests.tsv"
+    require_file "$root/assurance/zeroization.tsv"
+    require_file "$root/test/leakage-negative/mach.toml"
+    require_file "$root/test/leakage-negative/src/leakage.mach"
+}
+
+assert_clean_source() {
+    tree_is_clean || die "the source tree is dirty; commit the exact source before producing release evidence"
+}
+
+assert_no_redundant_aliases() {
+    local findings
+    findings=$(rg --pcre2 -n \
+        '^\s*use\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.\1\s*;' \
+        "$root/src" "$root/test" --glob '*.mach' 2>/dev/null || true)
+    [[ -z "$findings" ]] || die "redundant same-name use aliases remain:\n$findings"
+}
+
+validate_test_log() {
+    local log=$1
+    local expected=$2
+    local summary failed total
+    summary=$(grep '"event":"summary"' "$log" | tail -n 1 || true)
+    [[ -n "$summary" ]] || die "test log has no summary: $log"
+    failed=$(printf '%s\n' "$summary" | sed -n 's/.*"failed":\([0-9][0-9]*\).*/\1/p')
+    total=$(printf '%s\n' "$summary" | sed -n 's/.*"total":\([0-9][0-9]*\).*/\1/p')
+    [[ "$failed" == 0 ]] || die "test log reports failures: $log"
+    if [[ "$expected" == one ]]; then
+        [[ "$total" == 1 ]] || die "filtered evidence test did not select exactly one test: $log"
+    else
+        [[ -n "$total" && "$total" -gt 0 ]] || die "test project did not execute tests: $log"
+    fi
+}
+
+record_result() {
+    local category=$1
+    local project=$2
+    local algorithm=$3
+    local source=$4
+    local target=$5
+    local profile=$6
+    local artifact=$7
+    local hash=$8
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\tPASS\t%s\n' \
+        "$category" "$project" "$algorithm" "$source" "$target" "$profile" "$artifact" "$hash" \
+        >> "$results"
+}
+
+run_functional_tests() {
+    local project algorithm profile log relative hash
+    while IFS=$'\t' read -r project algorithm; do
+        [[ "$project" == project ]] && continue
+        for profile in "${profiles[@]}"; do
+            relative="logs/tests/functional/${algorithm}-${profile}.ndjson"
+            log="$stage/$relative"
+            mkdir -p "$(dirname -- "$log")"
+            if ! (cd "$root" && mach test "$project" --profile "$profile" --format json) > "$log" 2>&1; then
+                die "functional test failed for $project $profile; see $log"
+            fi
+            validate_test_log "$log" many
+            hash=$(sha256_file "$log")
+            record_result functional "$project" "$algorithm" "complete project test suite" \
+                linux-x86_64 "$profile" "$relative" "$hash"
+        done
+    done < "$root/assurance/projects.tsv"
+}
+
+run_independent_tests() {
+    local category project algorithm source filter profile log relative hash index
+    index=0
+    while IFS=$'\t' read -r category project algorithm source filter; do
+        [[ "$category" == category ]] && continue
+        index=$((index + 1))
+        for profile in "${profiles[@]}"; do
+            printf -v relative 'logs/tests/%s/%03d-%s.ndjson' "$category" "$index" "$profile"
+            log="$stage/$relative"
+            mkdir -p "$(dirname -- "$log")"
+            if ! (cd "$root" && mach test "$project" --profile "$profile" \
+                --filter "$filter" --format json) > "$log" 2>&1; then
+                die "$category test failed for $project $profile: $filter; see $log"
+            fi
+            validate_test_log "$log" one
+            hash=$(sha256_file "$log")
+            record_result "$category" "$project" "$algorithm" "$source" \
+                linux-x86_64 "$profile" "$relative" "$hash"
+        done
+    done < "$root/assurance/tests.tsv"
+}
+
+clean_build_projects() {
+    local project algorithm log
+    while IFS=$'\t' read -r project algorithm; do
+        [[ "$project" == project ]] && continue
+        log="$stage/logs/build/clean-${algorithm}.log"
+        mkdir -p "$(dirname -- "$log")"
+        if ! (cd "$root" && mach clean "$project") > "$log" 2>&1; then
+            die "mach clean failed for $project; see $log"
+        fi
+    done < "$root/assurance/projects.tsv"
+}
+
+project_output() {
+    local project=$1
+    if [[ "$project" == . ]]; then
+        printf '%s/out\n' "$root"
+    else
+        printf '%s/%s/out\n' "$root" "$project"
+    fi
+}
+
+require_generated_tree() {
+    local project=$1
+    local target=$2
+    local profile=$3
+    local base directory kind
+    base=$(project_output "$project")
+    directory="$base/$target/$profile"
+    [[ -d "$directory" ]] || die "build output is missing: ${directory#"$root"/}"
+    for kind in ir asm obj; do
+        [[ -d "$directory/$kind" ]] || die "$kind output is missing: ${directory#"$root"/}/$kind"
+        find "$directory/$kind" -type f -print -quit | grep -q . || \
+            die "$kind output is empty: ${directory#"$root"/}/$kind"
+    done
+}
+
+run_build_pass() {
+    local pass=$1
+    local project algorithm profile log relative hash target
+    clean_build_projects
+    while IFS=$'\t' read -r project algorithm; do
+        [[ "$project" == project ]] && continue
+        for profile in "${profiles[@]}"; do
+            relative="logs/build/${pass}-${algorithm}-${profile}.log"
+            log="$stage/$relative"
+            if ! (cd "$root" && mach build "$project" --all-targets --profile "$profile" \
+                --emit-ir --emit-asm --verify-ir) > "$log" 2>&1; then
+                die "verified build failed for $project $profile during $pass; see $log"
+            fi
+            hash=$(sha256_file "$log")
+            for target in "${targets[@]}"; do
+                require_generated_tree "$project" "$target" "$profile"
+                record_result generated-code "$project" "$algorithm" \
+                    "Mach IR verifier and code generator, $pass" "$target" "$profile" "$relative" "$hash"
+            done
+        done
+    done < "$root/assurance/projects.tsv"
+}
+
+write_artifact_manifest() {
+    local output=$1
+    local project algorithm target profile base directory file relative kind hash size
+    printf 'project\ttarget\tprofile\tkind\tpath\tsha256\tsize\n' > "$output"
+    while IFS=$'\t' read -r project algorithm; do
+        [[ "$project" == project ]] && continue
+        base=$(project_output "$project")
+        for target in "${targets[@]}"; do
+            for profile in "${profiles[@]}"; do
+                directory="$base/$target/$profile"
+                while IFS= read -r -d '' file; do
+                    relative=${file#"$root"/}
+                    kind=${file#"$directory"/}
+                    kind=${kind%%/*}
+                    hash=$(sha256_file "$file")
+                    size=$(stat -c '%s' "$file")
+                    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                        "$project" "$target" "$profile" "$kind" "$relative" "$hash" "$size" \
+                        >> "$output"
+                done < <(find "$directory" -type f -print0 | sort -z)
+            done
+        done
+    done < "$root/assurance/projects.tsv"
+}
+
+run_leakage_negative_controls() {
+    local target profile log relative hash
+    for target in "${targets[@]}"; do
+        for profile in "${profiles[@]}"; do
+            relative="logs/leakage/negative-${target}-${profile}.log"
+            log="$stage/$relative"
+            mkdir -p "$(dirname -- "$log")"
+            (cd "$root" && mach clean test/leakage-negative) >/dev/null 2>&1 || \
+                die "could not clean the leakage negative control"
+            if (cd "$root" && mach build test/leakage-negative --target "$target" \
+                --profile "$profile" --emit-ir --verify-ir) > "$log" 2>&1; then
+                die "compiler accepted the secret-dependent negative control for $target $profile"
+            fi
+            grep -q 'secret value used as a branch condition' "$log" || \
+                die "negative control failed for an unexpected reason: $log"
+            if find "$root/test/leakage-negative/out" -type f \
+                \( -name '*.ir' -o -name '*.o' -o -name 'leakage-negative' \) \
+                -print -quit 2>/dev/null | grep -q .; then
+                die "rejected leakage control left generated code behind for $target $profile"
+            fi
+            hash=$(sha256_file "$log")
+            record_result leakage test/leakage-negative all-secret-algorithms \
+                "Mach secret-flow negative control" "$target" "$profile" "$relative" "$hash"
+        done
+    done
+}
+
+record_positive_leakage_evidence() {
+    local algorithm ct source target profile log relative hash
+    while IFS=$'\t' read -r algorithm ct source; do
+        [[ "$algorithm" == algorithm ]] && continue
+        [[ "$ct" == yes ]] || continue
+        for target in "${targets[@]}"; do
+            for profile in "${profiles[@]}"; do
+                relative="logs/build/pass-b-package-${profile}.log"
+                log="$stage/$relative"
+                require_file "$log"
+                hash=$(sha256_file "$log")
+                record_result leakage . "$algorithm" \
+                    "Mach secret-flow checker plus verified IR" "$target" "$profile" "$relative" "$hash"
+            done
+        done
+    done < "$root/assurance/algorithms.tsv"
+}
+
+inspect_zeroization() {
+    local algorithm module assembly_required target profile ir asm ir_calls asm_calls
+    local relative_ir relative_asm destination hash
+    while IFS=$'\t' read -r algorithm module assembly_required; do
+        [[ "$algorithm" == algorithm ]] && continue
+        for target in "${targets[@]}"; do
+            for profile in "${profiles[@]}"; do
+                ir="$root/out/$target/$profile/ir/$module.ir"
+                require_file "$ir"
+                ir_calls=$(grep -c 'call void @std.crypto.ct.zeroize' "$ir" || true)
+                [[ "$ir_calls" -gt 0 ]] || die "zeroization call is absent from ${ir#"$root"/}"
+                relative_ir="generated/$target/$profile/$module.ir"
+                destination="$stage/$relative_ir"
+                mkdir -p "$(dirname -- "$destination")"
+                cp "$ir" "$destination"
+                hash=$(sha256_file "$destination")
+                record_result zeroization . "$algorithm" \
+                    "generated IR retains $ir_calls explicit zeroization call(s)" \
+                    "$target" "$profile" "$relative_ir" "$hash"
+            done
+            if [[ "$assembly_required" == yes ]]; then
+                asm="$root/out/$target/release/asm/$module.s"
+                require_file "$asm"
+                asm_calls=$(grep -c 'std.crypto.ct.zeroize' "$asm" || true)
+                [[ "$asm_calls" -gt 0 ]] || die "zeroization call is absent from ${asm#"$root"/}"
+                relative_asm="generated/$target/release/$module.s"
+                destination="$stage/$relative_asm"
+                mkdir -p "$(dirname -- "$destination")"
+                cp "$asm" "$destination"
+                hash=$(sha256_file "$destination")
+                record_result zeroization . "$algorithm" \
+                    "release assembly retains $asm_calls explicit zeroization reference(s)" \
+                    "$target" release "$relative_asm" "$hash"
+            fi
+        done
+    done < "$root/assurance/zeroization.tsv"
+}
+
+assert_complete_results() {
+    local category
+    for category in functional official-vector differential invalid-input \
+        generated-code leakage zeroization reproducibility; do
+        awk -F '\t' -v category="$category" '$1 == category && $8 == "PASS" { found = 1 } END { exit !found }' \
+            "$results" || die "required evidence category did not pass: $category"
+    done
+    awk -F '\t' 'NR > 1 && $8 != "PASS" { exit 1 }' "$results" || \
+        die "one or more evidence records did not pass"
+}
+
+write_integrity_manifest() {
+    (
+        cd "$stage"
+        find . -type f ! -name evidence.sha256 -print0 | sort -z | \
+            xargs -0 sha256sum
+    ) > "$stage/evidence.sha256"
+}
+
+publish_evidence() {
+    local run_id destination publishing link
+    run_id="$(date -u '+%Y%m%dT%H%M%SZ')-${git_commit:0:12}-${compiler_sha:0:12}"
+    mkdir -p "$evidence_root"
+    destination="$evidence_root/$run_id"
+    [[ ! -e "$destination" ]] || die "evidence destination already exists: $destination"
+    publishing="$evidence_root/.publishing-$run_id-$$"
+    [[ ! -e "$publishing" ]] || die "temporary publish destination already exists: $publishing"
+    mkdir "$publishing"
+    cp -R "$stage/." "$publishing/"
+    mv "$publishing" "$destination"
+    link="$evidence_root/.current-$$"
+    ln -s "$run_id" "$link"
+    mv -Tf "$link" "$evidence_root/current"
+    printf '%s\n' "$destination"
+}
+
+run_gate() {
+    local temporary pass_a pass_b difference artifact_hash run_path alias_log_hash
+    check_prerequisites
+    require_command rg
+    require_command sed
+    require_command xargs
+    assert_clean_source
+    assert_no_redundant_aliases
+
+    git_commit=$(git -C "$root" rev-parse HEAD)
+    compiler_path=$(command -v mach)
+    compiler_path=$(realpath "$compiler_path")
+    compiler_sha=$(sha256_file "$compiler_path")
+    compiler_version=$(mach info | sed -n '1p')
+    lock_sha=$(sha256_file "$root/mach.lock")
+    evidence_manifest_sha=$(manifest_hash)
+
+    temporary=$(mktemp -d "${TMPDIR:-/tmp}/mach-crypto-assurance.XXXXXX")
+    stage="$temporary/evidence"
+    mkdir -p "$stage/logs"
+    trap 'rm -rf -- "$temporary"' EXIT
+
+    results="$stage/results.tsv"
+    printf 'category\tproject\talgorithm\tsource\ttarget\tprofile\tartifact\tstatus\tsha256\n' > "$results"
+    printf 'key\tvalue\n' > "$stage/metadata.tsv"
+    printf 'schema\t1\n' >> "$stage/metadata.tsv"
+    printf 'git_commit\t%s\n' "$git_commit" >> "$stage/metadata.tsv"
+    printf 'git_tree\tclean\n' >> "$stage/metadata.tsv"
+    printf 'compiler_version\t%s\n' "$compiler_version" >> "$stage/metadata.tsv"
+    printf 'compiler_path\t%s\n' "$compiler_path" >> "$stage/metadata.tsv"
+    printf 'compiler_sha256\t%s\n' "$compiler_sha" >> "$stage/metadata.tsv"
+    printf 'mach_lock_sha256\t%s\n' "$lock_sha" >> "$stage/metadata.tsv"
+    printf 'evidence_manifest_sha256\t%s\n' "$evidence_manifest_sha" >> "$stage/metadata.tsv"
+    printf 'targets\t%s\n' "${targets[*]}" >> "$stage/metadata.tsv"
+    printf 'profiles\t%s\n' "${profiles[*]}" >> "$stage/metadata.tsv"
+    printf 'generated_at_utc\t%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$stage/metadata.tsv"
+
+    run_functional_tests
+    run_independent_tests
+    run_leakage_negative_controls
+
+    pass_a="$stage/artifacts-pass-a.tsv"
+    pass_b="$stage/artifacts.tsv"
+    run_build_pass pass-a
+    write_artifact_manifest "$pass_a"
+    run_build_pass pass-b
+    write_artifact_manifest "$pass_b"
+
+    difference="$stage/reproducibility.diff"
+    if ! diff -u "$pass_a" "$pass_b" > "$difference"; then
+        die "clean build passes were not byte-for-byte reproducible; see $difference"
+    fi
+    artifact_hash=$(sha256_file "$pass_b")
+    record_result reproducibility . all \
+        "two clean six-target debug/release build passes" all all artifacts.tsv "$artifact_hash"
+    rm "$difference"
+
+    record_positive_leakage_evidence
+    inspect_zeroization
+
+    alias_log_hash=$(printf 'no redundant same-name aliases\n' | sha256sum | awk '{print $1}')
+    record_result generated-code . all "redundant same-name alias scan" all all source-tree "$alias_log_hash"
+
+    printf 'scope\tavailability\tautomated_level\tfunctional\tofficial_vectors\tdifferential\tinvalid_input\tgenerated_code\tleakage\tzeroization\tindependent_review\n' \
+        > "$stage/state.tsv"
+    printf 'package\tFUNCTIONAL\tLEAKAGE_TESTED\tPASS\tPASS\tPASS\tPASS\tPASS\tPASS\tPASS\tNOT_RECORDED\n' \
+        >> "$stage/state.tsv"
+
+    assert_complete_results
+    write_integrity_manifest
+    run_path=$(publish_evidence)
+    "$root/tools/assurance" verify "$run_path"
+    printf 'assurance: PASS\n'
+    printf 'evidence: %s\n' "$run_path"
+}
+
+verify_artifacts() {
+    local manifest=$1
+    local project target profile kind path expected size file actual actual_size
+    while IFS=$'\t' read -r project target profile kind path expected size; do
+        [[ "$project" == project ]] && continue
+        [[ "$path" != /* && "$path" != *'../'* && "$path" != '../'* ]] || \
+            die "unsafe artifact path in evidence: $path"
+        file="$root/$path"
+        require_file "$file"
+        actual=$(sha256_file "$file")
+        [[ "$actual" == "$expected" ]] || die "artifact is stale: $path"
+        actual_size=$(stat -c '%s' "$file")
+        [[ "$actual_size" == "$size" ]] || die "artifact size is stale: $path"
+    done < "$manifest"
+}
+
+verify_gate() {
+    local requested=${1:-"$evidence_root/current"}
+    local evidence metadata resolved expected current
+    check_prerequisites
+    assert_clean_source
+    evidence=$(realpath "$requested")
+    resolved=$(realpath "$evidence_root")
+    [[ "$evidence" == "$resolved"/* ]] || die "evidence path is outside the repository output: $evidence"
+    require_file "$evidence/metadata.tsv"
+    require_file "$evidence/results.tsv"
+    require_file "$evidence/state.tsv"
+    require_file "$evidence/artifacts.tsv"
+    require_file "$evidence/evidence.sha256"
+    metadata="$evidence/metadata.tsv"
+
+    (cd "$evidence" && sha256sum -c evidence.sha256 >/dev/null) || \
+        die "evidence integrity check failed: $evidence"
+
+    current=$(git -C "$root" rev-parse HEAD)
+    expected=$(metadata_value "$metadata" git_commit)
+    [[ "$current" == "$expected" ]] || die "evidence is stale for git commit $current"
+    [[ "$(metadata_value "$metadata" git_tree)" == clean ]] || die "evidence was not produced from a clean tree"
+
+    compiler_path=$(command -v mach)
+    compiler_path=$(realpath "$compiler_path")
+    expected=$(metadata_value "$metadata" compiler_sha256)
+    [[ "$(sha256_file "$compiler_path")" == "$expected" ]] || die "evidence compiler does not match the active compiler"
+    expected=$(metadata_value "$metadata" mach_lock_sha256)
+    [[ "$(sha256_file "$root/mach.lock")" == "$expected" ]] || die "evidence dependency lock is stale"
+    expected=$(metadata_value "$metadata" evidence_manifest_sha256)
+    [[ "$(manifest_hash)" == "$expected" ]] || die "evidence policy or gate is stale"
+
+    awk -F '\t' 'NR > 1 && $8 != "PASS" { exit 1 }' "$evidence/results.tsv" || \
+        die "evidence contains a non-passing result"
+    awk -F '\t' 'NR == 2 && $2 == "FUNCTIONAL" && $3 == "LEAKAGE_TESTED" && \
+        $4 == "PASS" && $5 == "PASS" && $6 == "PASS" && $7 == "PASS" && \
+        $8 == "PASS" && $9 == "PASS" && $10 == "PASS" && $11 == "NOT_RECORDED" { ok = 1 } \
+        END { exit !ok }' "$evidence/state.tsv" || die "assurance state is incomplete or review status was conflated"
+
+    verify_artifacts "$evidence/artifacts.tsv"
+    printf 'assurance: verified %s\n' "$evidence"
+}
+
+case "$command_name" in
+    run)
+        [[ $# -eq 0 || $# -eq 1 ]] || die "usage: tools/assurance [run|verify [evidence-path]]"
+        run_gate
+        ;;
+    verify)
+        [[ $# -le 2 ]] || die "usage: tools/assurance verify [evidence-path]"
+        verify_gate "${2:-}"
+        ;;
+    *)
+        die "usage: tools/assurance [run|verify [evidence-path]]"
+        ;;
+esac

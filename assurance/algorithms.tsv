@@ -1,0 +1,20 @@
+algorithm	ct_required	vector_source
+secret-storage	yes	mach-crypto ownership contract
+sha-256	yes	NIST FIPS 180-4
+sha-384	yes	NIST FIPS 180-4
+hmac-sha-256	yes	RFC 4231
+hmac-sha-384	yes	RFC 4231
+hkdf-sha-256	yes	RFC 5869
+hkdf-sha-384	yes	RFC 5869
+aes-128-gcm	yes	NIST SP 800-38D
+aes-256-gcm	yes	NIST SP 800-38D
+chacha20-poly1305	yes	RFC 8439
+x25519	yes	RFC 7748
+p-256-ecdh	yes	NIST CAVP KAS-ECC
+ecdsa-p256-sha256	yes	RFC 6979
+ed25519	yes	RFC 8032
+rsa-pss-sha256	yes	NIST CAVP and RFC 8017
+rsa-pss-sha384	yes	NIST CAVP and RFC 8017
+der	no	ITU-T X.690
+pem	no	RFC 7468
+key-containers	yes	RFC 5208, RFC 5480, RFC 5958, RFC 8017, RFC 8410, SEC 1
