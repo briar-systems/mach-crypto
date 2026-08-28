@@ -14,6 +14,7 @@ targets=(
     darwin-aarch64
 )
 profiles=(debug release)
+temporary=
 
 die() {
     printf 'assurance: %s\n' "$*" >&2
@@ -367,7 +368,7 @@ publish_evidence() {
 }
 
 run_gate() {
-    local temporary pass_a pass_b difference artifact_hash run_path alias_log_hash
+    local pass_a pass_b difference artifact_hash run_path alias_log_hash
     check_prerequisites
     require_command rg
     require_command sed
