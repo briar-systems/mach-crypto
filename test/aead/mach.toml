@@ -1,6 +1,6 @@
 [project]
-id = "crypto"
-version = "0.3.0"
+id = "crypto-aead-test"
+version = "0.0.0"
 src = "src"
 out = "out/{target.name}/{profile.name}"
 
@@ -44,14 +44,13 @@ opt = 2
 debug = false
 simd = "scalarize"
 
-[artifact.crypto]
+[artifact.crypto-aead-test]
 kind = "static"
-entry = "lib.mach"
-out = "lib/crypto"
+entry = "tests.mach"
+out = "lib/crypto-aead-test"
 targets = ["*"]
 link = []
 need = []
 
-[dep.mach-std]
-git = "https://github.com/briar-systems/mach-std"
-ref = "tag/v0.29.0"
+[dep.crypto]
+path = "../.."

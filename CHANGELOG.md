@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0] - 2026-08-28
+
+### Added
+
+- HMAC-SHA-256, HMAC-SHA-384, and RFC 5869 HKDF extract and expand.
+- AES-128-GCM, AES-256-GCM, and ChaCha20-Poly1305 authenticated encryption.
+- X25519 public-key derivation and agreement.
+- Canonical SEC1 P-256 public-key derivation and ECDH agreement.
+- Deterministic RFC 6979 ECDSA P-256 signing with SHA-256 and strict DER.
+- Strict point, scalar, signature, tag, capacity, counter, and low-order validation.
+- NIST, RFC, hostile-input, failure-preservation, overlap, and generated-code evidence.
+
+### Security
+
+- Authentication completes before plaintext release and clears rejected output.
+- Secret-dependent field operations use fixed-position constant-shape arithmetic.
+- Key schedules, nonces, tags, scalars, field values, and intermediate state are explicitly zeroized.
+
 ## [0.2.0] - 2026-08-28
 
 ### Added

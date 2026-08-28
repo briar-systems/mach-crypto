@@ -1,0 +1,245 @@
+# streaming hmac over secret-state sha-2
+
+use crypto.contracts;
+use crypto.internal.sha2;
+use std.crypto.ct;
+use std.types.bool.bool;
+use std.types.bool.false;
+use std.types.bool.true;
+use std.types.size.usize;
+
+pub rec Context256 {
+    inner:     sha2.State256;
+    outer_pad: [64]^u8;
+    active:    bool;
+}
+
+pub rec Context384 {
+    inner:     sha2.State384;
+    outer_pad: [128]^u8;
+    active:    bool;
+}
+
+pub fun destroy256(context: *Context256) {
+    if (context == nil) { ret; }
+    sha2.destroy256(?context.inner);
+    ct.zeroize(?context.outer_pad[0], sha2.SHA256_BLOCK_SIZE);
+    context.active = false;
+}
+
+pub fun destroy384(context: *Context384) {
+    if (context == nil) { ret; }
+    sha2.destroy384(?context.inner);
+    ct.zeroize(?context.outer_pad[0], sha2.SHA384_BLOCK_SIZE);
+    context.active = false;
+}
+
+#[oblivious]
+pub fun init256(context: *Context256, key: contracts.SecretBytes) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    sha2.init256(?context.inner);
+    ct.zeroize(?context.outer_pad[0], sha2.SHA256_BLOCK_SIZE);
+    context.active = false;
+    if (key.len != 0 && key.data == nil) {
+        destroy256(context);
+        ret contracts.INVALID_INPUT;
+    }
+
+    var key_block: [64]^u8;
+    var inner_pad: [64]^u8;
+    var key_digest: [32]^u8;
+    ct.zeroize(?key_block[0], sha2.SHA256_BLOCK_SIZE);
+    ct.zeroize(?inner_pad[0], sha2.SHA256_BLOCK_SIZE);
+    ct.zeroize(?key_digest[0], sha2.SHA256_DIGEST_SIZE);
+
+    if (key.len > sha2.SHA256_BLOCK_SIZE) {
+        var key_state: sha2.State256;
+        sha2.init256(?key_state);
+        if (!sha2.update256_secret(?key_state, key.data, key.len)) {
+            sha2.destroy256(?key_state);
+            ct.zeroize(?key_block[0], sha2.SHA256_BLOCK_SIZE);
+            ct.zeroize(?inner_pad[0], sha2.SHA256_BLOCK_SIZE);
+            ct.zeroize(?key_digest[0], sha2.SHA256_DIGEST_SIZE);
+            destroy256(context);
+            ret contracts.INVALID_KEY;
+        }
+        sha2.final256(?key_state, ?key_digest[0]);
+        sha2.destroy256(?key_state);
+        var i: usize = 0;
+        for (i < sha2.SHA256_DIGEST_SIZE) {
+            key_block[i] = key_digest[i];
+            i = i + 1;
+        }
+    } or {
+        var i: usize = 0;
+        for (i < key.len) {
+            key_block[i] = key.data[i];
+            i = i + 1;
+        }
+    }
+
+    var i: usize = 0;
+    for (i < sha2.SHA256_BLOCK_SIZE) {
+        inner_pad[i] = key_block[i] ^ 0x36;
+        context.outer_pad[i] = key_block[i] ^ 0x5C;
+        i = i + 1;
+    }
+    if (!sha2.update256_secret(?context.inner, ?inner_pad[0], sha2.SHA256_BLOCK_SIZE)) {
+        ct.zeroize(?key_block[0], sha2.SHA256_BLOCK_SIZE);
+        ct.zeroize(?inner_pad[0], sha2.SHA256_BLOCK_SIZE);
+        ct.zeroize(?key_digest[0], sha2.SHA256_DIGEST_SIZE);
+        destroy256(context);
+        ret contracts.INVALID_STATE;
+    }
+    ct.zeroize(?key_block[0], sha2.SHA256_BLOCK_SIZE);
+    ct.zeroize(?inner_pad[0], sha2.SHA256_BLOCK_SIZE);
+    ct.zeroize(?key_digest[0], sha2.SHA256_DIGEST_SIZE);
+    context.active = true;
+    ret contracts.OK;
+}
+
+#[oblivious]
+pub fun init384(context: *Context384, key: contracts.SecretBytes) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    sha2.init384(?context.inner);
+    ct.zeroize(?context.outer_pad[0], sha2.SHA384_BLOCK_SIZE);
+    context.active = false;
+    if (key.len != 0 && key.data == nil) {
+        destroy384(context);
+        ret contracts.INVALID_INPUT;
+    }
+
+    var key_block: [128]^u8;
+    var inner_pad: [128]^u8;
+    var key_digest: [48]^u8;
+    ct.zeroize(?key_block[0], sha2.SHA384_BLOCK_SIZE);
+    ct.zeroize(?inner_pad[0], sha2.SHA384_BLOCK_SIZE);
+    ct.zeroize(?key_digest[0], sha2.SHA384_DIGEST_SIZE);
+
+    if (key.len > sha2.SHA384_BLOCK_SIZE) {
+        var key_state: sha2.State384;
+        sha2.init384(?key_state);
+        if (!sha2.update384_secret(?key_state, key.data, key.len)) {
+            sha2.destroy384(?key_state);
+            ct.zeroize(?key_block[0], sha2.SHA384_BLOCK_SIZE);
+            ct.zeroize(?inner_pad[0], sha2.SHA384_BLOCK_SIZE);
+            ct.zeroize(?key_digest[0], sha2.SHA384_DIGEST_SIZE);
+            destroy384(context);
+            ret contracts.INVALID_KEY;
+        }
+        sha2.final384(?key_state, ?key_digest[0]);
+        sha2.destroy384(?key_state);
+        var i: usize = 0;
+        for (i < sha2.SHA384_DIGEST_SIZE) {
+            key_block[i] = key_digest[i];
+            i = i + 1;
+        }
+    } or {
+        var i: usize = 0;
+        for (i < key.len) {
+            key_block[i] = key.data[i];
+            i = i + 1;
+        }
+    }
+
+    var i: usize = 0;
+    for (i < sha2.SHA384_BLOCK_SIZE) {
+        inner_pad[i] = key_block[i] ^ 0x36;
+        context.outer_pad[i] = key_block[i] ^ 0x5C;
+        i = i + 1;
+    }
+    if (!sha2.update384_secret(?context.inner, ?inner_pad[0], sha2.SHA384_BLOCK_SIZE)) {
+        ct.zeroize(?key_block[0], sha2.SHA384_BLOCK_SIZE);
+        ct.zeroize(?inner_pad[0], sha2.SHA384_BLOCK_SIZE);
+        ct.zeroize(?key_digest[0], sha2.SHA384_DIGEST_SIZE);
+        destroy384(context);
+        ret contracts.INVALID_STATE;
+    }
+    ct.zeroize(?key_block[0], sha2.SHA384_BLOCK_SIZE);
+    ct.zeroize(?inner_pad[0], sha2.SHA384_BLOCK_SIZE);
+    ct.zeroize(?key_digest[0], sha2.SHA384_DIGEST_SIZE);
+    context.active = true;
+    ret contracts.OK;
+}
+
+pub fun update256_public(context: *Context256, data: *u8, len: usize) contracts.Error {
+    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
+    if (len != 0 && data == nil) { ret contracts.INVALID_INPUT; }
+    if (!sha2.update256_public(?context.inner, data, len)) { ret contracts.INVALID_INPUT; }
+    ret contracts.OK;
+}
+
+pub fun update256_secret(context: *Context256, data: *^u8, len: usize) contracts.Error {
+    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
+    if (len != 0 && data == nil) { ret contracts.INVALID_INPUT; }
+    if (!sha2.update256_secret(?context.inner, data, len)) { ret contracts.INVALID_INPUT; }
+    ret contracts.OK;
+}
+
+pub fun update384_public(context: *Context384, data: *u8, len: usize) contracts.Error {
+    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
+    if (len != 0 && data == nil) { ret contracts.INVALID_INPUT; }
+    if (!sha2.update384_public(?context.inner, data, len)) { ret contracts.INVALID_INPUT; }
+    ret contracts.OK;
+}
+
+pub fun update384_secret(context: *Context384, data: *^u8, len: usize) contracts.Error {
+    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
+    if (len != 0 && data == nil) { ret contracts.INVALID_INPUT; }
+    if (!sha2.update384_secret(?context.inner, data, len)) { ret contracts.INVALID_INPUT; }
+    ret contracts.OK;
+}
+
+pub fun final256(context: *Context256, tag: *^u8) contracts.Error {
+    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
+    if (tag == nil) {
+        destroy256(context);
+        ret contracts.INVALID_INPUT;
+    }
+    var inner_digest: [32]^u8;
+    ct.zeroize(?inner_digest[0], sha2.SHA256_DIGEST_SIZE);
+    sha2.final256(?context.inner, ?inner_digest[0]);
+    sha2.destroy256(?context.inner);
+
+    var outer: sha2.State256;
+    sha2.init256(?outer);
+    if (!sha2.update256_secret(?outer, ?context.outer_pad[0], sha2.SHA256_BLOCK_SIZE) ||
+        !sha2.update256_secret(?outer, ?inner_digest[0], sha2.SHA256_DIGEST_SIZE)) {
+        sha2.destroy256(?outer);
+        ct.zeroize(?inner_digest[0], sha2.SHA256_DIGEST_SIZE);
+        destroy256(context);
+        ret contracts.INVALID_STATE;
+    }
+    sha2.final256(?outer, tag);
+    sha2.destroy256(?outer);
+    ct.zeroize(?inner_digest[0], sha2.SHA256_DIGEST_SIZE);
+    destroy256(context);
+    ret contracts.OK;
+}
+
+pub fun final384(context: *Context384, tag: *^u8) contracts.Error {
+    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
+    if (tag == nil) {
+        destroy384(context);
+        ret contracts.INVALID_INPUT;
+    }
+    var inner_digest: [48]^u8;
+    ct.zeroize(?inner_digest[0], sha2.SHA384_DIGEST_SIZE);
+    sha2.final384(?context.inner, ?inner_digest[0]);
+    sha2.destroy384(?context.inner);
+
+    var outer: sha2.State384;
+    sha2.init384(?outer);
+    if (!sha2.update384_secret(?outer, ?context.outer_pad[0], sha2.SHA384_BLOCK_SIZE) ||
+        !sha2.update384_secret(?outer, ?inner_digest[0], sha2.SHA384_DIGEST_SIZE)) {
+        sha2.destroy384(?outer);
+        ct.zeroize(?inner_digest[0], sha2.SHA384_DIGEST_SIZE);
+        destroy384(context);
+        ret contracts.INVALID_STATE;
+    }
+    sha2.final384(?outer, tag);
+    sha2.destroy384(?outer);
+    ct.zeroize(?inner_digest[0], sha2.SHA384_DIGEST_SIZE);
+    destroy384(context);
+    ret contracts.OK;
+}
