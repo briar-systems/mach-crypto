@@ -266,8 +266,9 @@ and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
 algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, P-256,
-ECDSA, Ed25519, RSA-PSS, HMAC, and HKDF have functional and vector evidence, but package-wide
-leakage and independent review layers have not yet advanced.
+ECDSA, Ed25519, RSA-PSS, HMAC, HKDF, and key encoding have functional and vector
+evidence, but package-wide leakage and independent review layers have not yet
+advanced.
 
 ## Local development
 
