@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0] - 2026-08-28
+
+### Added
+
+- Ed25519 and RSA-PSS signing and verification with strict key and salt policies.
+- Strict DER and PEM codecs with canonical length, value, label, line, and padding rules.
+- PKCS#1, PKCS#8, SEC1, and SPKI containers for RSA, P-256, Ed25519, and X25519 keys.
+- Incremental SHA-256 and SHA-384 transcript contexts with non-consuming snapshots.
+- NIST and RFC vectors, hostile parsing corpora, lifecycle tests, and six-target IR evidence.
+
+### Security
+
+- Private containers retain one move-only secret owner and deterministic cleanup recovery.
+- Transcript validation failures preserve state and output, while finalization and destruction zeroize state.
+- RSA-PSS, Ed25519, container parsing, and transcript operations clear private intermediate values.
+
 ## [0.3.0] - 2026-08-28
 
 ### Added
