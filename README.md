@@ -13,9 +13,9 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
-- `crypto.group.x25519` provides X25519 key agreement. `crypto.group.p256`
-  defines the P-256 contract.
-- `crypto.signature` covers certificate signature algorithms.
+- `crypto.group.x25519` provides X25519 key agreement.
+- `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
+- `crypto.signature` provides deterministic ECDSA P-256 with SHA-256.
 - `crypto.encoding.der` and `crypto.encoding.pem` cover cryptographic containers.
 - `crypto.vectors` defines a common test vector contract.
 - `crypto.assurance` publishes the validation state of this package.
@@ -136,14 +136,39 @@ multiplication rather than secret hardware multiplication or division. Scalar,
 field, inversion, encoded result, and rejected shared-secret state are
 explicitly zeroized.
 
+## P-256 and ECDSA
+
+`group.p256.derive_public` accepts an exact 32-byte big-endian private scalar
+in `1..n-1` and writes the exact 65-byte uncompressed SEC1 public point.
+`group.p256.agree` accepts that scalar and an exact uncompressed SEC1 peer
+point, validates canonical coordinates and the curve equation, and writes the
+32-byte big-endian shared x-coordinate to secret output. Compressed points,
+the point at infinity, off-curve points, non-canonical coordinates, and invalid
+private scalars are rejected. Successful agreement may overwrite its private
+scalar because the complete scalar is snapshotted first.
+
+`signature.sign_ecdsa_p256_sha256` hashes the public message with SHA-256 and
+uses RFC 6979 HMAC-SHA-256 nonce generation. It writes a strict minimal DER
+signature of at most 72 bytes. `signature.verify_ecdsa_p256_sha256` accepts an
+exact uncompressed SEC1 public key and strict DER, rejects zero or out-of-range
+`r` and `s`, and accepts both high- and low-`s` mathematical signatures. All
+validation and capacity failures return `written = 0` without changing output.
+
+Field and scalar values use fixed eight-limb storage. Multiplication uses a
+fixed 256-step masked shift-and-add operation, inversions use fixed public
+exponents, and scalar multiplication uses a fixed 256-step point loop without
+secret-indexed tables. Private scalars, nonce state, hashes, field and scalar
+temporaries, and projective points are explicitly zeroized.
+
 ## Status
 
 The repository combines callable primitives with contracts for algorithms that
 are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
-HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, and HKDF-Expand are callable in this
-revision. Their tests include NIST, RFC 4231, RFC 5869, RFC 7748, and RFC 8439
-vectors, independent differential vectors, tamper and low-order cases, counter
-and output limits, invalid inputs, fixed-buffer failures, and supported overlap.
+P-256 ECDH, ECDSA P-256 with SHA-256, HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract,
+and HKDF-Expand are callable in this revision. Their tests include NIST, RFC
+4231, RFC 5869, RFC 6979, RFC 7748, and RFC 8439 vectors, independent
+differential vectors, strict-encoding and tamper cases, counter and output
+limits, invalid inputs, fixed-buffer failures, and supported overlap.
 
 Mach constant-time support is functional. Its current limitation is assurance,
 not expressiveness. The package will use Mach secret types and oblivious code,
@@ -151,9 +176,9 @@ official vectors, differential tests, generated-code inspection, leakage tests,
 and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
-algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, HMAC, and
-HKDF have functional and vector evidence, but package-wide leakage and
-independent review layers have not yet advanced.
+algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, P-256,
+ECDSA, HMAC, and HKDF have functional and vector evidence, but package-wide
+leakage and independent review layers have not yet advanced.
 
 ## Local development
 
