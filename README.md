@@ -15,7 +15,7 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
 - `crypto.group.x25519` provides X25519 key agreement.
 - `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
-- `crypto.signature` provides deterministic ECDSA P-256 with SHA-256.
+- `crypto.signature` provides ECDSA P-256, Ed25519, and RSA-PSS signatures.
 - `crypto.encoding.der` and `crypto.encoding.pem` cover cryptographic containers.
 - `crypto.vectors` defines a common test vector contract.
 - `crypto.assurance` publishes the validation state of this package.
@@ -163,13 +163,48 @@ exponents, and scalar multiplication uses a fixed 256-step point loop without
 secret-indexed tables. Private scalars, nonce state, hashes, field and scalar
 temporaries, and projective points are explicitly zeroized.
 
+## Ed25519 and RSA-PSS
+
+`signature.derive_ed25519_public` derives an exact 32-byte RFC 8032 public key
+from an exact 32-byte private seed. `signature.sign_ed25519` writes an exact
+64-byte deterministic pure-Ed25519 signature. Verification requires canonical
+point encodings, `S < L`, and non-identity prime-subgroup public and nonce
+points. Malformed public keys return `INVALID_KEY`. Malformed or
+mathematically invalid signatures return `AUTH_FAILED`.
+
+RSA keys use explicit `RsaPublicKey` and `RsaPrivateKey` records. A modulus is
+a canonical big-endian, odd, full-width value from 256 through 512 bytes in
+four-byte increments. This admits 2048, 3072, and 4096-bit TLS keys. A public
+exponent is canonical big-endian, odd, at least three, and less than the
+modulus. A private exponent is secret, left-zero-padded to exactly the modulus
+width, and is paired with its public exponent so signing can verify its own
+result before release.
+
+`signature.sign_rsa_pss_sha256` requires an exact 32-byte caller-provided
+secret salt. `signature.sign_rsa_pss_sha384` requires an exact 48-byte salt.
+The caller owns salt generation and should use `secret.init_random` for every
+signature. The encoded message uses `emBits = modBits - 1`, MGF1 with the same
+hash, an exact hash-length salt, and trailer `0xbc`. Signatures are exactly the
+modulus width. Verification enforces the same salt and encoded-message policy.
+
+Ed25519 and RSA-PSS signing consume the complete message before writing, so
+public message and output storage may overlap. Validation, capacity, and key
+failures write nothing and return `written = 0`. RSA signing performs a public
+exponentiation self-check before any signature byte is released. Secret seeds,
+expanded scalars, nonces, salts copied into encoded messages, private
+exponentiation state, message hashes, masks, encoded messages, and unreleased
+signatures are explicitly zeroized. `signature.algorithm_status` returns
+`UNSUPPORTED` for an unknown TLS signature identifier, independently of
+`INVALID_KEY` and `AUTH_FAILED` operation results.
+
 ## Status
 
 The repository combines callable primitives with contracts for algorithms that
 are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
-P-256 ECDH, ECDSA P-256 with SHA-256, HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract,
-and HKDF-Expand are callable in this revision. Their tests include NIST, RFC
-4231, RFC 5869, RFC 6979, RFC 7748, and RFC 8439 vectors, independent
+P-256 ECDH, ECDSA P-256 with SHA-256, Ed25519, RSA-PSS with SHA-256 and SHA-384,
+HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, and HKDF-Expand are callable in this
+revision. Their tests include NIST, RFC 4231, RFC 5869, RFC 6979, RFC 7748, RFC
+8032, and RFC 8439 vectors, independent
 differential vectors, strict-encoding and tamper cases, counter and output
 limits, invalid inputs, fixed-buffer failures, and supported overlap.
 
@@ -180,7 +215,7 @@ and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
 algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, P-256,
-ECDSA, HMAC, and HKDF have functional and vector evidence, but package-wide
+ECDSA, Ed25519, RSA-PSS, HMAC, and HKDF have functional and vector evidence, but package-wide
 leakage and independent review layers have not yet advanced.
 
 ## Local development

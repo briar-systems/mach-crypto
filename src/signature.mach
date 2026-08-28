@@ -1,8 +1,10 @@
 # signatures needed by tls certificates and handshakes
 
 use crypto.contracts;
+use ed: crypto.internal.ed25519;
 use crypto.internal.hmac;
 use core: crypto.internal.p256;
+use crypto.internal.rsa;
 use crypto.internal.sha2;
 use std.crypto.ct;
 use std.types.bool.bool;
@@ -17,10 +19,38 @@ pub val ED25519:           Algorithm = 0x0807;
 pub val RSA_PSS_RSAE_SHA256: Algorithm = 0x0804;
 pub val RSA_PSS_RSAE_SHA384: Algorithm = 0x0805;
 
+pub fun algorithm_status(algorithm: Algorithm) contracts.Error {
+    if (algorithm == ECDSA_P256_SHA256 || algorithm == ED25519 ||
+        algorithm == RSA_PSS_RSAE_SHA256 || algorithm == RSA_PSS_RSAE_SHA384) {
+        ret contracts.OK;
+    }
+    ret contracts.UNSUPPORTED;
+}
+
 pub val ECDSA_P256_PRIVATE_KEY_SIZE: usize = 32;
 pub val ECDSA_P256_PUBLIC_KEY_SIZE: usize = 65;
 pub val ECDSA_P256_SIGNATURE_MIN_SIZE: usize = 8;
 pub val ECDSA_P256_SIGNATURE_MAX_SIZE: usize = 72;
+
+pub val ED25519_PRIVATE_KEY_SIZE: usize = 32;
+pub val ED25519_PUBLIC_KEY_SIZE: usize = 32;
+pub val ED25519_SIGNATURE_SIZE: usize = 64;
+
+pub val RSA_MIN_MODULUS_SIZE: usize = rsa.MIN_MODULUS_BYTES;
+pub val RSA_MAX_MODULUS_SIZE: usize = rsa.MAX_MODULUS_BYTES;
+pub val RSA_PSS_SHA256_SALT_SIZE: usize = 32;
+pub val RSA_PSS_SHA384_SALT_SIZE: usize = 48;
+
+pub rec RsaPublicKey {
+    modulus:  contracts.Bytes;
+    exponent: contracts.Bytes;
+}
+
+pub rec RsaPrivateKey {
+    modulus:         contracts.Bytes;
+    public_exponent: contracts.Bytes;
+    private_exponent: contracts.SecretBytes;
+}
 
 # verification returns auth_failed for an invalid signature
 pub def VerifyFun: fun(contracts.Bytes, contracts.Bytes, contracts.Bytes) contracts.Error;
@@ -35,6 +65,598 @@ rec NonceState {
 
 fun failed(error: contracts.Error) contracts.Operation {
     ret contracts.Operation{error: error, written: 0};
+}
+
+#[oblivious]
+fun hash512_secret(input: *^u8, len: usize, digest: *^u8) contracts.Error {
+    var state: sha2.State384;
+    sha2.init512(?state);
+    if (!sha2.update512_secret(?state, input, len)) {
+        sha2.destroy512(?state);
+        ret contracts.INVALID_INPUT;
+    }
+    sha2.final512(?state, digest);
+    sha2.destroy512(?state);
+    ret contracts.OK;
+}
+
+#[oblivious]
+fun hash512_secret_public(secret: *^u8, secret_len: usize,
+    public: contracts.Bytes, digest: *^u8) contracts.Error {
+    var state: sha2.State384;
+    sha2.init512(?state);
+    if (!sha2.update512_secret(?state, secret, secret_len) ||
+        !sha2.update512_public(?state, public.data, public.len)) {
+        sha2.destroy512(?state);
+        ret contracts.INVALID_INPUT;
+    }
+    sha2.final512(?state, digest);
+    sha2.destroy512(?state);
+    ret contracts.OK;
+}
+
+#[oblivious]
+fun hash512_two_secret_public(first: *^u8, second: *^u8,
+    public: contracts.Bytes, digest: *^u8) contracts.Error {
+    var state: sha2.State384;
+    sha2.init512(?state);
+    if (!sha2.update512_secret(?state, first, 32) ||
+        !sha2.update512_secret(?state, second, 32) ||
+        !sha2.update512_public(?state, public.data, public.len)) {
+        sha2.destroy512(?state);
+        ret contracts.INVALID_INPUT;
+    }
+    sha2.final512(?state, digest);
+    sha2.destroy512(?state);
+    ret contracts.OK;
+}
+
+#[oblivious]
+fun ed25519_expand(seed: contracts.SecretBytes, expanded: *^u8,
+    scalar: *ed.Scalar) contracts.Error {
+    val status: contracts.Error = hash512_secret(seed.data, seed.len, expanded);
+    if (status != contracts.OK) { ret status; }
+    expanded[0] = expanded[0] & 248;
+    expanded[31] = (expanded[31] & 63) | 64;
+    ed.scalar_reduce_secret(scalar, expanded, 32);
+    ret contracts.OK;
+}
+
+# derive the rfc 8032 public key from a 32-byte private seed
+#[oblivious]
+pub fun derive_ed25519_public(private_key: contracts.SecretBytes,
+    output: contracts.Buffer) contracts.Operation {
+    if (private_key.len != ED25519_PRIVATE_KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
+    if (private_key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < ED25519_PUBLIC_KEY_SIZE) {
+        ret failed(contracts.OUTPUT_TOO_SMALL);
+    }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    ct.begin();
+    var expanded: [64]^u8;
+    var scalar: ed.Scalar;
+    var basepoint: ed.Point;
+    var public_point: ed.Point;
+    ct.zeroize(?expanded[0], 64);
+    val status: contracts.Error = ed25519_expand(private_key, ?expanded[0], ?scalar);
+    if (status == contracts.OK) {
+        ed.generator(?basepoint);
+        ed.scalar_multiply(?public_point, ?scalar, ?basepoint);
+        ed.point_encode_public(output.data, ?public_point);
+    }
+    ct.zeroize(?expanded[0], 64);
+    ed.destroy_scalar(?scalar);
+    ed.destroy_point(?basepoint);
+    ed.destroy_point(?public_point);
+    ct.end();
+    if (status != contracts.OK) { ret failed(status); }
+    ret contracts.Operation{error: contracts.OK, written: ED25519_PUBLIC_KEY_SIZE};
+}
+
+# sign the exact message with rfc 8032 ed25519
+#[oblivious]
+pub fun sign_ed25519(private_key: contracts.SecretBytes, message: contracts.Bytes,
+    output: contracts.Buffer) contracts.Operation {
+    if (private_key.len != ED25519_PRIVATE_KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
+    if (private_key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (message.len != 0 && message.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < ED25519_SIGNATURE_SIZE) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+
+    ct.begin();
+    var expanded: [64]^u8;
+    var prefix: [32]^u8;
+    var public_encoded: [32]^u8;
+    var r_encoded: [32]^u8;
+    var s_encoded: [32]^u8;
+    var digest: [64]^u8;
+    var signature_bytes: [64]^u8;
+    ct.zeroize(?expanded[0], 64);
+    ct.zeroize(?prefix[0], 32);
+    ct.zeroize(?public_encoded[0], 32);
+    ct.zeroize(?r_encoded[0], 32);
+    ct.zeroize(?s_encoded[0], 32);
+    ct.zeroize(?digest[0], 64);
+    ct.zeroize(?signature_bytes[0], 64);
+    var private_scalar: ed.Scalar;
+    var nonce: ed.Scalar;
+    var challenge: ed.Scalar;
+    var product: ed.Scalar;
+    var response: ed.Scalar;
+    var basepoint: ed.Point;
+    var public_point: ed.Point;
+    var nonce_point: ed.Point;
+    var status: contracts.Error = ed25519_expand(private_key, ?expanded[0],
+        ?private_scalar);
+    if (status == contracts.OK) {
+        var i: usize = 0;
+        for (i < 32) { prefix[i] = expanded[32 + i]; i = i + 1; }
+        ed.generator(?basepoint);
+        ed.scalar_multiply(?public_point, ?private_scalar, ?basepoint);
+        ed.point_encode_signature(?public_encoded[0], ?public_point);
+        status = hash512_secret_public(?prefix[0], 32, message, ?digest[0]);
+    }
+    if (status == contracts.OK) {
+        ed.scalar_reduce_secret(?nonce, ?digest[0], 64);
+        ed.scalar_multiply(?nonce_point, ?nonce, ?basepoint);
+        ed.point_encode_signature(?r_encoded[0], ?nonce_point);
+        status = hash512_two_secret_public(?r_encoded[0], ?public_encoded[0],
+            message, ?digest[0]);
+    }
+    if (status == contracts.OK) {
+        ed.scalar_reduce_secret(?challenge, ?digest[0], 64);
+        ed.scalar_multiply_values(?product, ?challenge, ?private_scalar);
+        ed.scalar_add(?response, ?nonce, ?product);
+        ed.scalar_encode_secret(?s_encoded[0], ?response);
+        var i: usize = 0;
+        for (i < 32) {
+            signature_bytes[i] = r_encoded[i];
+            signature_bytes[32 + i] = s_encoded[i];
+            i = i + 1;
+        }
+        i = 0;
+        for (i < ED25519_SIGNATURE_SIZE) {
+            output.data[i] = signature_bytes[i]:^;
+            i = i + 1;
+        }
+    }
+    ct.zeroize(?expanded[0], 64);
+    ct.zeroize(?prefix[0], 32);
+    ct.zeroize(?public_encoded[0], 32);
+    ct.zeroize(?r_encoded[0], 32);
+    ct.zeroize(?s_encoded[0], 32);
+    ct.zeroize(?digest[0], 64);
+    ct.zeroize(?signature_bytes[0], 64);
+    ed.destroy_scalar(?private_scalar);
+    ed.destroy_scalar(?nonce);
+    ed.destroy_scalar(?challenge);
+    ed.destroy_scalar(?product);
+    ed.destroy_scalar(?response);
+    ed.destroy_point(?basepoint);
+    ed.destroy_point(?public_point);
+    ed.destroy_point(?nonce_point);
+    ct.end();
+    if (status != contracts.OK) { ret failed(status); }
+    ret contracts.Operation{error: contracts.OK, written: ED25519_SIGNATURE_SIZE};
+}
+
+# verify strict prime-subgroup rfc 8032 ed25519
+#[oblivious]
+pub fun verify_ed25519(public_key: contracts.Bytes, message: contracts.Bytes,
+    signature_bytes: contracts.Bytes) contracts.Error {
+    if (public_key.len != ED25519_PUBLIC_KEY_SIZE) { ret contracts.INVALID_KEY; }
+    if (public_key.data == nil) { ret contracts.INVALID_INPUT; }
+    if (message.len != 0 && message.data == nil) { ret contracts.INVALID_INPUT; }
+    if (signature_bytes.len != ED25519_SIGNATURE_SIZE) { ret contracts.AUTH_FAILED; }
+    if (signature_bytes.data == nil) { ret contracts.INVALID_INPUT; }
+
+    ct.begin();
+    var public_point: ed.Point;
+    var nonce_point: ed.Point;
+    var order: ed.Scalar;
+    var subgroup: ed.Point;
+    val public_decoded: ^u8 = ed.point_decode(?public_point, public_key.data);
+    ed.order_scalar(?order);
+    ed.scalar_multiply(?subgroup, ?order, ?public_point);
+    val public_subgroup: ^u8 = ed.point_is_identity(?subgroup) &
+        (ed.point_is_identity(?public_point) ^ 1);
+    if ((public_decoded & public_subgroup):^ != 1) {
+        ed.destroy_point(?public_point);
+        ed.destroy_point(?nonce_point);
+        ed.destroy_scalar(?order);
+        ed.destroy_point(?subgroup);
+        ct.end();
+        ret contracts.INVALID_KEY;
+    }
+    val nonce_decoded: ^u8 = ed.point_decode(?nonce_point, signature_bytes.data);
+    ed.scalar_multiply(?subgroup, ?order, ?nonce_point);
+    val nonce_subgroup: ^u8 = ed.point_is_identity(?subgroup) &
+        (ed.point_is_identity(?nonce_point) ^ 1);
+    var response: ed.Scalar;
+    ed.scalar_decode_public(?response, signature_bytes.data, 32);
+    val response_valid: ^u8 = ed.scalar_valid(?response);
+    if ((nonce_decoded & nonce_subgroup & response_valid):^ != 1) {
+        ed.destroy_point(?public_point);
+        ed.destroy_point(?nonce_point);
+        ed.destroy_scalar(?order);
+        ed.destroy_point(?subgroup);
+        ed.destroy_scalar(?response);
+        ct.end();
+        ret contracts.AUTH_FAILED;
+    }
+    var r_secret: [32]^u8;
+    var public_secret: [32]^u8;
+    var digest: [64]^u8;
+    ct.zeroize(?r_secret[0], 32);
+    ct.zeroize(?public_secret[0], 32);
+    ct.zeroize(?digest[0], 64);
+    var i: usize = 0;
+    for (i < 32) {
+        r_secret[i] = signature_bytes.data[i];
+        public_secret[i] = public_key.data[i];
+        i = i + 1;
+    }
+    val hash_status: contracts.Error = hash512_two_secret_public(?r_secret[0],
+        ?public_secret[0], message, ?digest[0]);
+    if (hash_status != contracts.OK) {
+        ct.zeroize(?r_secret[0], 32);
+        ct.zeroize(?public_secret[0], 32);
+        ct.zeroize(?digest[0], 64);
+        ed.destroy_point(?public_point);
+        ed.destroy_point(?nonce_point);
+        ed.destroy_scalar(?order);
+        ed.destroy_point(?subgroup);
+        ed.destroy_scalar(?response);
+        ct.end();
+        ret hash_status;
+    }
+    var challenge: ed.Scalar;
+    var basepoint: ed.Point;
+    var left: ed.Point;
+    var product_point: ed.Point;
+    var right: ed.Point;
+    var left_encoded: [32]^u8;
+    var right_encoded: [32]^u8;
+    ed.scalar_reduce_secret(?challenge, ?digest[0], 64);
+    ed.generator(?basepoint);
+    ed.scalar_multiply(?left, ?response, ?basepoint);
+    ed.scalar_multiply(?product_point, ?challenge, ?public_point);
+    ed.point_add(?right, ?nonce_point, ?product_point);
+    ed.point_encode_signature(?left_encoded[0], ?left);
+    ed.point_encode_signature(?right_encoded[0], ?right);
+    val matches: ^u8 = ct.eq_bytes(?left_encoded[0], ?right_encoded[0], 32);
+    var result: contracts.Error = contracts.AUTH_FAILED;
+    if (matches:^ == 1) { result = contracts.OK; }
+    ct.zeroize(?r_secret[0], 32);
+    ct.zeroize(?public_secret[0], 32);
+    ct.zeroize(?digest[0], 64);
+    ct.zeroize(?left_encoded[0], 32);
+    ct.zeroize(?right_encoded[0], 32);
+    ed.destroy_point(?public_point);
+    ed.destroy_point(?nonce_point);
+    ed.destroy_scalar(?order);
+    ed.destroy_point(?subgroup);
+    ed.destroy_scalar(?response);
+    ed.destroy_scalar(?challenge);
+    ed.destroy_point(?basepoint);
+    ed.destroy_point(?left);
+    ed.destroy_point(?product_point);
+    ed.destroy_point(?right);
+    ct.end();
+    ret result;
+}
+
+fun valid_rsa_public(key: RsaPublicKey) bool {
+    if (!rsa.valid_modulus(key.modulus.data, key.modulus.len)) { ret false; }
+    ret rsa.valid_exponent(key.exponent.data, key.exponent.len,
+        key.modulus.data, key.modulus.len);
+}
+
+fun valid_rsa_private(key: RsaPrivateKey) bool {
+    if (!rsa.valid_modulus(key.modulus.data, key.modulus.len)) { ret false; }
+    if (!rsa.valid_exponent(key.public_exponent.data, key.public_exponent.len,
+        key.modulus.data, key.modulus.len)) { ret false; }
+    if (key.private_exponent.data == nil ||
+        key.private_exponent.len != key.modulus.len) { ret false; }
+    ret true;
+}
+
+#[oblivious]
+fun pss_hash_message(output: *^u8, message: contracts.Bytes,
+    sha384: bool) contracts.Error {
+    if (sha384) {
+        var state384: sha2.State384;
+        sha2.init384(?state384);
+        if (!sha2.update384_public(?state384, message.data, message.len)) {
+            sha2.destroy384(?state384);
+            ret contracts.INVALID_INPUT;
+        }
+        sha2.final384(?state384, output);
+        sha2.destroy384(?state384);
+        ret contracts.OK;
+    }
+    var state256: sha2.State256;
+    sha2.init256(?state256);
+    if (!sha2.update256_public(?state256, message.data, message.len)) {
+        sha2.destroy256(?state256);
+        ret contracts.INVALID_INPUT;
+    }
+    sha2.final256(?state256, output);
+    sha2.destroy256(?state256);
+    ret contracts.OK;
+}
+
+#[oblivious]
+fun pss_hash_prime(output: *^u8, message_hash: *^u8, salt: *^u8,
+    hash_len: usize, sha384: bool) contracts.Error {
+    var zeros: [8]^u8;
+    ct.zeroize(?zeros[0], 8);
+    if (sha384) {
+        var state384: sha2.State384;
+        sha2.init384(?state384);
+        if (!sha2.update384_secret(?state384, ?zeros[0], 8) ||
+            !sha2.update384_secret(?state384, message_hash, hash_len) ||
+            !sha2.update384_secret(?state384, salt, hash_len)) {
+            sha2.destroy384(?state384);
+            ct.zeroize(?zeros[0], 8);
+            ret contracts.INVALID_INPUT;
+        }
+        sha2.final384(?state384, output);
+        sha2.destroy384(?state384);
+    } or {
+        var state256: sha2.State256;
+        sha2.init256(?state256);
+        if (!sha2.update256_secret(?state256, ?zeros[0], 8) ||
+            !sha2.update256_secret(?state256, message_hash, hash_len) ||
+            !sha2.update256_secret(?state256, salt, hash_len)) {
+            sha2.destroy256(?state256);
+            ct.zeroize(?zeros[0], 8);
+            ret contracts.INVALID_INPUT;
+        }
+        sha2.final256(?state256, output);
+        sha2.destroy256(?state256);
+    }
+    ct.zeroize(?zeros[0], 8);
+    ret contracts.OK;
+}
+
+#[oblivious]
+fun pss_mgf1(output: *^u8, output_len: usize, seed: *^u8,
+    hash_len: usize, sha384: bool) contracts.Error {
+    var digest: [48]^u8;
+    var counter: [4]^u8;
+    ct.zeroize(?digest[0], 48);
+    ct.zeroize(?counter[0], 4);
+    var generated: usize = 0;
+    var block: usize = 0;
+    var status: contracts.Error = contracts.OK;
+    for (generated < output_len) {
+        counter[0] = (block >> 24)::u8;
+        counter[1] = (block >> 16)::u8;
+        counter[2] = (block >> 8)::u8;
+        counter[3] = block::u8;
+        if (sha384) {
+            var state384: sha2.State384;
+            sha2.init384(?state384);
+            if (!sha2.update384_secret(?state384, seed, hash_len) ||
+                !sha2.update384_secret(?state384, ?counter[0], 4)) {
+                sha2.destroy384(?state384);
+                status = contracts.INVALID_INPUT;
+            } or {
+                sha2.final384(?state384, ?digest[0]);
+                sha2.destroy384(?state384);
+            }
+        } or {
+            var state256: sha2.State256;
+            sha2.init256(?state256);
+            if (!sha2.update256_secret(?state256, seed, hash_len) ||
+                !sha2.update256_secret(?state256, ?counter[0], 4)) {
+                sha2.destroy256(?state256);
+                status = contracts.INVALID_INPUT;
+            } or {
+                sha2.final256(?state256, ?digest[0]);
+                sha2.destroy256(?state256);
+            }
+        }
+        if (status != contracts.OK) {
+            ct.zeroize(?digest[0], 48);
+            ct.zeroize(?counter[0], 4);
+            ret status;
+        }
+        var copied: usize = 0;
+        for (copied < hash_len && generated < output_len) {
+            output[generated] = digest[copied];
+            copied = copied + 1;
+            generated = generated + 1;
+        }
+        block = block + 1;
+    }
+    ct.zeroize(?digest[0], 48);
+    ct.zeroize(?counter[0], 4);
+    ret contracts.OK;
+}
+
+#[oblivious]
+fun pss_encode(output: *^u8, encoded_len: usize, message: contracts.Bytes,
+    salt: contracts.SecretBytes, hash_len: usize, sha384: bool) contracts.Error {
+    var message_hash: [48]^u8;
+    var encoded_hash: [48]^u8;
+    var mask: [512]^u8;
+    ct.zeroize(?message_hash[0], 48);
+    ct.zeroize(?encoded_hash[0], 48);
+    ct.zeroize(?mask[0], 512);
+    var status: contracts.Error = pss_hash_message(?message_hash[0], message, sha384);
+    if (status == contracts.OK) {
+        status = pss_hash_prime(?encoded_hash[0], ?message_hash[0], salt.data,
+            hash_len, sha384);
+    }
+    val data_len: usize = encoded_len - hash_len - 1;
+    if (status == contracts.OK) {
+        status = pss_mgf1(?mask[0], data_len, ?encoded_hash[0], hash_len, sha384);
+    }
+    if (status == contracts.OK) {
+        val padding_len: usize = encoded_len - (hash_len << 1) - 2;
+        var i: usize = 0;
+        for (i < padding_len) { output[i] = mask[i]; i = i + 1; }
+        output[padding_len] = 1 ^ mask[padding_len];
+        i = 0;
+        for (i < hash_len) {
+            output[padding_len + 1 + i] = salt.data[i] ^ mask[padding_len + 1 + i];
+            output[data_len + i] = encoded_hash[i];
+            i = i + 1;
+        }
+        output[0] = output[0] & 0x7f;
+        output[encoded_len - 1] = 0xbc;
+    }
+    ct.zeroize(?message_hash[0], 48);
+    ct.zeroize(?encoded_hash[0], 48);
+    ct.zeroize(?mask[0], 512);
+    ret status;
+}
+
+#[oblivious]
+fun pss_check(encoded: *^u8, encoded_len: usize, message: contracts.Bytes,
+    hash_len: usize, sha384: bool) contracts.Error {
+    var message_hash: [48]^u8;
+    var expected_hash: [48]^u8;
+    var mask: [512]^u8;
+    var salt: [48]^u8;
+    ct.zeroize(?message_hash[0], 48);
+    ct.zeroize(?expected_hash[0], 48);
+    ct.zeroize(?mask[0], 512);
+    ct.zeroize(?salt[0], 48);
+    val data_len: usize = encoded_len - hash_len - 1;
+    var status: contracts.Error = pss_hash_message(?message_hash[0], message, sha384);
+    if (status == contracts.OK) {
+        status = pss_mgf1(?mask[0], data_len, ?encoded[data_len], hash_len, sha384);
+    }
+    var valid: ^u8 = 1;
+    valid = valid & ct.eq_u8(encoded[encoded_len - 1], 0xbc);
+    valid = valid & ct.eq_u8(encoded[0] & 0x80, 0);
+    val padding_len: usize = encoded_len - (hash_len << 1) - 2;
+    var i: usize = 0;
+    for (i < padding_len) {
+        var value: ^u8 = encoded[i] ^ mask[i];
+        if (i == 0) { value = value & 0x7f; }
+        valid = valid & ct.eq_u8(value, 0);
+        value = 0;
+        i = i + 1;
+    }
+    valid = valid & ct.eq_u8(encoded[padding_len] ^ mask[padding_len], 1);
+    i = 0;
+    for (i < hash_len) {
+        salt[i] = encoded[padding_len + 1 + i] ^ mask[padding_len + 1 + i];
+        i = i + 1;
+    }
+    if (status == contracts.OK) {
+        status = pss_hash_prime(?expected_hash[0], ?message_hash[0], ?salt[0],
+            hash_len, sha384);
+    }
+    valid = valid & ct.eq_bytes(?expected_hash[0], ?encoded[data_len], hash_len);
+    var result: contracts.Error = contracts.AUTH_FAILED;
+    if (status != contracts.OK) { result = status; }
+    if (status == contracts.OK && valid:^ == 1) { result = contracts.OK; }
+    ct.zeroize(?message_hash[0], 48);
+    ct.zeroize(?expected_hash[0], 48);
+    ct.zeroize(?mask[0], 512);
+    ct.zeroize(?salt[0], 48);
+    valid = 0;
+    ret result;
+}
+
+#[oblivious]
+fun sign_rsa_pss(private_key: RsaPrivateKey, message: contracts.Bytes,
+    salt: contracts.SecretBytes, output: contracts.Buffer, hash_len: usize,
+    sha384: bool) contracts.Operation {
+    if (!valid_rsa_private(private_key)) { ret failed(contracts.INVALID_KEY); }
+    if (message.len != 0 && message.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (salt.len != hash_len) { ret failed(contracts.INVALID_INPUT); }
+    if (salt.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < private_key.modulus.len) {
+        ret failed(contracts.OUTPUT_TOO_SMALL);
+    }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    ct.begin();
+    var encoded: [512]^u8;
+    var signature_bytes: [512]^u8;
+    var recovered: [512]^u8;
+    ct.zeroize(?encoded[0], 512);
+    ct.zeroize(?signature_bytes[0], 512);
+    ct.zeroize(?recovered[0], 512);
+    var status: contracts.Error = pss_encode(?encoded[0], private_key.modulus.len,
+        message, salt, hash_len, sha384);
+    var valid: ^u8 = 0;
+    if (status == contracts.OK) {
+        valid = rsa.private_apply(?signature_bytes[0], ?encoded[0],
+            private_key.modulus.data, private_key.modulus.len,
+            private_key.private_exponent.data, private_key.private_exponent.len);
+        valid = valid & rsa.public_apply_secret(?recovered[0], ?signature_bytes[0],
+            private_key.modulus.data, private_key.modulus.len,
+            private_key.public_exponent.data, private_key.public_exponent.len);
+        valid = valid & ct.eq_bytes(?recovered[0], ?encoded[0], private_key.modulus.len);
+        if (valid:^ != 1) { status = contracts.INVALID_KEY; }
+    }
+    if (status == contracts.OK) {
+        var i: usize = 0;
+        for (i < private_key.modulus.len) {
+            output.data[i] = signature_bytes[i]:^;
+            i = i + 1;
+        }
+    }
+    ct.zeroize(?encoded[0], 512);
+    ct.zeroize(?signature_bytes[0], 512);
+    ct.zeroize(?recovered[0], 512);
+    valid = 0;
+    ct.end();
+    if (status != contracts.OK) { ret failed(status); }
+    ret contracts.Operation{error: contracts.OK, written: private_key.modulus.len};
+}
+
+#[oblivious]
+fun verify_rsa_pss(public_key: RsaPublicKey, message: contracts.Bytes,
+    signature_bytes: contracts.Bytes, hash_len: usize, sha384: bool) contracts.Error {
+    if (!valid_rsa_public(public_key)) { ret contracts.INVALID_KEY; }
+    if (message.len != 0 && message.data == nil) { ret contracts.INVALID_INPUT; }
+    if (signature_bytes.len != public_key.modulus.len) { ret contracts.AUTH_FAILED; }
+    if (signature_bytes.data == nil) { ret contracts.INVALID_INPUT; }
+    if (!rsa.public_less_than(signature_bytes.data, public_key.modulus.data,
+        public_key.modulus.len)) { ret contracts.AUTH_FAILED; }
+    ct.begin();
+    var encoded: [512]^u8;
+    ct.zeroize(?encoded[0], 512);
+    val valid: ^u8 = rsa.public_apply(?encoded[0], signature_bytes.data,
+        public_key.modulus.data, public_key.modulus.len, public_key.exponent.data,
+        public_key.exponent.len);
+    var result: contracts.Error = contracts.AUTH_FAILED;
+    if (valid:^ == 1) {
+        result = pss_check(?encoded[0], public_key.modulus.len, message,
+            hash_len, sha384);
+    }
+    ct.zeroize(?encoded[0], 512);
+    ct.end();
+    ret result;
+}
+
+# sign rsa-pss with an exact 32-byte caller-provided salt
+pub fun sign_rsa_pss_sha256(private_key: RsaPrivateKey, message: contracts.Bytes,
+    salt: contracts.SecretBytes, output: contracts.Buffer) contracts.Operation {
+    ret sign_rsa_pss(private_key, message, salt, output, 32, false);
+}
+
+# sign rsa-pss with an exact 48-byte caller-provided salt
+pub fun sign_rsa_pss_sha384(private_key: RsaPrivateKey, message: contracts.Bytes,
+    salt: contracts.SecretBytes, output: contracts.Buffer) contracts.Operation {
+    ret sign_rsa_pss(private_key, message, salt, output, 48, true);
+}
+
+pub fun verify_rsa_pss_sha256(public_key: RsaPublicKey, message: contracts.Bytes,
+    signature_bytes: contracts.Bytes) contracts.Error {
+    ret verify_rsa_pss(public_key, message, signature_bytes, 32, false);
+}
+
+pub fun verify_rsa_pss_sha384(public_key: RsaPublicKey, message: contracts.Bytes,
+    signature_bytes: contracts.Bytes) contracts.Error {
+    ret verify_rsa_pss(public_key, message, signature_bytes, 48, true);
 }
 
 #[oblivious]

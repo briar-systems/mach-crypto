@@ -1,0 +1,568 @@
+# constant-shape ed25519 arithmetic
+
+use field: crypto.internal.x25519;
+use std.crypto.ct;
+use std.types.size.usize;
+
+val WORD_MASK: u64 = 0xFFFFFFFF;
+
+val ORDER: [8]u64 = [8]u64{
+    0x5CF5D3ED, 0x5812631A, 0xA2F79CD6, 0x14DEF9DE,
+    0x00000000, 0x00000000, 0x00000000, 0x10000000
+};
+
+val CURVE_D: [5]u64 = [5]u64{
+    0x34DCA135978A3, 0x1A8283B156EBD, 0x5E7A26001C029,
+    0x739C663A03CBB, 0x52036CEE2B6FF
+};
+
+val CURVE_2D: [5]u64 = [5]u64{
+    0x69B9426B2F159, 0x35050762ADD7A, 0x3CF44C0038052,
+    0x6738CC7407977, 0x2406D9DC56DFF
+};
+
+val SQRT_MINUS_ONE: [5]u64 = [5]u64{
+    0x61B274A0EA0B0, 0x0D5A5FC8F189D, 0x7EF5E9CBD0C60,
+    0x78595A6804C9E, 0x2B8324804FC1D
+};
+
+val BASE_X: [5]u64 = [5]u64{
+    0x62D608F25D51A, 0x412A4B4F6592A, 0x75B7171A4B31D,
+    0x1FF60527118FE, 0x216936D3CD6E5
+};
+
+val BASE_Y: [5]u64 = [5]u64{
+    0x6666666666658, 0x4CCCCCCCCCCCC, 0x1999999999999,
+    0x3333333333333, 0x6666666666666
+};
+
+pub rec Scalar {
+    limb: [8]^u64;
+}
+
+pub rec Point {
+    x: field.Field;
+    y: field.Field;
+    z: field.Field;
+    t: field.Field;
+}
+
+#[oblivious]
+pub fun destroy_scalar(value: *Scalar) {
+    if (value == nil) { ret; }
+    ct.zeroize((?value.limb[0]):~*^u8, 64);
+}
+
+#[oblivious]
+pub fun destroy_point(point: *Point) {
+    if (point == nil) { ret; }
+    field.destroy(?point.x);
+    field.destroy(?point.y);
+    field.destroy(?point.z);
+    field.destroy(?point.t);
+}
+
+#[oblivious] #[inline]
+fun nonzero_bit(value: ^u64) ^u8 {
+    ret ((value | (0 - value)) >> 63)::^u8;
+}
+
+#[oblivious]
+pub fun scalar_is_zero(value: *Scalar) ^u8 {
+    var combined: ^u64 = 0;
+    var i: usize = 0;
+    for (i < 8) {
+        combined = combined | value.limb[i];
+        i = i + 1;
+    }
+    val result: ^u8 = nonzero_bit(combined) ^ 1;
+    combined = 0;
+    ret result;
+}
+
+#[oblivious]
+pub fun scalar_copy(output: *Scalar, input: *Scalar) {
+    var i: usize = 0;
+    for (i < 8) {
+        output.limb[i] = input.limb[i];
+        i = i + 1;
+    }
+}
+
+#[oblivious]
+pub fun scalar_set_small(output: *Scalar, value: ^u64) {
+    output.limb[0] = value;
+    var i: usize = 1;
+    for (i < 8) {
+        output.limb[i] = 0;
+        i = i + 1;
+    }
+}
+
+#[oblivious]
+fun scalar_select(output: *Scalar, left: *Scalar, right: *Scalar,
+    choose_right: ^u8) {
+    val mask: ^u64 = 0 - choose_right::^u64;
+    var i: usize = 0;
+    for (i < 8) {
+        output.limb[i] = (left.limb[i] & ~mask) | (right.limb[i] & mask);
+        i = i + 1;
+    }
+}
+
+#[oblivious]
+fun scalar_less_order(value: *Scalar) ^u8 {
+    var borrow: ^u64 = 0;
+    var i: usize = 0;
+    for (i < 8) {
+        val difference: ^u64 = value.limb[i] - ORDER[i] - borrow;
+        borrow = difference >> 63;
+        i = i + 1;
+    }
+    val result: ^u8 = borrow::^u8;
+    borrow = 0;
+    ret result;
+}
+
+#[oblivious]
+pub fun scalar_valid(value: *Scalar) ^u8 {
+    ret scalar_less_order(value);
+}
+
+#[oblivious]
+pub fun scalar_add(output: *Scalar, left: *Scalar, right: *Scalar) {
+    var sum: Scalar;
+    var reduced: Scalar;
+    var carry: ^u64 = 0;
+    var i: usize = 0;
+    for (i < 8) {
+        val word: ^u64 = left.limb[i] + right.limb[i] + carry;
+        sum.limb[i] = word & WORD_MASK;
+        carry = word >> 32;
+        i = i + 1;
+    }
+    var borrow: ^u64 = 0;
+    i = 0;
+    for (i < 8) {
+        val difference: ^u64 = sum.limb[i] - ORDER[i] - borrow;
+        reduced.limb[i] = difference & WORD_MASK;
+        borrow = difference >> 63;
+        i = i + 1;
+    }
+    val use_reduced: ^u8 = (carry | (borrow ^ 1))::^u8;
+    scalar_select(output, ?sum, ?reduced, use_reduced);
+    carry = 0;
+    borrow = 0;
+    destroy_scalar(?sum);
+    destroy_scalar(?reduced);
+}
+
+#[oblivious]
+pub fun scalar_multiply_values(output: *Scalar, left: *Scalar, right: *Scalar) {
+    var result: Scalar;
+    var addend: Scalar;
+    var selected: Scalar;
+    scalar_set_small(?result, 0);
+    scalar_copy(?addend, left);
+    var bit: usize = 0;
+    for (bit < 256) {
+        val limb_index: usize = bit >> 5;
+        val shift: usize = bit & 31;
+        val take: ^u8 = ((right.limb[limb_index] >> shift) & 1)::^u8;
+        val mask: ^u64 = 0 - take::^u64;
+        var i: usize = 0;
+        for (i < 8) {
+            selected.limb[i] = addend.limb[i] & mask;
+            i = i + 1;
+        }
+        scalar_add(?result, ?result, ?selected);
+        scalar_add(?addend, ?addend, ?addend);
+        bit = bit + 1;
+    }
+    scalar_copy(output, ?result);
+    destroy_scalar(?result);
+    destroy_scalar(?addend);
+    destroy_scalar(?selected);
+}
+
+#[oblivious]
+pub fun scalar_decode_public(output: *Scalar, input: *u8, base: usize) {
+    var word: usize = 0;
+    for (word < 8) {
+        val offset: usize = base + (word << 2);
+        output.limb[word] = input[offset]::u64 |
+            (input[offset + 1]::u64 << 8) |
+            (input[offset + 2]::u64 << 16) |
+            (input[offset + 3]::u64 << 24);
+        word = word + 1;
+    }
+}
+
+#[oblivious]
+pub fun scalar_reduce_secret(output: *Scalar, input: *^u8, len: usize) {
+    var result: Scalar;
+    var bit_value: Scalar;
+    scalar_set_small(?result, 0);
+    var position: usize = len << 3;
+    for (position > 0) {
+        position = position - 1;
+        scalar_add(?result, ?result, ?result);
+        val byte_index: usize = position >> 3;
+        val shift: usize = position & 7;
+        scalar_set_small(?bit_value, ((input[byte_index] >> shift) & 1)::^u64);
+        scalar_add(?result, ?result, ?bit_value);
+    }
+    scalar_copy(output, ?result);
+    destroy_scalar(?result);
+    destroy_scalar(?bit_value);
+}
+
+#[oblivious]
+pub fun scalar_encode_secret(output: *^u8, input: *Scalar) {
+    var word: usize = 0;
+    for (word < 8) {
+        val offset: usize = word << 2;
+        val value: ^u64 = input.limb[word];
+        output[offset] = value::^u8;
+        output[offset + 1] = (value >> 8)::^u8;
+        output[offset + 2] = (value >> 16)::^u8;
+        output[offset + 3] = (value >> 24)::^u8;
+        word = word + 1;
+    }
+}
+
+#[oblivious]
+fun field_constant(output: *field.Field, value: *u64) {
+    var i: usize = 0;
+    for (i < 5) {
+        output.limb[i] = value[i];
+        i = i + 1;
+    }
+}
+
+#[oblivious]
+fun field_select(output: *field.Field, left: *field.Field, right: *field.Field,
+    choose_right: ^u8) {
+    val mask: ^u64 = 0 - choose_right::^u64;
+    var i: usize = 0;
+    for (i < 5) {
+        output.limb[i] = (left.limb[i] & ~mask) | (right.limb[i] & mask);
+        i = i + 1;
+    }
+}
+
+#[oblivious]
+fun field_equal(left: *field.Field, right: *field.Field) ^u8 {
+    var left_encoded: [32]^u8;
+    var right_encoded: [32]^u8;
+    field.encode(?left_encoded[0], left);
+    field.encode(?right_encoded[0], right);
+    val result: ^u8 = ct.eq_bytes(?left_encoded[0], ?right_encoded[0], 32);
+    ct.zeroize(?left_encoded[0], 32);
+    ct.zeroize(?right_encoded[0], 32);
+    ret result;
+}
+
+#[oblivious]
+fun field_is_zero(value: *field.Field) ^u8 {
+    var zero: field.Field;
+    field.set_small(?zero, 0);
+    val result: ^u8 = field_equal(value, ?zero);
+    field.destroy(?zero);
+    ret result;
+}
+
+#[oblivious]
+fun field_negate(output: *field.Field, input: *field.Field) {
+    var zero: field.Field;
+    field.set_small(?zero, 0);
+    field.subtract(output, ?zero, input);
+    field.destroy(?zero);
+}
+
+#[oblivious]
+fun field_sqrt(output: *field.Field, input: *field.Field) ^u8 {
+    var result: field.Field;
+    field.set_small(?result, 1);
+    var position: usize = 252;
+    for (position > 0) {
+        position = position - 1;
+        field.square(?result, ?result);
+        if (position > 0) { field.multiply(?result, ?result, input); }
+    }
+    var squared: field.Field;
+    field.square(?squared, ?result);
+    val direct: ^u8 = field_equal(?squared, input);
+    var sqrt_minus_one: field.Field;
+    var corrected: field.Field;
+    field_constant(?sqrt_minus_one, (?SQRT_MINUS_ONE[0]):~*u64);
+    field.multiply(?corrected, ?result, ?sqrt_minus_one);
+    field_select(?result, ?corrected, ?result, direct);
+    field.square(?squared, ?result);
+    val valid: ^u8 = field_equal(?squared, input);
+    field.copy(output, ?result);
+    field.destroy(?result);
+    field.destroy(?squared);
+    field.destroy(?sqrt_minus_one);
+    field.destroy(?corrected);
+    ret valid;
+}
+
+#[oblivious]
+fun point_copy(output: *Point, input: *Point) {
+    field.copy(?output.x, ?input.x);
+    field.copy(?output.y, ?input.y);
+    field.copy(?output.z, ?input.z);
+    field.copy(?output.t, ?input.t);
+}
+
+#[oblivious]
+fun point_select(output: *Point, left: *Point, right: *Point,
+    choose_right: ^u8) {
+    field_select(?output.x, ?left.x, ?right.x, choose_right);
+    field_select(?output.y, ?left.y, ?right.y, choose_right);
+    field_select(?output.z, ?left.z, ?right.z, choose_right);
+    field_select(?output.t, ?left.t, ?right.t, choose_right);
+}
+
+#[oblivious]
+pub fun identity(output: *Point) {
+    field.set_small(?output.x, 0);
+    field.set_small(?output.y, 1);
+    field.set_small(?output.z, 1);
+    field.set_small(?output.t, 0);
+}
+
+#[oblivious]
+pub fun generator(output: *Point) {
+    field_constant(?output.x, (?BASE_X[0]):~*u64);
+    field_constant(?output.y, (?BASE_Y[0]):~*u64);
+    field.set_small(?output.z, 1);
+    field.multiply(?output.t, ?output.x, ?output.y);
+}
+
+#[oblivious]
+pub fun point_is_identity(point: *Point) ^u8 {
+    ret field_is_zero(?point.x) & field_equal(?point.y, ?point.z);
+}
+
+#[oblivious]
+pub fun point_add(output: *Point, left: *Point, right: *Point) {
+    var a: field.Field;
+    var b: field.Field;
+    var c: field.Field;
+    var d_value: field.Field;
+    var e: field.Field;
+    var f: field.Field;
+    var g: field.Field;
+    var h: field.Field;
+    var first: field.Field;
+    var second: field.Field;
+    var two_d: field.Field;
+    var result: Point;
+    field.subtract(?first, ?left.y, ?left.x);
+    field.subtract(?second, ?right.y, ?right.x);
+    field.multiply(?a, ?first, ?second);
+    field.add(?first, ?left.y, ?left.x);
+    field.add(?second, ?right.y, ?right.x);
+    field.multiply(?b, ?first, ?second);
+    field_constant(?two_d, (?CURVE_2D[0]):~*u64);
+    field.multiply(?c, ?left.t, ?right.t);
+    field.multiply(?c, ?c, ?two_d);
+    field.multiply(?d_value, ?left.z, ?right.z);
+    field.add(?d_value, ?d_value, ?d_value);
+    field.subtract(?e, ?b, ?a);
+    field.subtract(?f, ?d_value, ?c);
+    field.add(?g, ?d_value, ?c);
+    field.add(?h, ?b, ?a);
+    field.multiply(?result.x, ?e, ?f);
+    field.multiply(?result.y, ?g, ?h);
+    field.multiply(?result.t, ?e, ?h);
+    field.multiply(?result.z, ?f, ?g);
+    point_copy(output, ?result);
+    field.destroy(?a);
+    field.destroy(?b);
+    field.destroy(?c);
+    field.destroy(?d_value);
+    field.destroy(?e);
+    field.destroy(?f);
+    field.destroy(?g);
+    field.destroy(?h);
+    field.destroy(?first);
+    field.destroy(?second);
+    field.destroy(?two_d);
+    destroy_point(?result);
+}
+
+#[oblivious]
+fun point_double(output: *Point, input: *Point) {
+    var a: field.Field;
+    var b: field.Field;
+    var c: field.Field;
+    var d_value: field.Field;
+    var e: field.Field;
+    var f: field.Field;
+    var g: field.Field;
+    var h: field.Field;
+    var temporary: field.Field;
+    var result: Point;
+    field.square(?a, ?input.x);
+    field.square(?b, ?input.y);
+    field.square(?c, ?input.z);
+    field.add(?c, ?c, ?c);
+    field_negate(?d_value, ?a);
+    field.add(?temporary, ?input.x, ?input.y);
+    field.square(?e, ?temporary);
+    field.subtract(?e, ?e, ?a);
+    field.subtract(?e, ?e, ?b);
+    field.add(?g, ?d_value, ?b);
+    field.subtract(?f, ?g, ?c);
+    field.subtract(?h, ?d_value, ?b);
+    field.multiply(?result.x, ?e, ?f);
+    field.multiply(?result.y, ?g, ?h);
+    field.multiply(?result.t, ?e, ?h);
+    field.multiply(?result.z, ?f, ?g);
+    point_copy(output, ?result);
+    field.destroy(?a);
+    field.destroy(?b);
+    field.destroy(?c);
+    field.destroy(?d_value);
+    field.destroy(?e);
+    field.destroy(?f);
+    field.destroy(?g);
+    field.destroy(?h);
+    field.destroy(?temporary);
+    destroy_point(?result);
+}
+
+#[oblivious]
+pub fun scalar_multiply(output: *Point, scalar: *Scalar, point: *Point) {
+    var result: Point;
+    var addend: Point;
+    var selected: Point;
+    identity(?result);
+    point_copy(?addend, point);
+    var bit: usize = 0;
+    for (bit < 256) {
+        val limb_index: usize = bit >> 5;
+        val shift: usize = bit & 31;
+        val take: ^u8 = ((scalar.limb[limb_index] >> shift) & 1)::^u8;
+        identity(?selected);
+        point_select(?selected, ?selected, ?addend, take);
+        point_add(?result, ?result, ?selected);
+        point_double(?addend, ?addend);
+        bit = bit + 1;
+    }
+    point_copy(output, ?result);
+    destroy_point(?result);
+    destroy_point(?addend);
+    destroy_point(?selected);
+}
+
+#[oblivious]
+pub fun order_scalar(output: *Scalar) {
+    var i: usize = 0;
+    for (i < 8) {
+        output.limb[i] = ORDER[i];
+        i = i + 1;
+    }
+}
+
+#[oblivious]
+fun point_encode_secret(output: *^u8, point: *Point) {
+    var inverse: field.Field;
+    var x: field.Field;
+    var y: field.Field;
+    var x_encoded: [32]^u8;
+    field.invert(?inverse, ?point.z);
+    field.multiply(?x, ?point.x, ?inverse);
+    field.multiply(?y, ?point.y, ?inverse);
+    field.encode(?x_encoded[0], ?x);
+    field.encode(output, ?y);
+    output[31] = output[31] | ((x_encoded[0] & 1) << 7);
+    field.destroy(?inverse);
+    field.destroy(?x);
+    field.destroy(?y);
+    ct.zeroize(?x_encoded[0], 32);
+}
+
+#[oblivious]
+pub fun point_encode_public(output: *u8, point: *Point) {
+    var encoded: [32]^u8;
+    point_encode_secret(?encoded[0], point);
+    var i: usize = 0;
+    for (i < 32) {
+        output[i] = encoded[i]:^;
+        i = i + 1;
+    }
+    ct.zeroize(?encoded[0], 32);
+}
+
+#[oblivious]
+pub fun point_encode_signature(output: *^u8, point: *Point) {
+    point_encode_secret(output, point);
+}
+
+#[oblivious]
+pub fun point_decode(output: *Point, input: *u8) ^u8 {
+    var y_bytes: [32]u8;
+    var provided: [32]^u8;
+    var i: usize = 0;
+    for (i < 32) {
+        y_bytes[i] = input[i];
+        provided[i] = input[i];
+        i = i + 1;
+    }
+    val sign: u8 = y_bytes[31] >> 7;
+    y_bytes[31] = y_bytes[31] & 0x7F;
+    provided[31] = provided[31] & 0x7F;
+    field.decode(?output.y, ?y_bytes[0]);
+    var canonical_y: [32]^u8;
+    field.encode(?canonical_y[0], ?output.y);
+    val canonical: ^u8 = ct.eq_bytes(?canonical_y[0], ?provided[0], 32);
+
+    var y_squared: field.Field;
+    var numerator: field.Field;
+    var denominator: field.Field;
+    var inverse: field.Field;
+    var x_squared: field.Field;
+    var one: field.Field;
+    var d_value: field.Field;
+    field.square(?y_squared, ?output.y);
+    field.set_small(?one, 1);
+    field.subtract(?numerator, ?y_squared, ?one);
+    field_constant(?d_value, (?CURVE_D[0]):~*u64);
+    field.multiply(?denominator, ?d_value, ?y_squared);
+    field.add(?denominator, ?denominator, ?one);
+    field.invert(?inverse, ?denominator);
+    field.multiply(?x_squared, ?numerator, ?inverse);
+    val has_root: ^u8 = field_sqrt(?output.x, ?x_squared);
+    var negative_x: field.Field;
+    field_negate(?negative_x, ?output.x);
+    var x_encoded: [32]^u8;
+    field.encode(?x_encoded[0], ?output.x);
+    val flip: ^u8 = (x_encoded[0] & 1) ^ sign;
+    field_select(?output.x, ?output.x, ?negative_x, flip);
+    val sign_valid: ^u8 = (field_is_zero(?output.x) & sign) ^ 1;
+    field.set_small(?output.z, 1);
+    field.multiply(?output.t, ?output.x, ?output.y);
+
+    ct.zeroize(?provided[0], 32);
+    ct.zeroize(?canonical_y[0], 32);
+    ct.zeroize(?x_encoded[0], 32);
+    field.destroy(?y_squared);
+    field.destroy(?numerator);
+    field.destroy(?denominator);
+    field.destroy(?inverse);
+    field.destroy(?x_squared);
+    field.destroy(?one);
+    field.destroy(?d_value);
+    field.destroy(?negative_x);
+    ret canonical & has_root & sign_valid;
+}
+
+test "ed25519 internal: order and basepoint constants are canonical" {
+    if (ORDER[0] != 0x5CF5D3ED || ORDER[7] != 0x10000000) { ret 1; }
+    if (BASE_Y[0] != 0x6666666666658) { ret 2; }
+    ret 0;
+}
