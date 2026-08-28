@@ -298,24 +298,30 @@ fun validate_secret_tree(input: contracts.SecretBytes, depth: usize) bool {
 }
 
 pub fun exact(input: contracts.Bytes, output: *Element) contracts.Error {
+    if (output == nil) { ret contracts.INVALID_INPUT; }
     var value: Cursor = cursor(input);
-    val status: contracts.Error = next(?value, output);
+    var parsed: Element;
+    val status: contracts.Error = next(?value, ?parsed);
     if (status != contracts.OK) { ret status; }
     if (!complete(?value)) { ret contracts.INVALID_INPUT; }
-    if ((output.tag & 0x20) != 0 &&
-        !validate_public_tree(output.content, 1)) { ret contracts.INVALID_INPUT; }
+    if ((parsed.tag & 0x20) != 0 &&
+        !validate_public_tree(parsed.content, 1)) { ret contracts.INVALID_INPUT; }
+    @output = parsed;
     ret contracts.OK;
 }
 
 #[oblivious]
 pub fun exact_secret(input: contracts.SecretBytes,
     output: *SecretElement) contracts.Error {
+    if (output == nil) { ret contracts.INVALID_INPUT; }
     var value: SecretCursor = secret_cursor(input);
-    val status: contracts.Error = next_secret(?value, output);
+    var parsed: SecretElement;
+    val status: contracts.Error = next_secret(?value, ?parsed);
     if (status != contracts.OK) { ret status; }
     if (!secret_complete(?value)) { ret contracts.INVALID_INPUT; }
-    if ((output.tag & 0x20) != 0 &&
-        !validate_secret_tree(output.content, 1)) { ret contracts.INVALID_INPUT; }
+    if ((parsed.tag & 0x20) != 0 &&
+        !validate_secret_tree(parsed.content, 1)) { ret contracts.INVALID_INPUT; }
+    @output = parsed;
     ret contracts.OK;
 }
 

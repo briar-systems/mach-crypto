@@ -207,7 +207,11 @@ test "der: canonical lengths, values, depth, and transactions are strict" {
         i = i + 1;
     }
     var trailing: [4]u8 = [4]u8{0x04, 0x01, 0xaa, 0};
-    if (der.exact(contracts.Bytes{data: ?trailing[0], len: 4}, ?element) == contracts.OK) {
+    element.tag = 0xaa;
+    element.content = contracts.Bytes{data: ?trailing[3], len: 1};
+    if (der.exact(contracts.Bytes{data: ?trailing[0], len: 4}, ?element) ==
+        contracts.OK || element.tag != 0xaa ||
+        element.content.data != ?trailing[3] || element.content.len != 1) {
         ret 7;
     }
 
