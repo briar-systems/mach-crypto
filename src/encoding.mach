@@ -1,4 +1,5 @@
 # cryptographic encoding module surface
 
 fwd crypto.encoding.der;
+fwd crypto.encoding.keys;
 fwd crypto.encoding.pem;

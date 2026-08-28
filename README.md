@@ -16,7 +16,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.group.x25519` provides X25519 key agreement.
 - `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
 - `crypto.signature` provides ECDSA P-256, Ed25519, and RSA-PSS signatures.
-- `crypto.encoding.der` and `crypto.encoding.pem` cover cryptographic containers.
+- `crypto.encoding.der`, `crypto.encoding.pem`, and `crypto.encoding.keys`
+  provide strict TLS key-container parsing and exact serialization.
 - `crypto.vectors` defines a common test vector contract.
 - `crypto.assurance` publishes the validation state of this package.
 
@@ -40,6 +41,55 @@ The native allocator and entropy source keep storage secret-welded across the
 OS boundary. Custom allocators follow the same rule. A nonnil allocation result
 transfers ownership even when allocation reports failure, allowing partial
 storage to be wiped and released deterministically.
+
+## Key containers
+
+`encoding.der` accepts only definite, minimally encoded lengths and rejects
+noncanonical BOOLEAN, INTEGER, BIT STRING, NULL, and OBJECT IDENTIFIER values.
+Complete-document parsing rejects trailing bytes and validates every nested
+constructed value to a maximum depth of 16. Cursor failures are transactional.
+The public writer supports overlapping content through move semantics and
+validates constructed content before changing output.
+
+`encoding.pem` uses standard base64 with canonical padding and 64-character
+lines. Labels are bounded to 64 uppercase ASCII letters, digits, and single
+interior spaces. Decoding accepts LF or CRLF and an optional final newline, but
+rejects leading or trailing data, mismatched labels, nonfinal short lines,
+noncanonical padding bits, URL-safe base64, and embedded whitespace. Exact-base
+in-place decoding is supported. Public encoding rejects every overlap. Secret
+encoding rejects exact-base overlap, and nonidentical secret views are disjoint
+by contract.
+
+`encoding.keys` supports the key containers needed by TLS:
+
+- RFC 8410 Ed25519 and X25519 PKCS#8 private keys and SPKI public keys
+- P-256 SEC1 and PKCS#8 private keys and uncompressed SPKI public keys
+- PKCS#1 RSA private keys, RSA PKCS#8 private keys, and RSA SPKI public keys
+
+Algorithm identifiers and parameters are exact. P-256 private scalars are
+range-checked. An embedded SEC1 public point must be on the curve and match the
+private scalar. RSA containers require version zero, a 2048 through 4096-bit
+odd modulus, a canonical odd public exponent smaller than the modulus, and all
+eight PKCS#1 key integers. Encrypted PKCS#8, version-one OneAsymmetricKey,
+multi-prime RSA, compressed P-256 points, and legacy `RSA PUBLIC KEY` PEM are
+not accepted.
+
+Initialize every private output with `keys.empty_private`. Successful DER
+decoding copies the complete canonical document into one owned secret
+allocation. Successful PEM decoding allocates the exact decoded DER size once
+and transfers that allocation directly into the key. `keys.private_bytes`
+returns a borrowed seed or scalar. `keys.copy_rsa` copies the public modulus and
+exponent and a modulus-width private exponent into caller storage. It snapshots
+the private exponent first, so private output may overlap the owning key.
+Overlapping public RSA outputs are rejected.
+
+Private keys are move-only by contract and must be released with
+`keys.destroy_private`. A failed allocation or parse normally leaves the output
+empty. If cleanup deallocation fails, the output retains wiped cleanup-pending
+storage while the primary error is returned. Call `destroy_private` after that
+failure to retry release. Serialization reproduces the exact accepted DER, not
+a reconstructed variant. Public SPKI views borrow the caller's DER or PEM
+scratch buffer and must not outlive it.
 
 ## HMAC and HKDF
 
@@ -202,10 +252,11 @@ signatures are explicitly zeroized. `signature.algorithm_status` returns
 The repository combines callable primitives with contracts for algorithms that
 are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
 P-256 ECDH, ECDSA P-256 with SHA-256, Ed25519, RSA-PSS with SHA-256 and SHA-384,
-HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, and HKDF-Expand are callable in this
-revision. Their tests include NIST, RFC 4231, RFC 5869, RFC 6979, RFC 7748, RFC
-8032, and RFC 8439 vectors, independent
-differential vectors, strict-encoding and tamper cases, counter and output
+HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, HKDF-Expand, strict DER and PEM, and
+TLS key containers are callable in this revision. Their tests include NIST,
+RFC 4231, RFC 5869, RFC 6979, RFC 7468, RFC 7748, RFC 8017, RFC 8032, RFC 8410,
+RFC 8439, SEC 1, and independent OpenSSL vectors. They cover
+strict-encoding and tamper cases, counter and output
 limits, invalid inputs, fixed-buffer failures, and supported overlap.
 
 Mach constant-time support is functional. Its current limitation is assurance,
@@ -215,8 +266,9 @@ and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
 algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, P-256,
-ECDSA, Ed25519, RSA-PSS, HMAC, and HKDF have functional and vector evidence, but package-wide
-leakage and independent review layers have not yet advanced.
+ECDSA, Ed25519, RSA-PSS, HMAC, HKDF, and key encoding have functional and vector
+evidence, but package-wide leakage and independent review layers have not yet
+advanced.
 
 ## Local development
 
