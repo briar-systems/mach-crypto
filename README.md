@@ -39,10 +39,13 @@ active storage before release. If a deallocator fails, the owner remains in a
 wiped cleanup-pending state and a later destroy retries release without wiping
 twice.
 
-The native allocator and entropy source keep storage secret-welded across the
-OS boundary. Custom allocators follow the same rule. A nonnil allocation result
-transfers ownership even when allocation reports failure, allowing partial
-storage to be wiped and released deterministically.
+The native allocator and entropy source delegate to `mach-std` secret-welded OS
+primitives. Storage remains secret-welded through every native boundary,
+allocation begins zeroed, entropy fills are complete or leave a fully wiped
+destination, and release wipes before returning storage to the operating
+system. Custom allocators follow the same ownership rule. A nonnil allocation
+result transfers ownership even when allocation reports failure, allowing
+partial storage to be wiped and released deterministically.
 
 ## Key containers
 

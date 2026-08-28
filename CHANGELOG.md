@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Native secret allocation, entropy, and release now use the portable
+  secret-welded operating-system primitives from `mach-std`.
+- System entropy failures inherit complete-destination wiping, bounded
+  interruption handling, and platform chunking from `mach-std`.
+
 ## [0.5.0] - 2026-08-28
 
 ### Added
