@@ -1,6 +1,7 @@
-# aes-gcm production contract tests
+# aead production contract tests
 
 use crypto.aead.aes_gcm;
+use crypto.aead.chacha20_poly1305;
 use crypto.contracts;
 use std.crypto.hash.sha256;
 use std.runtime;
@@ -12,6 +13,9 @@ use std.types.size.usize;
 var long_plaintext: [4097]^u8;
 var long_sealed: [4113]u8;
 var long_opened: [4097]^u8;
+var long_chacha_plaintext: [16385]^u8;
+var long_chacha_sealed: [16401]u8;
+var long_chacha_opened: [16385]^u8;
 
 fun public_equal(actual: *u8, expected: *u8, len: usize) bool {
     var i: usize = 0;
@@ -383,6 +387,333 @@ test "aes-gcm: independent counter-carry differential vector" {
     i = 0;
     for (i < 4097) {
         if (long_opened[i]:^ != (i * 7 + 3)::u8) { ret 4; }
+        i = i + 1;
+    }
+    ret 0;
+}
+
+test "chacha20-poly1305: rfc 8439 aead vector seals and opens" {
+    var key: [32]^u8;
+    var nonce: [12]u8 = [12]u8{
+        0x07, 0x00, 0x00, 0x00, 0x40, 0x41, 0x42, 0x43,
+        0x44, 0x45, 0x46, 0x47
+    };
+    var aad: [12]u8 = [12]u8{
+        0x50, 0x51, 0x52, 0x53, 0xc0, 0xc1, 0xc2, 0xc3,
+        0xc4, 0xc5, 0xc6, 0xc7
+    };
+    var plaintext: [114]^u8;
+    val message: *u8 = "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it."::*u8;
+    var i: usize = 0;
+    for (i < 32) { key[i] = (0x80 + i)::u8; i = i + 1; }
+    i = 0;
+    for (i < 114) { plaintext[i] = message[i]; i = i + 1; }
+    val expected: [130]u8 = [130]u8{
+        0xd3, 0x1a, 0x8d, 0x34, 0x64, 0x8e, 0x60, 0xdb,
+        0x7b, 0x86, 0xaf, 0xbc, 0x53, 0xef, 0x7e, 0xc2,
+        0xa4, 0xad, 0xed, 0x51, 0x29, 0x6e, 0x08, 0xfe,
+        0xa9, 0xe2, 0xb5, 0xa7, 0x36, 0xee, 0x62, 0xd6,
+        0x3d, 0xbe, 0xa4, 0x5e, 0x8c, 0xa9, 0x67, 0x12,
+        0x82, 0xfa, 0xfb, 0x69, 0xda, 0x92, 0x72, 0x8b,
+        0x1a, 0x71, 0xde, 0x0a, 0x9e, 0x06, 0x0b, 0x29,
+        0x05, 0xd6, 0xa5, 0xb6, 0x7e, 0xcd, 0x3b, 0x36,
+        0x92, 0xdd, 0xbd, 0x7f, 0x2d, 0x77, 0x8b, 0x8c,
+        0x98, 0x03, 0xae, 0xe3, 0x28, 0x09, 0x1b, 0x58,
+        0xfa, 0xb3, 0x24, 0xe4, 0xfa, 0xd6, 0x75, 0x94,
+        0x55, 0x85, 0x80, 0x8b, 0x48, 0x31, 0xd7, 0xbc,
+        0x3f, 0xf4, 0xde, 0xf0, 0x8e, 0x4b, 0x7a, 0x9d,
+        0xe5, 0x76, 0xd2, 0x65, 0x86, 0xce, 0xc6, 0x4b,
+        0x61, 0x16, 0x1a, 0xe1, 0x0b, 0x59, 0x4f, 0x09,
+        0xe2, 0x6a, 0x7e, 0x90, 0x2e, 0xcb, 0xd0, 0x60,
+        0x06, 0x91
+    };
+    var sealed: [130]u8;
+    var result: contracts.Operation = chacha20_poly1305.seal(
+        contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: ?aad[0], len: 12},
+        contracts.SecretBytes{data: ?plaintext[0], len: 114},
+        contracts.Buffer{data: ?sealed[0], capacity: 130});
+    if (result.error != contracts.OK || result.written != 130) { ret 1; }
+    if (!public_equal(?sealed[0], (?expected[0]):~*u8, 114)) { ret 2; }
+    if (!public_equal(?sealed[114], (?expected[114]):~*u8, 16)) { ret 3; }
+    var opened: [114]^u8;
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: ?aad[0], len: 12},
+        contracts.Bytes{data: ?sealed[0], len: 130},
+        contracts.SecretBuffer{data: ?opened[0], capacity: 114});
+    if (result.error != contracts.OK || result.written != 114 ||
+        !secrets_equal(?opened[0], ?plaintext[0], 114)) { ret 4; }
+    ret 0;
+}
+
+test "chacha20-poly1305: empty independent vector" {
+    var key: [32]^u8;
+    var nonce: [12]u8;
+    fill_secret(?key[0], 0, 32);
+    val expected: [16]u8 = [16]u8{
+        0x4e, 0xb9, 0x72, 0xc9, 0xa8, 0xfb, 0x3a, 0x1b,
+        0x38, 0x2b, 0xb4, 0xd3, 0x6f, 0x5f, 0xfa, 0xd1
+    };
+    var output: [16]u8;
+    var result: contracts.Operation = chacha20_poly1305.seal(
+        contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0}, contracts.Buffer{data: ?output[0], capacity: 16});
+    if (result.error != contracts.OK || result.written != 16 ||
+        !public_equal(?output[0], (?expected[0]):~*u8, 16)) { ret 1; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?output[0], len: 16}, contracts.SecretBuffer{data: nil, capacity: 0});
+    if (result.error != contracts.OK || result.written != 0) { ret 2; }
+    ret 0;
+}
+
+test "chacha20-poly1305: block boundary and supported overlap are safe" {
+    var key: [32]^u8;
+    var nonce: [12]u8;
+    var plaintext: [65]^u8;
+    var i: usize = 0;
+    for (i < 32) { key[i] = i::u8; i = i + 1; }
+    i = 0;
+    for (i < 12) { nonce[i] = i::u8; i = i + 1; }
+    i = 0;
+    for (i < 65) { plaintext[i] = i::u8; i = i + 1; }
+    var aad_output: [81]u8;
+    i = 0;
+    for (i < 12) { aad_output[i] = "boundary aad"[i]; i = i + 1; }
+    val expected: [81]u8 = [81]u8{
+        0x89, 0xfa, 0x0a, 0x03, 0x2d, 0x12, 0xa3, 0x47,
+        0xbf, 0x8a, 0x35, 0xf8, 0x94, 0x10, 0x00, 0x6c,
+        0xd9, 0x61, 0xa0, 0xf4, 0x45, 0x61, 0xbb, 0xae,
+        0xfe, 0x8e, 0x35, 0xde, 0x69, 0xdd, 0xb8, 0x23,
+        0xcc, 0xa1, 0x0e, 0xd0, 0xc2, 0x3b, 0x97, 0xbf,
+        0x1f, 0x1b, 0x5c, 0xf3, 0x49, 0xb9, 0xa1, 0x0c,
+        0x4e, 0xb5, 0x9b, 0x47, 0xc9, 0x1d, 0x8e, 0xac,
+        0x2a, 0x81, 0xe3, 0x3c, 0xac, 0x72, 0xa0, 0xe9,
+        0x39, 0xa4, 0x20, 0x7f, 0xd1, 0x7e, 0xcd, 0x9e,
+        0x7e, 0x79, 0x58, 0x2d, 0x8c, 0xc2, 0xf1, 0x7d,
+        0x28
+    };
+    var result: contracts.Operation = chacha20_poly1305.seal(
+        contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12},
+        contracts.Bytes{data: ?aad_output[0], len: 12},
+        contracts.SecretBytes{data: ?plaintext[0], len: 65},
+        contracts.Buffer{data: ?aad_output[0], capacity: 81});
+    if (result.error != contracts.OK || result.written != 81 ||
+        !public_equal(?aad_output[0], (?expected[0]):~*u8, 81)) { ret 1; }
+
+    var shared_key_output: [65]^u8;
+    i = 0;
+    for (i < 32) { shared_key_output[i] = i::u8; i = i + 1; }
+    result = chacha20_poly1305.open(
+        contracts.SecretBytes{data: ?shared_key_output[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12},
+        contracts.Bytes{data: "boundary aad"::*u8, len: 12},
+        contracts.Bytes{data: (?expected[0]):~*u8, len: 81},
+        contracts.SecretBuffer{data: ?shared_key_output[0], capacity: 65});
+    if (result.error != contracts.OK || result.written != 65 ||
+        !secrets_equal(?shared_key_output[0], ?plaintext[0], 65)) { ret 2; }
+
+    var nonce_output: [16]u8;
+    fill_secret(?key[0], 0, 32);
+    i = 0;
+    for (i < 12) { nonce_output[i] = 0; i = i + 1; }
+    val empty_tag: [16]u8 = [16]u8{
+        0x4e, 0xb9, 0x72, 0xc9, 0xa8, 0xfb, 0x3a, 0x1b,
+        0x38, 0x2b, 0xb4, 0xd3, 0x6f, 0x5f, 0xfa, 0xd1
+    };
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce_output[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0},
+        contracts.Buffer{data: ?nonce_output[0], capacity: 16});
+    if (result.error != contracts.OK || !public_equal(?nonce_output[0], (?empty_tag[0]):~*u8, 16)) { ret 3; }
+    ret 0;
+}
+
+test "chacha20-poly1305: authentication failures clear output before release" {
+    var key: [32]^u8;
+    var nonce: [12]u8;
+    var aad: [12]u8;
+    var i: usize = 0;
+    for (i < 32) { key[i] = i::u8; i = i + 1; }
+    i = 0;
+    for (i < 12) { nonce[i] = i::u8; aad[i] = "boundary aad"[i]; i = i + 1; }
+    val valid: [32]u8 = [32]u8{
+        0x89, 0xfa, 0x0a, 0x03, 0x2d, 0x12, 0xa3, 0x47,
+        0xbf, 0x8a, 0x35, 0xf8, 0x94, 0x10, 0x00, 0x6c,
+        0x61, 0xa9, 0x1f, 0xd4, 0xe4, 0x0d, 0xb9, 0xfc,
+        0x7d, 0x47, 0x1b, 0x3f, 0x26, 0xf6, 0xd5, 0x33
+    };
+    var tampered: [32]u8;
+    var output: [32]^u8;
+    var result: contracts.Operation;
+    var case: usize = 0;
+    for (case < 5) {
+        i = 0;
+        for (i < 32) { tampered[i] = valid[i]; output[i] = 0xA5; i = i + 1; }
+        i = 0;
+        for (i < 32) { key[i] = i::u8; i = i + 1; }
+        i = 0;
+        for (i < 12) { nonce[i] = i::u8; aad[i] = "boundary aad"[i]; i = i + 1; }
+        if (case == 0) { tampered[31] = tampered[31] ^ 1; }
+        or (case == 1) { tampered[0] = tampered[0] ^ 1; }
+        or (case == 2) { aad[0] = aad[0] ^ 1; }
+        or (case == 3) { nonce[0] = nonce[0] ^ 1; }
+        or { key[0] = 1; }
+        result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+            contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: ?aad[0], len: 12},
+            contracts.Bytes{data: ?tampered[0], len: 32},
+            contracts.SecretBuffer{data: ?output[0], capacity: 32});
+        if (result.error != contracts.AUTH_FAILED || result.written != 0) { ret 1; }
+        if (!secret_filled(?output[0], 0, 16) || !secret_filled(?output[16], 0xA5, 16)) { ret 2; }
+        case = case + 1;
+    }
+    ret 0;
+}
+
+test "chacha20-poly1305: malformed and bounded failures do not write" {
+    var key: [32]^u8;
+    var nonce: [12]u8;
+    var public_output: [32]u8;
+    var secret_output: [32]^u8;
+    var public_byte: [1]u8;
+    var secret_byte: [1]^u8;
+    fill_secret(?key[0], 0, 32);
+    var i: usize = 0;
+    for (i < 32) { public_output[i] = 0xA5; secret_output[i] = 0xA5; i = i + 1; }
+    var result: contracts.Operation = chacha20_poly1305.seal(
+        contracts.SecretBytes{data: ?key[0], len: 31},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0},
+        contracts.Buffer{data: ?public_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_KEY || !public_filled(?public_output[0], 0xA5, 32)) { ret 1; }
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: nil, len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0},
+        contracts.Buffer{data: ?public_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 2; }
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 11}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0},
+        contracts.Buffer{data: ?public_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 3; }
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: nil, len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0},
+        contracts.Buffer{data: ?public_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 4; }
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 1},
+        contracts.SecretBytes{data: nil, len: 0},
+        contracts.Buffer{data: ?public_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 5; }
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12},
+        contracts.Bytes{data: ?public_byte[0], len: 0},
+        contracts.SecretBytes{data: nil, len: 1},
+        contracts.Buffer{data: ?public_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 6; }
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0},
+        contracts.Buffer{data: ?public_output[0], capacity: 15});
+    if (result.error != contracts.OUTPUT_TOO_SMALL || !public_filled(?public_output[0], 0xA5, 32)) { ret 7; }
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0},
+        contracts.Buffer{data: nil, capacity: 16});
+    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 8; }
+    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: ?secret_byte[0], len: 274877906881},
+        contracts.Buffer{data: ?public_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 9; }
+
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?public_output[0], len: 15},
+        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 10; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 31},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?public_output[0], len: 16},
+        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_KEY || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 11; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: nil, len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?public_output[0], len: 16},
+        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 12; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: nil, len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?public_output[0], len: 16},
+        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 13; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 1},
+        contracts.Bytes{data: ?public_output[0], len: 16},
+        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 14; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12},
+        contracts.Bytes{data: ?public_byte[0], len: 0},
+        contracts.Bytes{data: nil, len: 16},
+        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 15; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?public_output[0], len: 32},
+        contracts.SecretBuffer{data: ?secret_output[0], capacity: 15});
+    if (result.error != contracts.OUTPUT_TOO_SMALL || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 16; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?public_output[0], len: 32},
+        contracts.SecretBuffer{data: nil, capacity: 16});
+    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 17; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?public_output[0], len: 274877906897},
+        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 18; }
+    ret 0;
+}
+
+test "chacha20-poly1305: independent counter-carry differential vector" {
+    var key: [32]^u8;
+    var nonce: [12]u8;
+    var aad: [65]u8;
+    var i: usize = 0;
+    for (i < 32) { key[i] = i::u8; i = i + 1; }
+    i = 0;
+    for (i < 12) { nonce[i] = (0xA0 + i)::u8; i = i + 1; }
+    i = 0;
+    for (i < 65) { aad[i] = (0x55 ^ i)::u8; i = i + 1; }
+    i = 0;
+    for (i < 16385) { long_chacha_plaintext[i] = (i * 7 + 3)::u8; i = i + 1; }
+    var result: contracts.Operation = chacha20_poly1305.seal(
+        contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: ?aad[0], len: 65},
+        contracts.SecretBytes{data: ?long_chacha_plaintext[0], len: 16385},
+        contracts.Buffer{data: ?long_chacha_sealed[0], capacity: 16401});
+    if (result.error != contracts.OK || result.written != 16401) { ret 1; }
+    var digest: [32]u8;
+    sha256.hash(?long_chacha_sealed[0], 16401, ?digest[0]);
+    val expected_digest: [32]u8 = [32]u8{
+        0xb1, 0xba, 0x73, 0x50, 0x2f, 0x09, 0xc9, 0x00,
+        0x09, 0x53, 0x5e, 0x2a, 0x1e, 0x4f, 0xde, 0x72,
+        0xc6, 0x03, 0xb2, 0x07, 0x10, 0x34, 0x91, 0x41,
+        0x4f, 0xc9, 0x4e, 0xf2, 0x06, 0xe0, 0x09, 0xac
+    };
+    if (!public_equal(?digest[0], (?expected_digest[0]):~*u8, 32)) { ret 2; }
+    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: ?aad[0], len: 65},
+        contracts.Bytes{data: ?long_chacha_sealed[0], len: 16401},
+        contracts.SecretBuffer{data: ?long_chacha_opened[0], capacity: 16385});
+    if (result.error != contracts.OK || result.written != 16385) { ret 3; }
+    i = 0;
+    for (i < 16385) {
+        if (long_chacha_opened[i]:^ != (i * 7 + 3)::u8) { ret 4; }
         i = i + 1;
     }
     ret 0;

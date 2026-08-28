@@ -1,19 +1,187 @@
-# chacha20-poly1305 contracts
+# chacha20-poly1305 authenticated encryption
 
 use crypto.contracts;
+use stream: crypto.internal.chacha20;
+use mac: crypto.internal.poly1305;
+use std.crypto.ct;
 use std.types.size.usize;
 
 pub val KEY_SIZE:   usize = 32;
 pub val NONCE_SIZE: usize = 12;
 pub val TAG_SIZE:   usize = 16;
 
-# seal declassifies authenticated ciphertext into public output
-pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes, contracts.SecretBytes, contracts.Buffer) contracts.Operation;
+pub val MAX_PLAINTEXT_SIZE: usize = 274877906880;
 
-# open authenticates before releasing plaintext to secret output
-pub def OpenFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes, contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
+# seal writes ciphertext followed by the complete tag
+pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
+    contracts.SecretBytes, contracts.Buffer) contracts.Operation;
 
-test "chacha20-poly1305: key, nonce, and tag dimensions are fixed" {
+# open authenticates the complete input before releasing secret plaintext
+pub def OpenFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
+    contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
+
+fun failed(error: contracts.Error) contracts.Operation {
+    ret contracts.Operation{error: error, written: 0};
+}
+
+fun wipe_contexts(chacha: *stream.Context, poly: *mac.Context, key_block: *^u8, tag: *^u8) {
+    stream.destroy(chacha);
+    mac.destroy(poly);
+    ct.zeroize(key_block, 64);
+    ct.zeroize(tag, 16);
+}
+
+# encrypt and authenticate one tls or quic record payload
+#
+# nonce must be exactly 12 bytes. output capacity must cover plaintext plus the
+# 16-byte tag. aad and nonce may overlap output because both are consumed before
+# the first output write. secret and public buffers cannot alias by contract.
+#[oblivious]
+pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
+    plaintext: contracts.SecretBytes, output: contracts.Buffer) contracts.Operation {
+    if (key.len != KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
+    if (key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (aad.len != 0 && aad.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (plaintext.len != 0 && plaintext.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (plaintext.len > MAX_PLAINTEXT_SIZE) { ret failed(contracts.INVALID_INPUT); }
+    val required: usize = plaintext.len + TAG_SIZE;
+    if (output.capacity < required) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+
+    ct.begin();
+    var chacha: stream.Context;
+    val stream_ready: contracts.Error = stream.init(?chacha, key, nonce);
+    if (stream_ready != contracts.OK) { ct.end(); ret failed(stream_ready); }
+    var key_block: [64]^u8;
+    var tag: [16]^u8;
+    ct.zeroize(?key_block[0], 64);
+    ct.zeroize(?tag[0], 16);
+    stream.block(?chacha, 0, ?key_block[0]);
+    var poly: mac.Context;
+    val mac_ready: contracts.Error = mac.init(?poly,
+        contracts.SecretBytes{data: ?key_block[0], len: 32});
+    if (mac_ready != contracts.OK) {
+        wipe_contexts(?chacha, ?poly, ?key_block[0], ?tag[0]);
+        ct.end();
+        ret failed(mac_ready);
+    }
+    ct.zeroize(?key_block[0], 64);
+    mac.update_padded(?poly, aad.data, aad.len);
+
+    var keystream: [64]^u8;
+    ct.zeroize(?keystream[0], 64);
+    var offset: usize = 0;
+    var counter: u32 = 1;
+    for (offset < plaintext.len) {
+        stream.block(?chacha, counter, ?keystream[0]);
+        var take: usize = plaintext.len - offset;
+        if (take > 64) { take = 64; }
+        var i: usize = 0;
+        for (i < take) {
+            output.data[offset + i] = (plaintext.data[offset + i] ^ keystream[i]):^;
+            i = i + 1;
+        }
+        offset = offset + take;
+        if (offset < plaintext.len) { counter = counter + 1; }
+    }
+    ct.zeroize(?keystream[0], 64);
+    mac.update_padded(?poly, output.data, plaintext.len);
+    mac.update_lengths(?poly, aad.len, plaintext.len);
+    mac.final(?poly, ?tag[0]);
+    var i: usize = 0;
+    for (i < TAG_SIZE) {
+        output.data[plaintext.len + i] = tag[i]:^;
+        i = i + 1;
+    }
+    wipe_contexts(?chacha, ?poly, ?key_block[0], ?tag[0]);
+    ct.end();
+    ret contracts.Operation{error: contracts.OK, written: required};
+}
+
+# authenticate and decrypt one tls or quic record payload
+#
+# input is ciphertext followed by a complete 16-byte tag. authentication occurs
+# before any decryption. authentication failure writes no plaintext and clears
+# exactly the ciphertext-length prefix of output. successful output may overlap
+# the secret key because the stream context snapshots it before plaintext release.
+#[oblivious]
+pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
+    input: contracts.Bytes, output: contracts.SecretBuffer) contracts.Operation {
+    if (key.len != KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
+    if (key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (aad.len != 0 && aad.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (input.len < TAG_SIZE || input.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    val ciphertext_len: usize = input.len - TAG_SIZE;
+    if (ciphertext_len > MAX_PLAINTEXT_SIZE) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < ciphertext_len) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (ciphertext_len != 0 && output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+
+    ct.begin();
+    var chacha: stream.Context;
+    val stream_ready: contracts.Error = stream.init(?chacha, key, nonce);
+    if (stream_ready != contracts.OK) { ct.end(); ret failed(stream_ready); }
+    var key_block: [64]^u8;
+    var expected: [16]^u8;
+    var provided: [16]^u8;
+    ct.zeroize(?key_block[0], 64);
+    ct.zeroize(?expected[0], 16);
+    ct.zeroize(?provided[0], 16);
+    stream.block(?chacha, 0, ?key_block[0]);
+    var poly: mac.Context;
+    val mac_ready: contracts.Error = mac.init(?poly,
+        contracts.SecretBytes{data: ?key_block[0], len: 32});
+    if (mac_ready != contracts.OK) {
+        wipe_contexts(?chacha, ?poly, ?key_block[0], ?expected[0]);
+        ct.zeroize(?provided[0], 16);
+        ct.end();
+        ret failed(mac_ready);
+    }
+    ct.zeroize(?key_block[0], 64);
+    mac.update_padded(?poly, aad.data, aad.len);
+    mac.update_padded(?poly, input.data, ciphertext_len);
+    mac.update_lengths(?poly, aad.len, ciphertext_len);
+    mac.final(?poly, ?expected[0]);
+    var i: usize = 0;
+    for (i < TAG_SIZE) {
+        provided[i] = input.data[ciphertext_len + i];
+        i = i + 1;
+    }
+    val authenticated: ^u8 = ct.eq_bytes(?expected[0], ?provided[0], TAG_SIZE);
+    ct.zeroize(?provided[0], 16);
+    if (authenticated:^ != 1) {
+        ct.zeroize(output.data, ciphertext_len);
+        wipe_contexts(?chacha, ?poly, ?key_block[0], ?expected[0]);
+        ct.end();
+        ret failed(contracts.AUTH_FAILED);
+    }
+    ct.zeroize(?expected[0], 16);
+
+    var keystream: [64]^u8;
+    ct.zeroize(?keystream[0], 64);
+    var offset: usize = 0;
+    var counter: u32 = 1;
+    for (offset < ciphertext_len) {
+        stream.block(?chacha, counter, ?keystream[0]);
+        var take: usize = ciphertext_len - offset;
+        if (take > 64) { take = 64; }
+        i = 0;
+        for (i < take) {
+            output.data[offset + i] = input.data[offset + i] ^ keystream[i];
+            i = i + 1;
+        }
+        offset = offset + take;
+        if (offset < ciphertext_len) { counter = counter + 1; }
+    }
+    ct.zeroize(?keystream[0], 64);
+    wipe_contexts(?chacha, ?poly, ?key_block[0], ?expected[0]);
+    ct.end();
+    ret contracts.Operation{error: contracts.OK, written: ciphertext_len};
+}
+
+test "chacha20-poly1305: tls and quic dimensions are fixed" {
     if (KEY_SIZE != 32 || NONCE_SIZE != 12 || TAG_SIZE != 16) { ret 1; }
+    if (MAX_PLAINTEXT_SIZE != 274877906880) { ret 1; }
     ret 0;
 }
