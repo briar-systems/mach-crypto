@@ -71,7 +71,7 @@ fun normalize(value: *Field) {
 }
 
 #[oblivious]
-fun canonicalize(value: *Field) {
+pub fun canonicalize(value: *Field) {
     normalize(value);
     normalize(value);
     normalize(value);
@@ -100,20 +100,20 @@ fun canonicalize(value: *Field) {
 }
 
 #[oblivious]
-fun copy(output: *Field, input: *Field) {
+pub fun copy(output: *Field, input: *Field) {
     var i: usize = 0;
     for (i < 5) { output.limb[i] = input.limb[i]; i = i + 1; }
 }
 
 #[oblivious]
-fun set_small(output: *Field, value: u64) {
+pub fun set_small(output: *Field, value: u64) {
     output.limb[0] = value;
     var i: usize = 1;
     for (i < 5) { output.limb[i] = 0; i = i + 1; }
 }
 
 #[oblivious]
-fun add(output: *Field, left: *Field, right: *Field) {
+pub fun add(output: *Field, left: *Field, right: *Field) {
     var i: usize = 0;
     for (i < 5) {
         output.limb[i] = left.limb[i] + right.limb[i];
@@ -124,7 +124,7 @@ fun add(output: *Field, left: *Field, right: *Field) {
 }
 
 #[oblivious]
-fun subtract(output: *Field, left: *Field, right: *Field) {
+pub fun subtract(output: *Field, left: *Field, right: *Field) {
     output.limb[0] = left.limb[0] + 4503599627370458 - right.limb[0];
     var i: usize = 1;
     for (i < 5) {
@@ -136,7 +136,7 @@ fun subtract(output: *Field, left: *Field, right: *Field) {
 }
 
 #[oblivious]
-fun multiply(output: *Field, left: *Field, right: *Field) {
+pub fun multiply(output: *Field, left: *Field, right: *Field) {
     var product: [10]^u64;
     ct.zeroize((?product[0]):~*^u8, 80);
     var i: usize = 0;
@@ -167,7 +167,7 @@ fun multiply(output: *Field, left: *Field, right: *Field) {
 }
 
 #[oblivious] #[inline]
-fun square(output: *Field, input: *Field) {
+pub fun square(output: *Field, input: *Field) {
     multiply(output, input, input);
 }
 
@@ -205,7 +205,7 @@ fun square_times(output: *Field, input: *Field, count: usize) {
 }
 
 #[oblivious]
-fun invert(output: *Field, input: *Field) {
+pub fun invert(output: *Field, input: *Field) {
     var t0: Field;
     var t1: Field;
     var t2: Field;
@@ -247,7 +247,7 @@ fun read_public_u64(input: *u8, offset: usize) u64 {
 }
 
 #[oblivious]
-fun decode(output: *Field, input: *u8) {
+pub fun decode(output: *Field, input: *u8) {
     output.limb[0] = read_public_u64(input, 0) & LIMB_MASK;
     output.limb[1] = (read_public_u64(input, 6) >> 3) & LIMB_MASK;
     output.limb[2] = (read_public_u64(input, 12) >> 6) & LIMB_MASK;
@@ -257,7 +257,7 @@ fun decode(output: *Field, input: *u8) {
 }
 
 #[oblivious]
-fun encode(output: *^u8, input: *Field) {
+pub fun encode(output: *^u8, input: *Field) {
     canonicalize(input);
     ct.zeroize(output, 32);
     var position: usize = 0;
