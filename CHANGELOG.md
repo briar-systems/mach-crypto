@@ -4,6 +4,10 @@
 
 ### Added
 
+- Strict RSA PKCS#1 v1.5 SHA-256 and SHA-384 certificate signature
+  verification with exact RFC 8017 `DigestInfo` encodings.
+- NIST CAVP and independent OpenSSL verification vectors plus hostile padding,
+  algorithm identifier, digest, and key corpora.
 - Fail-closed cryptographic release evidence with independent test layers.
 - Reproducible six-target debug and release builds with verified IR, assembly,
   provenance, and machine-readable artifact hashes.
@@ -11,6 +15,9 @@
 
 ### Security
 
+- RSA PKCS#1 verification distinguishes malformed keys from authentication
+  failures, preserves caller inputs, and clears recovered message and digest
+  intermediates.
 - Assurance reports cannot advance from missing, failed, modified, or stale
   evidence. Functional availability and independent review remain separate.
 
