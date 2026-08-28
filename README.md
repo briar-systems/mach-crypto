@@ -9,7 +9,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 
 - `crypto.secret` owns allocated secret storage, bounded views, explicit moves,
   allocating clones, entropy initialization, and deterministic destruction.
-- `crypto.hmac` and `crypto.hkdf` define keyed hashing and derivation contracts.
+- `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384.
+- `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.aead.aes_gcm` and `crypto.aead.chacha20_poly1305` cover authenticated encryption.
 - `crypto.group.p256` and `crypto.group.x25519` cover TLS key agreement.
 - `crypto.signature` covers certificate signature algorithms.
@@ -38,18 +39,46 @@ OS boundary. Custom allocators follow the same rule. A nonnil allocation result
 transfers ownership even when allocation reports failure, allowing partial
 storage to be wiped and released deterministically.
 
+## HMAC and HKDF
+
+`hmac.sha256` and `hmac.sha384` accept secret keys, public messages, and
+caller-owned public output. The output capacity must be at least the full tag
+size. Successful calls write the full tag. The output may overlap the public
+message because no output is written until authentication is complete.
+
+`hkdf.extract_sha256` and `hkdf.extract_sha384` accept secret salt and input key
+material and write a fixed-size secret pseudorandom key. Empty salt and input
+key material follow RFC 5869. Extract output may overlap either input because
+the complete pseudorandom key is held locally before it is copied.
+
+`hkdf.expand_sha256` and `hkdf.expand_sha384` treat output capacity as the
+requested output length. The pseudorandom key must be exactly the hash output
+size. Zero-length output is valid. Output is bounded to 255 hash blocks, which
+is 8160 bytes for SHA-256 and 12240 bytes for SHA-384. Expand output may overlap
+the pseudorandom key because the key is snapshotted before the first write.
+
+Every validation failure returns `written = 0` without changing output. Public
+buffers cannot alias nonempty secret buffers under Mach's secret-welded pointer
+types. Internal SHA-2 state, schedules, HMAC pads, intermediate tags,
+pseudorandom key snapshots, and expansion blocks are explicitly zeroized.
+
 ## Status
 
-This scaffold defines public contracts and algorithm dimensions. Algorithms are
-not represented as available until their callable implementation exists.
+The repository combines callable primitives with contracts for algorithms that
+are still being built. HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, and HKDF-Expand
+are callable in this revision. Their tests include RFC 4231 and RFC 5869 vectors,
+empty inputs, long keys, maximum expansions, invalid inputs, fixed-buffer
+failures, and supported overlap.
 
 Mach constant-time support is functional. Its current limitation is assurance,
 not expressiveness. The package will use Mach secret types and oblivious code,
 official vectors, differential tests, generated-code inspection, leakage tests,
 and independent review as distinct evidence layers.
 
-The current assurance level is `assurance.SCAFFOLD`. No production algorithm is
-exported by this revision.
+The package-wide assurance level remains `assurance.SCAFFOLD` while the other
+algorithm modules are scaffolds. HMAC and HKDF have functional and vector
+evidence, but package-wide differential, leakage, and independent review layers
+have not yet advanced.
 
 ## Local development
 
