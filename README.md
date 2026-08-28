@@ -13,7 +13,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
-- `crypto.group.p256` and `crypto.group.x25519` cover TLS key agreement.
+- `crypto.group.x25519` provides X25519 key agreement. `crypto.group.p256`
+  defines the P-256 contract.
 - `crypto.signature` covers certificate signature algorithms.
 - `crypto.encoding.der` and `crypto.encoding.pem` cover cryptographic containers.
 - `crypto.vectors` defines a common test vector contract.
@@ -112,14 +113,37 @@ This module protects TLS records and QUIC packet payloads. QUIC header
 protection remains a separate primitive contract because it consumes a packet
 sample to generate a five-byte mask rather than an AEAD nonce and payload.
 
+## X25519
+
+`group.x25519.derive_public` accepts an exact 32-byte secret private value and
+writes its 32-byte RFC 7748 public u-coordinate to caller-owned public output.
+`group.x25519.agree` accepts an exact 32-byte secret private value and 32-byte
+public peer encoding, then writes the shared value to caller-owned secret
+output. Private values are clamped internally. Consumers can create fresh
+private values directly with `secret.init_random`.
+
+Peer decoding masks the high bit and accepts non-canonical values by reducing
+them modulo `2^255 - 19`, as required by RFC 7748. Any peer encoding that
+produces the all-zero shared value is rejected with `INVALID_KEY`. Validation,
+capacity, and low-order failures return `written = 0` without changing caller
+output. Successful agreement output may overlap the private key because the
+complete scalar is snapshotted before output is written.
+
+The implementation performs the same 255-step Montgomery ladder for every
+private value. Conditional swaps use masks rather than secret branches. Field
+operations use fixed-position radix-`2^51` limbs and fixed 51-step masked
+multiplication rather than secret hardware multiplication or division. Scalar,
+field, inversion, encoded result, and rejected shared-secret state are
+explicitly zeroized.
+
 ## Status
 
 The repository combines callable primitives with contracts for algorithms that
-are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305,
+are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
 HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, and HKDF-Expand are callable in this
-revision. Their tests include NIST, RFC 4231, RFC 5869, and RFC 8439 vectors,
-independent differential vectors, tamper cases, counter and output limits,
-invalid inputs, fixed-buffer failures, and supported overlap.
+revision. Their tests include NIST, RFC 4231, RFC 5869, RFC 7748, and RFC 8439
+vectors, independent differential vectors, tamper and low-order cases, counter
+and output limits, invalid inputs, fixed-buffer failures, and supported overlap.
 
 Mach constant-time support is functional. Its current limitation is assurance,
 not expressiveness. The package will use Mach secret types and oblivious code,
@@ -127,9 +151,9 @@ official vectors, differential tests, generated-code inspection, leakage tests,
 and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
-algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, HMAC, and HKDF have
-functional and vector evidence, but package-wide leakage and independent review
-layers have not yet advanced.
+algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, HMAC, and
+HKDF have functional and vector evidence, but package-wide leakage and
+independent review layers have not yet advanced.
 
 ## Local development
 
