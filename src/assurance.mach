@@ -12,9 +12,21 @@ pub val INDEPENDENTLY_REVIEWED: Level = 5;
 # this value advances only when the repository carries the required evidence
 pub val CURRENT: Level = SCAFFOLD;
 
+pub def ReviewStatus: u8;
+
+pub val REVIEW_NOT_RECORDED: ReviewStatus = 0;
+pub val REVIEW_IN_PROGRESS:  ReviewStatus = 1;
+pub val REVIEW_COMPLETE:     ReviewStatus = 2;
+
+# review is deliberately independent from callable algorithm availability
+pub val INDEPENDENT_REVIEW: ReviewStatus = REVIEW_NOT_RECORDED;
+
 test "assurance: levels are ordered by accumulated evidence" {
     if (SCAFFOLD >= FUNCTIONAL) { ret 1; }
     if (FUNCTIONAL >= VECTORS_VERIFIED) { ret 1; }
     if (LEAKAGE_TESTED >= INDEPENDENTLY_REVIEWED) { ret 1; }
+    if (REVIEW_NOT_RECORDED >= REVIEW_IN_PROGRESS) { ret 1; }
+    if (REVIEW_IN_PROGRESS >= REVIEW_COMPLETE) { ret 1; }
+    if (INDEPENDENT_REVIEW != REVIEW_NOT_RECORDED) { ret 1; }
     ret 0;
 }

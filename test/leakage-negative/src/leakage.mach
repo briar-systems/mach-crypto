@@ -1,0 +1,5 @@
+#[oblivious]
+pub fun forbidden_secret_branch(value: ^u8) u8 {
+    if (value == 0) { ret 0; }
+    ret 1;
+}
