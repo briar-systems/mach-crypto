@@ -11,6 +11,9 @@ pub val INVALID_KEY:        Error = 3;
 pub val AUTH_FAILED:        Error = 4;
 pub val UNSUPPORTED:        Error = 5;
 pub val ENTROPY_UNAVAILABLE: Error = 6;
+pub val ALLOCATION_FAILED:   Error = 7;
+pub val DEALLOCATION_FAILED: Error = 8;
+pub val INVALID_STATE:       Error = 9;
 
 # public bytes with a stable address for an operation's duration
 pub rec Bytes {
@@ -45,5 +48,8 @@ pub rec Operation {
 test "contracts: error values are distinct" {
     if (OK == INVALID_INPUT) { ret 1; }
     if (AUTH_FAILED == UNSUPPORTED) { ret 1; }
+    if (ENTROPY_UNAVAILABLE == ALLOCATION_FAILED) { ret 1; }
+    if (ALLOCATION_FAILED == DEALLOCATION_FAILED) { ret 1; }
+    if (DEALLOCATION_FAILED == INVALID_STATE) { ret 1; }
     ret 0;
 }
