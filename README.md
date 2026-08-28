@@ -11,7 +11,8 @@ state machines belong in protocol repositories such as `mach-tls`.
   allocating clones, entropy initialization, and deterministic destruction.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
-- `crypto.aead.aes_gcm` and `crypto.aead.chacha20_poly1305` cover authenticated encryption.
+- `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
+- `crypto.aead.chacha20_poly1305` defines the ChaCha20-Poly1305 contract.
 - `crypto.group.p256` and `crypto.group.x25519` cover TLS key agreement.
 - `crypto.signature` covers certificate signature algorithms.
 - `crypto.encoding.der` and `crypto.encoding.pem` cover cryptographic containers.
@@ -62,13 +63,36 @@ buffers cannot alias nonempty secret buffers under Mach's secret-welded pointer
 types. Internal SHA-2 state, schedules, HMAC pads, intermediate tags,
 pseudorandom key snapshots, and expansion blocks are explicitly zeroized.
 
+## AES-GCM
+
+`aead.aes_gcm.seal` accepts a 16-byte or 32-byte secret key, an exact 12-byte
+public nonce, public additional authenticated data, secret plaintext, and
+caller-owned public output. It writes ciphertext followed by the complete
+16-byte tag. Output capacity must cover both. Nonce and additional data may
+overlap output because both are fully consumed before the first write.
+
+`aead.aes_gcm.open` accepts ciphertext followed by its complete tag and
+authenticates the entire record before decrypting any byte. On authentication
+failure it returns `AUTH_FAILED`, writes no plaintext, and zeroizes exactly the
+ciphertext-length prefix of secret output. Validation and capacity failures do
+not change output. Successful output may overlap the secret key because the
+expanded key schedule is complete before plaintext release.
+
+Plaintext is bounded to 68,719,476,704 bytes, or `2^32 - 2` counter blocks.
+Additional authenticated data is bounded to `2^61 - 1` bytes so its bit length
+is representable in GCM's 64-bit length field. The implementation uses an
+algebraic AES S-box and fixed-position GHASH multiplication rather than memory
+lookups indexed by secret values. Expanded keys, cipher state, hash products,
+authentication tags, and stream blocks are explicitly zeroized.
+
 ## Status
 
 The repository combines callable primitives with contracts for algorithms that
-are still being built. HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, and HKDF-Expand
-are callable in this revision. Their tests include RFC 4231 and RFC 5869 vectors,
-empty inputs, long keys, maximum expansions, invalid inputs, fixed-buffer
-failures, and supported overlap.
+are still being built. AES-128-GCM, AES-256-GCM, HMAC-SHA-256, HMAC-SHA-384,
+HKDF-Extract, and HKDF-Expand are callable in this revision. Their tests include
+NIST, RFC 4231, and RFC 5869 vectors, independent differential vectors, tamper
+cases, counter and output limits, invalid inputs, fixed-buffer failures, and
+supported overlap.
 
 Mach constant-time support is functional. Its current limitation is assurance,
 not expressiveness. The package will use Mach secret types and oblivious code,
@@ -76,9 +100,9 @@ official vectors, differential tests, generated-code inspection, leakage tests,
 and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
-algorithm modules are scaffolds. HMAC and HKDF have functional and vector
-evidence, but package-wide differential, leakage, and independent review layers
-have not yet advanced.
+algorithm modules are scaffolds. AES-GCM, HMAC, and HKDF have functional and
+vector evidence, but package-wide leakage and independent review layers have not
+yet advanced.
 
 ## Local development
 
