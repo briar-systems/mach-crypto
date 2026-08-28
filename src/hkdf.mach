@@ -1,11 +1,16 @@
 # hkdf contracts
 
 use crypto.contracts;
+use core: crypto.internal.hmac;
+use crypto.internal.sha2;
+use std.crypto.ct;
 use std.types.size.usize;
 
 pub val SHA256_PRK_SIZE: usize = 32;
 pub val SHA384_PRK_SIZE: usize = 48;
 pub val MAX_BLOCKS:      usize = 255;
+pub val SHA256_MAX_OUTPUT: usize = SHA256_PRK_SIZE * MAX_BLOCKS;
+pub val SHA384_MAX_OUTPUT: usize = SHA384_PRK_SIZE * MAX_BLOCKS;
 
 # extract writes one pseudorandom key to secret output
 pub def ExtractFun: fun(contracts.SecretBytes, contracts.SecretBytes, contracts.SecretBuffer) contracts.Operation;
@@ -13,7 +18,238 @@ pub def ExtractFun: fun(contracts.SecretBytes, contracts.SecretBytes, contracts.
 # expand writes caller-sized secret key material
 pub def ExpandFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
 
+fun failed(error: contracts.Error) contracts.Operation {
+    ret contracts.Operation{error: error, written: 0};
+}
+
+# extract a sha-256 pseudorandom key
+#
+# empty salt is the rfc-defined all-zero key. output may overlap salt or ikm
+# because the complete pseudorandom key is held locally until extraction ends.
+pub fun extract_sha256(salt: contracts.SecretBytes, ikm: contracts.SecretBytes,
+    output: contracts.SecretBuffer) contracts.Operation {
+    if (salt.len != 0 && salt.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (ikm.len != 0 && ikm.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < SHA256_PRK_SIZE) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+
+    var context: core.Context256;
+    val initialized: contracts.Error = core.init256(?context, salt);
+    if (initialized != contracts.OK) { ret failed(initialized); }
+    var prk: [32]^u8;
+    ct.zeroize(?prk[0], SHA256_PRK_SIZE);
+    val updated: contracts.Error = core.update256_secret(?context, ikm.data, ikm.len);
+    if (updated != contracts.OK) {
+        core.destroy256(?context);
+        ct.zeroize(?prk[0], SHA256_PRK_SIZE);
+        ret failed(updated);
+    }
+    val finalized: contracts.Error = core.final256(?context, ?prk[0]);
+    if (finalized != contracts.OK) {
+        ct.zeroize(?prk[0], SHA256_PRK_SIZE);
+        ret failed(finalized);
+    }
+    var i: usize = 0;
+    for (i < SHA256_PRK_SIZE) {
+        output.data[i] = prk[i];
+        i = i + 1;
+    }
+    ct.zeroize(?prk[0], SHA256_PRK_SIZE);
+    ret contracts.Operation{error: contracts.OK, written: SHA256_PRK_SIZE};
+}
+
+# extract a sha-384 pseudorandom key
+#
+# empty salt is the rfc-defined all-zero key. output may overlap salt or ikm
+# because the complete pseudorandom key is held locally until extraction ends.
+pub fun extract_sha384(salt: contracts.SecretBytes, ikm: contracts.SecretBytes,
+    output: contracts.SecretBuffer) contracts.Operation {
+    if (salt.len != 0 && salt.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (ikm.len != 0 && ikm.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < SHA384_PRK_SIZE) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+
+    var context: core.Context384;
+    val initialized: contracts.Error = core.init384(?context, salt);
+    if (initialized != contracts.OK) { ret failed(initialized); }
+    var prk: [48]^u8;
+    ct.zeroize(?prk[0], SHA384_PRK_SIZE);
+    val updated: contracts.Error = core.update384_secret(?context, ikm.data, ikm.len);
+    if (updated != contracts.OK) {
+        core.destroy384(?context);
+        ct.zeroize(?prk[0], SHA384_PRK_SIZE);
+        ret failed(updated);
+    }
+    val finalized: contracts.Error = core.final384(?context, ?prk[0]);
+    if (finalized != contracts.OK) {
+        ct.zeroize(?prk[0], SHA384_PRK_SIZE);
+        ret failed(finalized);
+    }
+    var i: usize = 0;
+    for (i < SHA384_PRK_SIZE) {
+        output.data[i] = prk[i];
+        i = i + 1;
+    }
+    ct.zeroize(?prk[0], SHA384_PRK_SIZE);
+    ret contracts.Operation{error: contracts.OK, written: SHA384_PRK_SIZE};
+}
+
+fun wipe256(prk: *^u8, previous: *^u8, block: *^u8) {
+    ct.zeroize(prk, SHA256_PRK_SIZE);
+    ct.zeroize(previous, SHA256_PRK_SIZE);
+    ct.zeroize(block, SHA256_PRK_SIZE);
+}
+
+fun wipe384(prk: *^u8, previous: *^u8, block: *^u8) {
+    ct.zeroize(prk, SHA384_PRK_SIZE);
+    ct.zeroize(previous, SHA384_PRK_SIZE);
+    ct.zeroize(block, SHA384_PRK_SIZE);
+}
+
+# expand a sha-256 pseudorandom key into output.capacity bytes
+#
+# zero length is valid. prk must be exactly 32 bytes. output may overlap prk
+# because expansion snapshots the complete pseudorandom key before writing.
+pub fun expand_sha256(prk: contracts.SecretBytes, info: contracts.Bytes,
+    output: contracts.SecretBuffer) contracts.Operation {
+    if (prk.len != SHA256_PRK_SIZE) { ret failed(contracts.INVALID_KEY); }
+    if (prk.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (info.len != 0 && info.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity > SHA256_MAX_OUTPUT) { ret failed(contracts.INVALID_INPUT); }
+    if (info.len::u64 > sha2.SHA256_MAX_BYTES - sha2.SHA256_BLOCK_SIZE - SHA256_PRK_SIZE - 1) {
+        ret failed(contracts.INVALID_INPUT);
+    }
+    if (output.capacity == 0) {
+        ret contracts.Operation{error: contracts.OK, written: 0};
+    }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+
+    var key: [32]^u8;
+    var previous: [32]^u8;
+    var block: [32]^u8;
+    ct.zeroize(?key[0], SHA256_PRK_SIZE);
+    ct.zeroize(?previous[0], SHA256_PRK_SIZE);
+    ct.zeroize(?block[0], SHA256_PRK_SIZE);
+    var i: usize = 0;
+    for (i < SHA256_PRK_SIZE) {
+        key[i] = prk.data[i];
+        i = i + 1;
+    }
+
+    var written: usize = 0;
+    var previous_len: usize = 0;
+    var counter: [1]u8;
+    for (written < output.capacity) {
+        counter[0] = (written / SHA256_PRK_SIZE + 1)::u8;
+        var context: core.Context256;
+        val initialized: contracts.Error = core.init256(?context,
+            contracts.SecretBytes{data: ?key[0], len: SHA256_PRK_SIZE});
+        if (initialized != contracts.OK) {
+            wipe256(?key[0], ?previous[0], ?block[0]);
+            ret failed(initialized);
+        }
+        var error: contracts.Error = core.update256_secret(?context, ?previous[0], previous_len);
+        if (error == contracts.OK) { error = core.update256_public(?context, info.data, info.len); }
+        if (error == contracts.OK) { error = core.update256_public(?context, ?counter[0], 1); }
+        if (error == contracts.OK) { error = core.final256(?context, ?block[0]); }
+        if (error != contracts.OK) {
+            core.destroy256(?context);
+            wipe256(?key[0], ?previous[0], ?block[0]);
+            ret failed(error);
+        }
+
+        var take: usize = output.capacity - written;
+        if (take > SHA256_PRK_SIZE) { take = SHA256_PRK_SIZE; }
+        i = 0;
+        for (i < take) {
+            output.data[written + i] = block[i];
+            i = i + 1;
+        }
+        i = 0;
+        for (i < SHA256_PRK_SIZE) {
+            previous[i] = block[i];
+            i = i + 1;
+        }
+        previous_len = SHA256_PRK_SIZE;
+        written = written + take;
+    }
+    wipe256(?key[0], ?previous[0], ?block[0]);
+    ret contracts.Operation{error: contracts.OK, written: written};
+}
+
+# expand a sha-384 pseudorandom key into output.capacity bytes
+#
+# zero length is valid. prk must be exactly 48 bytes. output may overlap prk
+# because expansion snapshots the complete pseudorandom key before writing.
+pub fun expand_sha384(prk: contracts.SecretBytes, info: contracts.Bytes,
+    output: contracts.SecretBuffer) contracts.Operation {
+    if (prk.len != SHA384_PRK_SIZE) { ret failed(contracts.INVALID_KEY); }
+    if (prk.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (info.len != 0 && info.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity > SHA384_MAX_OUTPUT) { ret failed(contracts.INVALID_INPUT); }
+    if (info.len::u64 > sha2.SHA384_MAX_BYTES - sha2.SHA384_BLOCK_SIZE - SHA384_PRK_SIZE - 1) {
+        ret failed(contracts.INVALID_INPUT);
+    }
+    if (output.capacity == 0) {
+        ret contracts.Operation{error: contracts.OK, written: 0};
+    }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+
+    var key: [48]^u8;
+    var previous: [48]^u8;
+    var block: [48]^u8;
+    ct.zeroize(?key[0], SHA384_PRK_SIZE);
+    ct.zeroize(?previous[0], SHA384_PRK_SIZE);
+    ct.zeroize(?block[0], SHA384_PRK_SIZE);
+    var i: usize = 0;
+    for (i < SHA384_PRK_SIZE) {
+        key[i] = prk.data[i];
+        i = i + 1;
+    }
+
+    var written: usize = 0;
+    var previous_len: usize = 0;
+    var counter: [1]u8;
+    for (written < output.capacity) {
+        counter[0] = (written / SHA384_PRK_SIZE + 1)::u8;
+        var context: core.Context384;
+        val initialized: contracts.Error = core.init384(?context,
+            contracts.SecretBytes{data: ?key[0], len: SHA384_PRK_SIZE});
+        if (initialized != contracts.OK) {
+            wipe384(?key[0], ?previous[0], ?block[0]);
+            ret failed(initialized);
+        }
+        var error: contracts.Error = core.update384_secret(?context, ?previous[0], previous_len);
+        if (error == contracts.OK) { error = core.update384_public(?context, info.data, info.len); }
+        if (error == contracts.OK) { error = core.update384_public(?context, ?counter[0], 1); }
+        if (error == contracts.OK) { error = core.final384(?context, ?block[0]); }
+        if (error != contracts.OK) {
+            core.destroy384(?context);
+            wipe384(?key[0], ?previous[0], ?block[0]);
+            ret failed(error);
+        }
+
+        var take: usize = output.capacity - written;
+        if (take > SHA384_PRK_SIZE) { take = SHA384_PRK_SIZE; }
+        i = 0;
+        for (i < take) {
+            output.data[written + i] = block[i];
+            i = i + 1;
+        }
+        i = 0;
+        for (i < SHA384_PRK_SIZE) {
+            previous[i] = block[i];
+            i = i + 1;
+        }
+        previous_len = SHA384_PRK_SIZE;
+        written = written + take;
+    }
+    wipe384(?key[0], ?previous[0], ?block[0]);
+    ret contracts.Operation{error: contracts.OK, written: written};
+}
+
 test "hkdf: output expansion is bounded by the rfc block counter" {
     if (MAX_BLOCKS != 255) { ret 1; }
+    if (SHA256_MAX_OUTPUT != 8160 || SHA384_MAX_OUTPUT != 12240) { ret 1; }
     ret 0;
 }
