@@ -9,14 +9,16 @@ state machines belong in protocol repositories such as `mach-tls`.
 
 - `crypto.secret` owns allocated secret storage, bounded views, explicit moves,
   allocating clones, entropy initialization, and deterministic destruction.
+- `crypto.hash` provides incremental SHA-256 and SHA-384 transcript hashing.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
 - `crypto.group.x25519` provides X25519 key agreement.
 - `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
-- `crypto.signature` provides deterministic ECDSA P-256 with SHA-256.
-- `crypto.encoding.der` and `crypto.encoding.pem` cover cryptographic containers.
+- `crypto.signature` provides ECDSA P-256, Ed25519, and RSA-PSS signatures.
+- `crypto.encoding.der`, `crypto.encoding.pem`, and `crypto.encoding.keys`
+  provide strict TLS key-container parsing and exact serialization.
 - `crypto.vectors` defines a common test vector contract.
 - `crypto.assurance` publishes the validation state of this package.
 
@@ -40,6 +42,78 @@ The native allocator and entropy source keep storage secret-welded across the
 OS boundary. Custom allocators follow the same rule. A nonnil allocation result
 transfers ownership even when allocation reports failure, allowing partial
 storage to be wiped and released deterministically.
+
+## Key containers
+
+`encoding.der` accepts only definite, minimally encoded lengths and rejects
+noncanonical BOOLEAN, INTEGER, BIT STRING, NULL, and OBJECT IDENTIFIER values.
+Complete-document parsing rejects trailing bytes and validates every nested
+constructed value to a maximum depth of 16. Cursor failures are transactional.
+The public writer supports overlapping content through move semantics and
+validates constructed content before changing output.
+
+`encoding.pem` uses standard base64 with canonical padding and 64-character
+lines. Labels are bounded to 64 uppercase ASCII letters, digits, and single
+interior spaces. Decoding accepts LF or CRLF and an optional final newline, but
+rejects leading or trailing data, mismatched labels, nonfinal short lines,
+noncanonical padding bits, URL-safe base64, and embedded whitespace. Exact-base
+in-place decoding is supported. Public encoding rejects every overlap. Secret
+encoding rejects exact-base overlap, and nonidentical secret views are disjoint
+by contract.
+
+`encoding.keys` supports the key containers needed by TLS:
+
+- RFC 8410 Ed25519 and X25519 PKCS#8 private keys and SPKI public keys
+- P-256 SEC1 and PKCS#8 private keys and uncompressed SPKI public keys
+- PKCS#1 RSA private keys, RSA PKCS#8 private keys, and RSA SPKI public keys
+
+Algorithm identifiers and parameters are exact. P-256 private scalars are
+range-checked. An embedded SEC1 public point must be on the curve and match the
+private scalar. RSA containers require version zero, a 2048 through 4096-bit
+odd modulus, a canonical odd public exponent smaller than the modulus, and all
+eight PKCS#1 key integers. Encrypted PKCS#8, version-one OneAsymmetricKey,
+multi-prime RSA, compressed P-256 points, and legacy `RSA PUBLIC KEY` PEM are
+not accepted.
+
+Initialize every private output with `keys.empty_private`. Successful DER
+decoding copies the complete canonical document into one owned secret
+allocation. Successful PEM decoding allocates the exact decoded DER size once
+and transfers that allocation directly into the key. `keys.private_bytes`
+returns a borrowed seed or scalar. `keys.copy_rsa` copies the public modulus and
+exponent and a modulus-width private exponent into caller storage. It snapshots
+the private exponent first, so private output may overlap the owning key.
+Overlapping public RSA outputs are rejected.
+
+Private keys are move-only by contract and must be released with
+`keys.destroy_private`. A failed allocation or parse normally leaves the output
+empty. If cleanup deallocation fails, the output retains wiped cleanup-pending
+storage while the primary error is returned. Call `destroy_private` after that
+failure to retry release. Serialization reproduces the exact accepted DER, not
+a reconstructed variant. Public SPKI views borrow the caller's DER or PEM
+scratch buffer and must not outlive it.
+
+## Transcript hashes
+
+`hash.Sha256` and `hash.Sha384` are separate incremental state records for
+public protocol transcripts. Initialize each record with `hash.empty_sha256`
+or `hash.empty_sha384`, then activate it with the corresponding `init`
+function. Repeated `update` calls accept bounded public fragments, including an
+empty fragment. SHA-256 input is bounded to `2^61 - 1` bytes. SHA-384 uses its
+full 128-bit encoded length field and accepts totals through `2^64 - 1` bytes.
+
+`snapshot_sha256` and `snapshot_sha384` write the current digest without
+changing the source state. The same state remains usable for later updates,
+which is the TLS transcript operation used at handshake checkpoints. `final`
+writes the digest and consumes the state only after successful output.
+Validation, capacity, and length-overflow failures leave both state and output
+unchanged.
+
+`destroy_sha256` and `destroy_sha384` zeroize the complete state and are
+idempotent. A destroyed state rejects update, snapshot, and final, but can be
+activated again with `init`. This supports the TLS HelloRetryRequest transcript
+rewrite without exposing `crypto.internal.sha2`. State records are opaque and
+must not be copied directly. Snapshot clones, padded blocks, compression
+schedules, temporary digests, and destroyed contexts are explicitly zeroized.
 
 ## HMAC and HKDF
 
@@ -163,14 +237,51 @@ exponents, and scalar multiplication uses a fixed 256-step point loop without
 secret-indexed tables. Private scalars, nonce state, hashes, field and scalar
 temporaries, and projective points are explicitly zeroized.
 
+## Ed25519 and RSA-PSS
+
+`signature.derive_ed25519_public` derives an exact 32-byte RFC 8032 public key
+from an exact 32-byte private seed. `signature.sign_ed25519` writes an exact
+64-byte deterministic pure-Ed25519 signature. Verification requires canonical
+point encodings, `S < L`, and non-identity prime-subgroup public and nonce
+points. Malformed public keys return `INVALID_KEY`. Malformed or
+mathematically invalid signatures return `AUTH_FAILED`.
+
+RSA keys use explicit `RsaPublicKey` and `RsaPrivateKey` records. A modulus is
+a canonical big-endian, odd, full-width value from 256 through 512 bytes in
+four-byte increments. This admits 2048, 3072, and 4096-bit TLS keys. A public
+exponent is canonical big-endian, odd, at least three, and less than the
+modulus. A private exponent is secret, left-zero-padded to exactly the modulus
+width, and is paired with its public exponent so signing can verify its own
+result before release.
+
+`signature.sign_rsa_pss_sha256` requires an exact 32-byte caller-provided
+secret salt. `signature.sign_rsa_pss_sha384` requires an exact 48-byte salt.
+The caller owns salt generation and should use `secret.init_random` for every
+signature. The encoded message uses `emBits = modBits - 1`, MGF1 with the same
+hash, an exact hash-length salt, and trailer `0xbc`. Signatures are exactly the
+modulus width. Verification enforces the same salt and encoded-message policy.
+
+Ed25519 and RSA-PSS signing consume the complete message before writing, so
+public message and output storage may overlap. Validation, capacity, and key
+failures write nothing and return `written = 0`. RSA signing performs a public
+exponentiation self-check before any signature byte is released. Secret seeds,
+expanded scalars, nonces, salts copied into encoded messages, private
+exponentiation state, message hashes, masks, encoded messages, and unreleased
+signatures are explicitly zeroized. `signature.algorithm_status` returns
+`UNSUPPORTED` for an unknown TLS signature identifier, independently of
+`INVALID_KEY` and `AUTH_FAILED` operation results.
+
 ## Status
 
 The repository combines callable primitives with contracts for algorithms that
 are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
-P-256 ECDH, ECDSA P-256 with SHA-256, HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract,
-and HKDF-Expand are callable in this revision. Their tests include NIST, RFC
-4231, RFC 5869, RFC 6979, RFC 7748, and RFC 8439 vectors, independent
-differential vectors, strict-encoding and tamper cases, counter and output
+P-256 ECDH, ECDSA P-256 with SHA-256, Ed25519, RSA-PSS with SHA-256 and SHA-384,
+HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, HKDF-Expand, incremental SHA-256 and
+SHA-384, strict DER and PEM, and TLS key containers are callable in this
+revision. Their tests include NIST,
+RFC 4231, RFC 5869, RFC 6979, RFC 7468, RFC 7748, RFC 8017, RFC 8032, RFC 8410,
+RFC 8439, SEC 1, and independent OpenSSL vectors. They cover
+strict-encoding and tamper cases, counter and output
 limits, invalid inputs, fixed-buffer failures, and supported overlap.
 
 Mach constant-time support is functional. Its current limitation is assurance,
@@ -180,8 +291,9 @@ and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
 algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, P-256,
-ECDSA, HMAC, and HKDF have functional and vector evidence, but package-wide
-leakage and independent review layers have not yet advanced.
+ECDSA, Ed25519, RSA-PSS, SHA-256, SHA-384, HMAC, HKDF, and key encoding have
+functional and vector evidence, but package-wide leakage and independent
+review layers have not yet advanced.
 
 ## Local development
 
