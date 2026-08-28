@@ -327,6 +327,8 @@ pub fun sign_ecdsa_p256_sha256(private_key: contracts.SecretBytes,
     var r: core.UInt;
     var s: core.UInt;
     var nonce: core.UInt;
+    var nonce_one: core.UInt;
+    var candidate_nonce: core.UInt;
     var basepoint: core.Point;
     var nonce_point: core.Point;
     var x: core.UInt;
@@ -335,28 +337,33 @@ pub fun sign_ecdsa_p256_sha256(private_key: contracts.SecretBytes,
     var sum: core.UInt;
     var inverse: core.UInt;
     core.generator(?basepoint);
-    var complete: bool = false;
-    for (!complete) {
-        status = nonce_next(?nonce_state, ?nonce);
-        if (status != contracts.OK) { complete = true; }
-        or {
-            val nonce_valid: ^u8 = core.valid_scalar(?nonce);
-            if (nonce_valid:^ == 1) {
-                core.scalar_multiply(?nonce_point, ?nonce, ?basepoint);
-                core.to_affine(?x, ?y, ?nonce_point);
-                core.copy(?r, ?x);
-                core.reduce_scalar_once(?r);
-                core.scalar_multiply_values(?product, ?r, ?private_scalar);
-                core.scalar_add(?sum, ?hash_scalar, ?product);
-                core.scalar_inverse(?inverse, ?nonce);
-                core.scalar_multiply_values(?s, ?inverse, ?sum);
-                val usable: ^u8 = (core.is_zero(?r) | core.is_zero(?s)) ^ 1;
-                if (usable:^ == 1) { complete = true; }
-                or { status = nonce_advance(?nonce_state); }
-            } or {
-                status = nonce_advance(?nonce_state);
-            }
+    core.set_small(?nonce_one, 1);
+    core.copy(?nonce, ?nonce_one);
+    # fixed candidates hide rfc rejection count at a 2^-256 failure bound
+    var selected: ^u8 = 0;
+    var attempt: usize = 0;
+    for (attempt < 8 && status == contracts.OK) {
+        status = nonce_next(?nonce_state, ?candidate_nonce);
+        if (status == contracts.OK) {
+            val candidate_valid: ^u8 = core.valid_scalar(?candidate_nonce);
+            val choose: ^u8 = candidate_valid & (selected ^ 1);
+            core.select(?nonce, ?nonce, ?candidate_nonce, choose);
+            selected = selected | candidate_valid;
+            status = nonce_advance(?nonce_state);
         }
+        attempt = attempt + 1;
+    }
+    if (status == contracts.OK) {
+        core.scalar_multiply(?nonce_point, ?nonce, ?basepoint);
+        core.to_affine(?x, ?y, ?nonce_point);
+        core.copy(?r, ?x);
+        core.reduce_scalar_once(?r);
+        core.scalar_multiply_values(?product, ?r, ?private_scalar);
+        core.scalar_add(?sum, ?hash_scalar, ?product);
+        core.scalar_inverse(?inverse, ?nonce);
+        core.scalar_multiply_values(?s, ?inverse, ?sum);
+        val usable: ^u8 = selected & ((core.is_zero(?r) | core.is_zero(?s)) ^ 1);
+        if (usable:^ != 1) { status = contracts.INVALID_STATE; }
     }
 
     var encoded: [72]^u8;
@@ -382,6 +389,8 @@ pub fun sign_ecdsa_p256_sha256(private_key: contracts.SecretBytes,
     core.destroy_uint(?r);
     core.destroy_uint(?s);
     core.destroy_uint(?nonce);
+    core.destroy_uint(?nonce_one);
+    core.destroy_uint(?candidate_nonce);
     core.destroy_point(?basepoint);
     core.destroy_point(?nonce_point);
     core.destroy_uint(?x);

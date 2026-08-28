@@ -153,6 +153,9 @@ signature of at most 72 bytes. `signature.verify_ecdsa_p256_sha256` accepts an
 exact uncompressed SEC1 public key and strict DER, rejects zero or out-of-range
 `r` and `s`, and accepts both high- and low-`s` mathematical signatures. All
 validation and capacity failures return `written = 0` without changing output.
+Signing evaluates eight nonce candidates before selecting the first valid one,
+which hides the RFC rejection count and bounds all-candidate failure below the
+P-256 security level.
 
 Field and scalar values use fixed eight-limb storage. Multiplication uses a
 fixed 256-step masked shift-and-add operation, inversions use fixed public
