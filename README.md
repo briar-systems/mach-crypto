@@ -9,6 +9,7 @@ state machines belong in protocol repositories such as `mach-tls`.
 
 - `crypto.secret` owns allocated secret storage, bounded views, explicit moves,
   allocating clones, entropy initialization, and deterministic destruction.
+- `crypto.hash` provides incremental SHA-256 and SHA-384 transcript hashing.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
@@ -90,6 +91,29 @@ storage while the primary error is returned. Call `destroy_private` after that
 failure to retry release. Serialization reproduces the exact accepted DER, not
 a reconstructed variant. Public SPKI views borrow the caller's DER or PEM
 scratch buffer and must not outlive it.
+
+## Transcript hashes
+
+`hash.Sha256` and `hash.Sha384` are separate incremental state records for
+public protocol transcripts. Initialize each record with `hash.empty_sha256`
+or `hash.empty_sha384`, then activate it with the corresponding `init`
+function. Repeated `update` calls accept bounded public fragments, including an
+empty fragment. SHA-256 input is bounded to `2^61 - 1` bytes. SHA-384 uses its
+full 128-bit encoded length field and accepts totals through `2^64 - 1` bytes.
+
+`snapshot_sha256` and `snapshot_sha384` write the current digest without
+changing the source state. The same state remains usable for later updates,
+which is the TLS transcript operation used at handshake checkpoints. `final`
+writes the digest and consumes the state only after successful output.
+Validation, capacity, and length-overflow failures leave both state and output
+unchanged.
+
+`destroy_sha256` and `destroy_sha384` zeroize the complete state and are
+idempotent. A destroyed state rejects update, snapshot, and final, but can be
+activated again with `init`. This supports the TLS HelloRetryRequest transcript
+rewrite without exposing `crypto.internal.sha2`. State records are opaque and
+must not be copied directly. Snapshot clones, padded blocks, compression
+schedules, temporary digests, and destroyed contexts are explicitly zeroized.
 
 ## HMAC and HKDF
 
@@ -252,8 +276,9 @@ signatures are explicitly zeroized. `signature.algorithm_status` returns
 The repository combines callable primitives with contracts for algorithms that
 are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
 P-256 ECDH, ECDSA P-256 with SHA-256, Ed25519, RSA-PSS with SHA-256 and SHA-384,
-HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, HKDF-Expand, strict DER and PEM, and
-TLS key containers are callable in this revision. Their tests include NIST,
+HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, HKDF-Expand, incremental SHA-256 and
+SHA-384, strict DER and PEM, and TLS key containers are callable in this
+revision. Their tests include NIST,
 RFC 4231, RFC 5869, RFC 6979, RFC 7468, RFC 7748, RFC 8017, RFC 8032, RFC 8410,
 RFC 8439, SEC 1, and independent OpenSSL vectors. They cover
 strict-encoding and tamper cases, counter and output
@@ -266,9 +291,9 @@ and independent review as distinct evidence layers.
 
 The package-wide assurance level remains `assurance.SCAFFOLD` while the other
 algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, P-256,
-ECDSA, Ed25519, RSA-PSS, HMAC, HKDF, and key encoding have functional and vector
-evidence, but package-wide leakage and independent review layers have not yet
-advanced.
+ECDSA, Ed25519, RSA-PSS, SHA-256, SHA-384, HMAC, HKDF, and key encoding have
+functional and vector evidence, but package-wide leakage and independent
+review layers have not yet advanced.
 
 ## Local development
 
