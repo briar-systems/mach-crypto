@@ -3,6 +3,7 @@
 use std.runtime;
 
 fwd crypto.contracts;
+fwd crypto.secret;
 fwd crypto.assurance;
 fwd crypto.hmac;
 fwd crypto.hkdf;
