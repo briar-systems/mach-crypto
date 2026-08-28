@@ -16,11 +16,14 @@ pub def Algorithm: u16;
 
 pub val ECDSA_P256_SHA256: Algorithm = 0x0403;
 pub val ED25519:           Algorithm = 0x0807;
+pub val RSA_PKCS1_SHA256:  Algorithm = 0x0401;
+pub val RSA_PKCS1_SHA384:  Algorithm = 0x0501;
 pub val RSA_PSS_RSAE_SHA256: Algorithm = 0x0804;
 pub val RSA_PSS_RSAE_SHA384: Algorithm = 0x0805;
 
 pub fun algorithm_status(algorithm: Algorithm) contracts.Error {
     if (algorithm == ECDSA_P256_SHA256 || algorithm == ED25519 ||
+        algorithm == RSA_PKCS1_SHA256 || algorithm == RSA_PKCS1_SHA384 ||
         algorithm == RSA_PSS_RSAE_SHA256 || algorithm == RSA_PSS_RSAE_SHA384) {
         ret contracts.OK;
     }
@@ -40,6 +43,20 @@ pub val RSA_MIN_MODULUS_SIZE: usize = rsa.MIN_MODULUS_BYTES;
 pub val RSA_MAX_MODULUS_SIZE: usize = rsa.MAX_MODULUS_BYTES;
 pub val RSA_PSS_SHA256_SALT_SIZE: usize = 32;
 pub val RSA_PSS_SHA384_SALT_SIZE: usize = 48;
+
+val RSA_PKCS1_DIGEST_INFO_PREFIX_SIZE: usize = 19;
+
+val RSA_PKCS1_SHA256_DIGEST_INFO: [19]u8 = [19]u8{
+    0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
+    0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05,
+    0x00, 0x04, 0x20
+};
+
+val RSA_PKCS1_SHA384_DIGEST_INFO: [19]u8 = [19]u8{
+    0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
+    0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05,
+    0x00, 0x04, 0x30
+};
 
 pub rec RsaPublicKey {
     modulus:  contracts.Bytes;
@@ -362,7 +379,7 @@ fun valid_rsa_private(key: RsaPrivateKey) bool {
 }
 
 #[oblivious]
-fun pss_hash_message(output: *^u8, message: contracts.Bytes,
+fun rsa_hash_message(output: *^u8, message: contracts.Bytes,
     sha384: bool) contracts.Error {
     if (sha384) {
         var state384: sha2.State384;
@@ -485,7 +502,7 @@ fun pss_encode(output: *^u8, encoded_len: usize, message: contracts.Bytes,
     ct.zeroize(?message_hash[0], 48);
     ct.zeroize(?encoded_hash[0], 48);
     ct.zeroize(?mask[0], 512);
-    var status: contracts.Error = pss_hash_message(?message_hash[0], message, sha384);
+    var status: contracts.Error = rsa_hash_message(?message_hash[0], message, sha384);
     if (status == contracts.OK) {
         status = pss_hash_prime(?encoded_hash[0], ?message_hash[0], salt.data,
             hash_len, sha384);
@@ -526,7 +543,7 @@ fun pss_check(encoded: *^u8, encoded_len: usize, message: contracts.Bytes,
     ct.zeroize(?mask[0], 512);
     ct.zeroize(?salt[0], 48);
     val data_len: usize = encoded_len - hash_len - 1;
-    var status: contracts.Error = pss_hash_message(?message_hash[0], message, sha384);
+    var status: contracts.Error = rsa_hash_message(?message_hash[0], message, sha384);
     if (status == contracts.OK) {
         status = pss_mgf1(?mask[0], data_len, ?encoded[data_len], hash_len, sha384);
     }
@@ -657,6 +674,87 @@ pub fun verify_rsa_pss_sha256(public_key: RsaPublicKey, message: contracts.Bytes
 pub fun verify_rsa_pss_sha384(public_key: RsaPublicKey, message: contracts.Bytes,
     signature_bytes: contracts.Bytes) contracts.Error {
     ret verify_rsa_pss(public_key, message, signature_bytes, 48, true);
+}
+
+#[oblivious]
+fun pkcs1_check(encoded: *^u8, encoded_len: usize, message: contracts.Bytes,
+    hash_len: usize, sha384: bool) contracts.Error {
+    val digest_info_len: usize = RSA_PKCS1_DIGEST_INFO_PREFIX_SIZE + hash_len;
+    if (encoded_len < digest_info_len + 11) { ret contracts.AUTH_FAILED; }
+    val digest_info_offset: usize = encoded_len - digest_info_len;
+    val separator: usize = digest_info_offset - 1;
+    var digest: [48]^u8;
+    ct.zeroize(?digest[0], 48);
+    val status: contracts.Error = rsa_hash_message(?digest[0], message, sha384);
+    var valid: ^u8 = 1;
+    valid = valid & ct.eq_u8(encoded[0], 0);
+    valid = valid & ct.eq_u8(encoded[1], 1);
+    var i: usize = 2;
+    for (i < separator) {
+        valid = valid & ct.eq_u8(encoded[i], 0xff);
+        i = i + 1;
+    }
+    valid = valid & ct.eq_u8(encoded[separator], 0);
+    i = 0;
+    if (sha384) {
+        for (i < RSA_PKCS1_DIGEST_INFO_PREFIX_SIZE) {
+            valid = valid & ct.eq_u8(encoded[digest_info_offset + i],
+                RSA_PKCS1_SHA384_DIGEST_INFO[i]);
+            i = i + 1;
+        }
+    } or {
+        for (i < RSA_PKCS1_DIGEST_INFO_PREFIX_SIZE) {
+            valid = valid & ct.eq_u8(encoded[digest_info_offset + i],
+                RSA_PKCS1_SHA256_DIGEST_INFO[i]);
+            i = i + 1;
+        }
+    }
+    valid = valid & ct.eq_bytes(?encoded[digest_info_offset +
+        RSA_PKCS1_DIGEST_INFO_PREFIX_SIZE], ?digest[0], hash_len);
+    var result: contracts.Error = contracts.AUTH_FAILED;
+    if (status != contracts.OK) { result = status; }
+    if (status == contracts.OK && valid:^ == 1) { result = contracts.OK; }
+    ct.zeroize(?digest[0], 48);
+    valid = 0;
+    ret result;
+}
+
+#[oblivious]
+fun verify_rsa_pkcs1(public_key: RsaPublicKey, message: contracts.Bytes,
+    signature_bytes: contracts.Bytes, hash_len: usize,
+    sha384: bool) contracts.Error {
+    if (!valid_rsa_public(public_key)) { ret contracts.INVALID_KEY; }
+    if (message.len != 0 && message.data == nil) { ret contracts.INVALID_INPUT; }
+    if (signature_bytes.len != public_key.modulus.len) { ret contracts.AUTH_FAILED; }
+    if (signature_bytes.data == nil) { ret contracts.INVALID_INPUT; }
+    if (!rsa.public_less_than(signature_bytes.data, public_key.modulus.data,
+        public_key.modulus.len)) { ret contracts.AUTH_FAILED; }
+    ct.begin();
+    var encoded: [512]^u8;
+    ct.zeroize(?encoded[0], 512);
+    val valid: ^u8 = rsa.public_apply(?encoded[0], signature_bytes.data,
+        public_key.modulus.data, public_key.modulus.len, public_key.exponent.data,
+        public_key.exponent.len);
+    var result: contracts.Error = contracts.AUTH_FAILED;
+    if (valid:^ == 1) {
+        result = pkcs1_check(?encoded[0], public_key.modulus.len, message,
+            hash_len, sha384);
+    }
+    ct.zeroize(?encoded[0], 512);
+    ct.end();
+    ret result;
+}
+
+# verify exact rfc 8017 emsa-pkcs1-v1_5 with sha-256
+pub fun verify_rsa_pkcs1_sha256(public_key: RsaPublicKey,
+    message: contracts.Bytes, signature_bytes: contracts.Bytes) contracts.Error {
+    ret verify_rsa_pkcs1(public_key, message, signature_bytes, 32, false);
+}
+
+# verify exact rfc 8017 emsa-pkcs1-v1_5 with sha-384
+pub fun verify_rsa_pkcs1_sha384(public_key: RsaPublicKey,
+    message: contracts.Bytes, signature_bytes: contracts.Bytes) contracts.Error {
+    ret verify_rsa_pkcs1(public_key, message, signature_bytes, 48, true);
 }
 
 #[oblivious]
@@ -1116,6 +1214,9 @@ pub fun verify_ecdsa_p256_sha256(public_key: contracts.Bytes,
 test "signature: algorithm ids match the tls registry" {
     if (ECDSA_P256_SHA256 != 0x0403) { ret 1; }
     if (ED25519 != 0x0807) { ret 1; }
+    if (RSA_PKCS1_SHA256 != 0x0401) { ret 1; }
+    if (RSA_PKCS1_SHA384 != 0x0501) { ret 1; }
     if (RSA_PSS_RSAE_SHA256 != 0x0804) { ret 1; }
+    if (RSA_PSS_RSAE_SHA384 != 0x0805) { ret 1; }
     ret 0;
 }

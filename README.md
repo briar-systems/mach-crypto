@@ -16,7 +16,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
 - `crypto.group.x25519` provides X25519 key agreement.
 - `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
-- `crypto.signature` provides ECDSA P-256, Ed25519, and RSA-PSS signatures.
+- `crypto.signature` provides ECDSA P-256, Ed25519, RSA-PSS, and strict
+  RSA PKCS#1 v1.5 signatures.
 - `crypto.encoding.der`, `crypto.encoding.pem`, and `crypto.encoding.keys`
   provide strict TLS key-container parsing and exact serialization.
 - `crypto.vectors` defines a common test vector contract.
@@ -237,7 +238,7 @@ exponents, and scalar multiplication uses a fixed 256-step point loop without
 secret-indexed tables. Private scalars, nonce state, hashes, field and scalar
 temporaries, and projective points are explicitly zeroized.
 
-## Ed25519 and RSA-PSS
+## Ed25519 and RSA signatures
 
 `signature.derive_ed25519_public` derives an exact 32-byte RFC 8032 public key
 from an exact 32-byte private seed. `signature.sign_ed25519` writes an exact
@@ -261,6 +262,14 @@ signature. The encoded message uses `emBits = modBits - 1`, MGF1 with the same
 hash, an exact hash-length salt, and trailer `0xbc`. Signatures are exactly the
 modulus width. Verification enforces the same salt and encoded-message policy.
 
+`signature.verify_rsa_pkcs1_sha256` and
+`signature.verify_rsa_pkcs1_sha384` accept certificate signatures encoded by
+EMSA-PKCS1-v1_5. Verification requires a signature exactly as wide as the
+modulus, at least eight `0xff` padding bytes, the exact RFC 8017 SHA-256 or
+SHA-384 `DigestInfo` with explicit NULL parameters, and no leading or trailing
+bytes. Malformed encodings and digest mismatches return `AUTH_FAILED` without
+changing caller-owned key, message, or signature storage.
+
 Ed25519 and RSA-PSS signing consume the complete message before writing, so
 public message and output storage may overlap. Validation, capacity, and key
 failures write nothing and return `written = 0`. RSA signing performs a public
@@ -275,10 +284,10 @@ signatures are explicitly zeroized. `signature.algorithm_status` returns
 
 The repository combines callable primitives with contracts for algorithms that
 are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
-P-256 ECDH, ECDSA P-256 with SHA-256, Ed25519, RSA-PSS with SHA-256 and SHA-384,
-HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, HKDF-Expand, incremental SHA-256 and
-SHA-384, strict DER and PEM, and TLS key containers are callable in this
-revision. Their tests include NIST,
+P-256 ECDH, ECDSA P-256 with SHA-256, Ed25519, RSA-PSS and RSA PKCS#1 v1.5 with
+SHA-256 and SHA-384, HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, HKDF-Expand,
+incremental SHA-256 and SHA-384, strict DER and PEM, and TLS key containers are
+callable in this revision. Their tests include NIST,
 RFC 4231, RFC 5869, RFC 6979, RFC 7468, RFC 7748, RFC 8017, RFC 8032, RFC 8410,
 RFC 8439, SEC 1, and independent OpenSSL vectors. They cover
 strict-encoding and tamper cases, counter and output
@@ -289,11 +298,24 @@ not expressiveness. The package will use Mach secret types and oblivious code,
 official vectors, differential tests, generated-code inspection, leakage tests,
 and independent review as distinct evidence layers.
 
-The package-wide assurance level remains `assurance.SCAFFOLD` while the other
-algorithm modules are scaffolds. AES-GCM, ChaCha20-Poly1305, X25519, P-256,
-ECDSA, Ed25519, RSA-PSS, SHA-256, SHA-384, HMAC, HKDF, and key encoding have
-functional and vector evidence, but package-wide leakage and independent
-review layers have not yet advanced.
+`tools/assurance run` is the fail-closed release evidence gate. It runs the
+functional, official-vector, differential, invalid-input, leakage, and
+zeroization layers independently. It then performs two clean builds of every
+project for all six targets in debug and release mode with verified IR and
+emitted assembly. The two artifact sets must be byte-for-byte identical.
+
+A successful run publishes an immutable machine-readable evidence directory
+under `out/assurance/` and updates `out/assurance/current`. The report records
+the exact Git commit, compiler binary hash, compiler version, dependency lock,
+target, profile, algorithm, vector source, logs, generated-code samples, and
+artifact hashes. `tools/assurance verify` rejects missing, modified, or stale
+evidence. See [the assurance guide](doc/assurance.md) for the complete contract.
+
+The source-only floor remains `assurance.SCAFFOLD` because generated evidence
+is deliberately not trusted merely because a source constant says it exists.
+The gate advances the automated level in `state.tsv` only after every required
+artifact passes. Callable algorithm availability and independent review status
+are separate fields. Independent review is currently `NOT_RECORDED`.
 
 ## Local development
 
@@ -304,4 +326,6 @@ directory inside this repository.
 mach dep pull .
 mach build .
 mach test .
+tools/assurance run
+tools/assurance verify
 ```

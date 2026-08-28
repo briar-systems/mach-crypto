@@ -27,6 +27,58 @@ fun public_filled(actual: *u8, value: u8, len: usize) bool {
     ret true;
 }
 
+fun nibble(byte: u8) u8 {
+    if (byte >= '0' && byte <= '9') { ret byte - '0'; }
+    if (byte >= 'a' && byte <= 'f') { ret byte - 'a' + 10; }
+    if (byte >= 'A' && byte <= 'F') { ret byte - 'A' + 10; }
+    ret 255;
+}
+
+fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
+    if (text == nil || output == nil || text_len % 2 != 0) { ret false; }
+    var i: usize = 0;
+    for (i < text_len / 2) {
+        val high: u8 = nibble(text[i * 2]);
+        val low: u8 = nibble(text[i * 2 + 1]);
+        if (high == 255 || low == 255) { ret false; }
+        output[i] = (high << 4) | low;
+        i = i + 1;
+    }
+    ret true;
+}
+
+fun copy_public(output: *u8, input: *u8, len: usize) {
+    var i: usize = 0;
+    for (i < len) {
+        output[i] = input[i];
+        i = i + 1;
+    }
+}
+
+fun pkcs1_hostile_rejected(public_key: signature.RsaPublicKey,
+    message: contracts.Bytes, encoded: *u8) bool {
+    var signature_bytes: [256]u8;
+    var snapshot: [256]u8;
+    if (!decode_hex(encoded, 512, ?signature_bytes[0])) { ret false; }
+    copy_public(?snapshot[0], ?signature_bytes[0], 256);
+    val status: contracts.Error = signature.verify_rsa_pkcs1_sha256(public_key,
+        message, contracts.Bytes{data: ?signature_bytes[0], len: 256});
+    ret status == contracts.AUTH_FAILED &&
+        public_equal(?signature_bytes[0], ?snapshot[0], 256);
+}
+
+fun pkcs1_sha384_hostile_rejected(public_key: signature.RsaPublicKey,
+    message: contracts.Bytes, encoded: *u8) bool {
+    var signature_bytes: [256]u8;
+    var snapshot: [256]u8;
+    if (!decode_hex(encoded, 512, ?signature_bytes[0])) { ret false; }
+    copy_public(?snapshot[0], ?signature_bytes[0], 256);
+    val status: contracts.Error = signature.verify_rsa_pkcs1_sha384(public_key,
+        message, contracts.Bytes{data: ?signature_bytes[0], len: 256});
+    ret status == contracts.AUTH_FAILED &&
+        public_equal(?signature_bytes[0], ?snapshot[0], 256);
+}
+
 fun set_rfc_private(output: *^u8) {
     val value: [32]u8 = [32]u8{
         0xc9, 0xaf, 0xa9, 0xd8, 0x45, 0xba, 0x75, 0x16,
@@ -881,5 +933,194 @@ test "rsa-pss: nist cavp sha384 verification" {
     if (signature.verify_rsa_pss_sha384(public_key,
         contracts.Bytes{data: (?message[0]):~*u8, len: 128},
         contracts.Bytes{data: (?encoded[0]):~*u8, len: 256}) != contracts.OK) { ret 1; }
+    ret 0;
+}
+
+test "rsa-pkcs1: nist cavp sha-256 and sha-384 verification" {
+    var modulus256: [256]u8;
+    var message256: [128]u8;
+    var encoded256: [256]u8;
+    if (!decode_hex(
+        "c47abacc2a84d56f3614d92fd62ed36ddde459664b9301dcd1d61781cfcc026bcb2399bee7e75681a80b7bf500e2d08ceae1c42ec0b707927f2b2fe92ae852087d25f1d260cc74905ee5f9b254ed05494a9fe06732c3680992dd6f0dc634568d11542a705f83ae96d2a49763d5fbb24398edf3702bc94bc168190166492b8671de874bb9cecb058c6c8344aa8c93754d6effcd44a41ed7de0a9dcd9144437f212b18881d042d331a4618a9e630ef9bb66305e4fdf8f0391b3b2313fe549f0189ff968b92f33c266a4bc2cffc897d1937eeb9e406f5d0eaa7a14782e76af3fce98f54ed237b4a04a4159a5f6250a296a902880204e61d891c4da29f2d65f34cbb"::*u8,
+        512, ?modulus256[0]) || !decode_hex(
+        "95123c8d1b236540b86976a11cea31f8bd4e6c54c235147d20ce722b03a6ad756fbd918c27df8ea9ce3104444c0bbe877305bc02e35535a02a58dcda306e632ad30b3dc3ce0ba97fdf46ec192965dd9cd7f4a71b02b8cba3d442646eeec4af590824ca98d74fbca934d0b6867aa1991f3040b707e806de6e66b5934f05509bea"::*u8,
+        256, ?message256[0]) || !decode_hex(
+        "51265d96f11ab338762891cb29bf3f1d2b3305107063f5f3245af376dfcc7027d39365de70a31db05e9e10eb6148cb7f6425f0c93c4fb0e2291adbd22c77656afc196858a11e1c670d9eeb592613e69eb4f3aa501730743ac4464486c7ae68fd509e896f63884e9424f69c1c5397959f1e52a368667a598a1fc90125273d9341295d2f8e1cc4969bf228c860e07a3546be2eeda1cde48ee94d062801fe666e4a7ae8cb9cd79262c017b081af874ff00453ca43e34efdb43fffb0bb42a4e2d32a5e5cc9e8546a221fe930250e5f5333e0efe58ffebf19369a3b8ae5a67f6a048bc9ef915bda25160729b508667ada84a0c27e7e26cf2abca413e5e4693f4a9405"::*u8,
+        512, ?encoded256[0])) { ret 1; }
+    val exponent256: [3]u8 = [3]u8{0x49, 0xd2, 0xa1};
+    val key256: signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus: contracts.Bytes{data: ?modulus256[0], len: 256},
+        exponent: contracts.Bytes{data: (?exponent256[0]):~*u8, len: 3}
+    };
+    if (signature.verify_rsa_pkcs1_sha256(key256,
+        contracts.Bytes{data: ?message256[0], len: 128},
+        contracts.Bytes{data: ?encoded256[0], len: 256}) != contracts.OK) { ret 2; }
+
+    var modulus384: [256]u8;
+    var message384: [128]u8;
+    var encoded384: [256]u8;
+    if (!decode_hex(
+        "c858aea188541c0dd2626eec9a8c98511ca03870353128c1687d94a1be762a4940fca789831a720e108f2f7c1fc20aab38336b5668205d62963c51aad74757183faae7c0c59b9f679e96393e7f93e8a30ce99fed1b8e85e7146bd69a3f8dc5734bbacd51359f4f66aa507fbf4e69708877f7cd7cfb6868006e330869d9eee99f466962b0dee9080d9413bdec2e41445190394a49ecb191167350be411cdd6ade4eb38c4c4bf891b43c91b5981a3bcc8a66f85e5cbaef751e3cbe94c7f193fd78ac55048800250d5cc9e41b89319ac3d0258aa640299e165b0cf7e5e108f76a12f72132f6a2a4c239df0544d3d8407b94f9f38e9156c825a7eae001543fb264eb"::*u8,
+        512, ?modulus384[0]) || !decode_hex(
+        "d6a169031049b0b3b582d22bf40b9fca45d2618457146c2b4ac6f6ed1f34291f6de8773955cd2e21b7944caca65794621a7ce181e5ddbb45e9252867877dc4e35b6914ff26ec18890bf31f60fff1df367bc6c59373e58a1d8cb607188a394a2907ede95f6bf096731867f44fe520aacece76b5c3ea75023c9d3f3c080eaee376"::*u8,
+        256, ?message384[0]) || !decode_hex(
+        "b9794f252e6907dc4c41de42ea5a0e6361114ac3814c4a92583ca70fd78e98190a0d9215bd5282e8520422093eff2e1cfa335cffcdcc27fe9bafe4516e74445d4aa17a08db754fc69b156d86ff26eb9e814f605142a3051d2fa64305d3e5c5c5f67c7d9e38c5054d069c14b23e4278fa5a73381f61f90a9ec428c883f1366e27ec0219db8c942582a284c161eead307285d0e4df6b0d7dea0e8216d7ef2e4b2ede2296e0b780e5a3f8d15f123f737b9d6170074f758de32b6f1e958b27e422b053df8f5fbbbafbc14119260f7022cd2934e8faeffbd7085aabc44497bfe07387bc0e5aa02399eab99318adb98f99a677aa0683e0c11d638cb13907fc5c3147e5"::*u8,
+        512, ?encoded384[0])) { ret 3; }
+    val exponent384: [3]u8 = [3]u8{0x2a, 0x26, 0xdb};
+    val key384: signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus: contracts.Bytes{data: ?modulus384[0], len: 256},
+        exponent: contracts.Bytes{data: (?exponent384[0]):~*u8, len: 3}
+    };
+    if (signature.verify_rsa_pkcs1_sha384(key384,
+        contracts.Bytes{data: ?message384[0], len: 128},
+        contracts.Bytes{data: ?encoded384[0], len: 256}) != contracts.OK) { ret 4; }
+    ret 0;
+}
+
+test "rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs" {
+    var modulus: [256]u8;
+    var message: [33]u8;
+    var encoded256: [256]u8;
+    var encoded384: [256]u8;
+    if (!decode_hex(
+        "cd0d4a9e79ece89342b35e97d4dfc9461b68b46cda89f0bc9681d7056ddaf8713b5ada74e9e26c5178e84f01ae2abb072b7591f6d0fb82d245dffc107eae711c1c966a3c1016e38a1cc3bd93daabbda4ecd5c6307813b9e5ac195a30a05debf13d83afa1bcd20d992b4c0634bfc6aeca3b0c21a2c89d914064848c724ccad4b31a3efede42a7de0f6cbedeee7a0cd9809e1052f7583ae9b81188b436b0f5da5bd94ca77cce5cb7ae5293937024660e63ca43a38d33d8a49a2133c426156a1860d2a6cf0253ca7cdcb66b4b0111f1107aeeece92d806d26626784016262ba1e9a1436ecac8fd1cccdb8e57f1a7e1da27200514fcd8fd399852fe745c239520ee1"::*u8,
+        512, ?modulus[0]) || !decode_hex(
+        "6d6163682072736120706b63733120636572746966696361746520766563746f72"::*u8,
+        66, ?message[0]) || !decode_hex(
+        "c447f3b9ffa9cf464eb8e63d48949081f198902121d0fc310079b981aa80d9bf3f781f9052f9f32ac55d5639d57f53b479702619ffdd57a565726e315c933ffc1a3be331568072efcf990f43e96663d13992ce942a79880b968ae45bb148354d42f6aaeb522249bd30c28efd983321f166f9d13c81d65ff9a92f23e98a4e44e8edce9e134f84059f28e0892ab6f9d91a0eed72c32142d6c34f6d8c58f4a231c3be8bf12373f7fb3b80a70004818cf779962a3174bbdcbf2ab7e770142193fabf20d394a66f928881519bb48eaed01603d517acb155fe4be54d34ee5836eef5cf11fe53a9f9af061585d95013fab3a0afe4f10f84d9f761bd4524cb859933c8ca"::*u8,
+        512, ?encoded256[0]) || !decode_hex(
+        "b8e7e3d3a50ef5feaac07b1319316b01b9e0ad28f985db9332b2bd309940363188b3d2d9029903e5909dbdf5f1315383fdb9c8a2c76b50148fe70c0b7a30298a5866758794ff21480d09fc24bac5bae365d0cc48edb469d209f584e5565eaa4d261da8389d596673e19d79ccfab6003cf4f0b3e93e25cebfa7ba65d80fff15c8da3a0a7f76fc2e41b74d0b86181c9685cd5be61050cbe95bc5a3eee6b154a74c660f10965a3a2a980aaab6c43fc0b86f77ada49980f7ed9c308f60140605ee225e1f23f41bf1e028f3374c4377ef05a0428c6f523b56b766c3ed9d02411663cb60f6b48550adfa5774898b80f020e86795a55df59d1e44dd0f7de4e92ab2ca7d"::*u8,
+        512, ?encoded384[0])) { ret 1; }
+    val exponent: [3]u8 = [3]u8{1, 0, 1};
+    val public_key: signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus: contracts.Bytes{data: ?modulus[0], len: 256},
+        exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
+    };
+    var modulus_snapshot: [256]u8;
+    var exponent_snapshot: [3]u8;
+    var message_snapshot: [33]u8;
+    var encoded256_snapshot: [256]u8;
+    var encoded384_snapshot: [256]u8;
+    copy_public(?modulus_snapshot[0], ?modulus[0], 256);
+    copy_public(?exponent_snapshot[0], (?exponent[0]):~*u8, 3);
+    copy_public(?message_snapshot[0], ?message[0], 33);
+    copy_public(?encoded256_snapshot[0], ?encoded256[0], 256);
+    copy_public(?encoded384_snapshot[0], ?encoded384[0], 256);
+    if (signature.verify_rsa_pkcs1_sha256(public_key,
+        contracts.Bytes{data: ?message[0], len: 33},
+        contracts.Bytes{data: ?encoded256[0], len: 256}) != contracts.OK) { ret 2; }
+    if (signature.verify_rsa_pkcs1_sha384(public_key,
+        contracts.Bytes{data: ?message[0], len: 33},
+        contracts.Bytes{data: ?encoded384[0], len: 256}) != contracts.OK) { ret 3; }
+    if (!public_equal(?modulus[0], ?modulus_snapshot[0], 256) ||
+        !public_equal((?exponent[0]):~*u8, ?exponent_snapshot[0], 3) ||
+        !public_equal(?message[0], ?message_snapshot[0], 33) ||
+        !public_equal(?encoded256[0], ?encoded256_snapshot[0], 256) ||
+        !public_equal(?encoded384[0], ?encoded384_snapshot[0], 256)) { ret 4; }
+    ret 0;
+}
+
+test "rsa-pkcs1: hostile padding and digestinfo encodings are rejected" {
+    var modulus: [256]u8;
+    var message: [33]u8;
+    if (!decode_hex(
+        "cd0d4a9e79ece89342b35e97d4dfc9461b68b46cda89f0bc9681d7056ddaf8713b5ada74e9e26c5178e84f01ae2abb072b7591f6d0fb82d245dffc107eae711c1c966a3c1016e38a1cc3bd93daabbda4ecd5c6307813b9e5ac195a30a05debf13d83afa1bcd20d992b4c0634bfc6aeca3b0c21a2c89d914064848c724ccad4b31a3efede42a7de0f6cbedeee7a0cd9809e1052f7583ae9b81188b436b0f5da5bd94ca77cce5cb7ae5293937024660e63ca43a38d33d8a49a2133c426156a1860d2a6cf0253ca7cdcb66b4b0111f1107aeeece92d806d26626784016262ba1e9a1436ecac8fd1cccdb8e57f1a7e1da27200514fcd8fd399852fe745c239520ee1"::*u8,
+        512, ?modulus[0]) || !decode_hex(
+        "6d6163682072736120706b63733120636572746966696361746520766563746f72"::*u8,
+        66, ?message[0])) { ret 1; }
+    val exponent: [3]u8 = [3]u8{1, 0, 1};
+    val public_key: signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus: contracts.Bytes{data: ?modulus[0], len: 256},
+        exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
+    };
+    val input: contracts.Bytes = contracts.Bytes{data: ?message[0], len: 33};
+    if (!pkcs1_hostile_rejected(public_key, input,
+        "46a064b549da2801b440c73a8e25b6a9211d871058f83478fe2ff511c0d465122dd1b8efea6591232d44d61f030aa7b43e33be9690ccbea9b3144cb077068abc65b79e039c1e4ebe7e5b929dde5741f7178b35c414da859b7d5a64485ef22facb2fe774816d1ffb3a7751f8fbae95f41a8e4ab21fd369253473af021f5d191682e94c5035b3c93518b7b31d640a5def579e3db25cee6feea71f2ead8ee975821b80c31bf9d738bcd0c92b98e95cb9377a3f4fefa5c4a12302dc2c4f84ec1693c3d1256bd03e3dbe222e49b0fb79ce9affdc4640d15ae227773a6572df7d93cba4c40222b2ced1aa557c9477b70eac2824cbed29ade19b7876d21f0babaa57721"::*u8)) { ret 2; }
+    if (!pkcs1_hostile_rejected(public_key, input,
+        "1a038833ff3239d323e74d06c404b6d4d7ba3aa7f69f815988632ab0052168a5a22dd4ad38cb49f3df4e352eda74aab576efcdfc01159c5c97958f3451fd335849343ff5056a1a296511461e9164650bc9f12d8ff90f59731f018945b1c8f75ed1a73e75795aab429305eef29d8bfb0a3ed7c84e3ba47dc6785f5adea7177bd320e9aedc9d032e124ad7f3669a86ae1c78aa1b43c6d2187cda5a3083a7f8316eebb473b3ef406ef141d9d905993c5a6e8ab3a7857dd6246ff46ddaa8add9d7cfaa46bf00a00b2a7352cf7327cc9bd3d803b5aba1dbba357dde75e71651b460ae302ec7631ddf880323fde016ebfc6c654b156dae15d8833f31b1cdbc31280951"::*u8)) { ret 3; }
+    if (!pkcs1_hostile_rejected(public_key, input,
+        "c355eb2d4c23901c0e13a9040b081f6f18fd8d8d3b7267a11969d4c10bbee44fdb7eddd7ccb4a6e7b4d2f1c240fb567018dcd4b92fe4a547a087256e45df4a64584127942d49c4945c9528940b7fb357f6128256ee7c51809b10a0aca03b92935ff3ad5466419e7af2758aae2b643ab39196b08338720daeed89750ef40327ae41d2350b3dc1f1d13f9f4d9d2df3e08966041d4bd024671450d07e5da5af8c5e612de59f6f254c7ed08340d6f1a4b4ffa60e1816d6ef07f1b48144df7b61e0c585974bf2285d5be617db1ae1533ea9df7fbb6894bbef581eb8ad4f13047bc723ea0b84c0697d2b995bc869a24e045e26a5bf5428fa65b4a266d78dcf051e9ee2"::*u8)) { ret 4; }
+    if (!pkcs1_hostile_rejected(public_key, input,
+        "470e02377c4c62731fe91b5bdd98f80dbbfbf91e5eedf0766231175b31af6a3ca251878a094fb4efa848af3e34a3566ccd5b3e822771ba46d9559f49f30e6af29b49eb6e61f66b22db7d9e37fe515fec0997e2e6017ff7e3790809cac000bfecbf879fefc03c0303afdda997830444cd7bcb1f2530a1f39f97f87d13884415d4e610db6bea8cd8ac94df904a2ffca34af4767393372af74c9c517fe0cb949a695c0807d4b24d6364409e7e9ec86d6872f17ba0a52fe1d430630c06cb57feab7ff4b83097b37179c03f24eae7fdf507411d9f584fb610e1388af1ce87a6528044d34bf317f0a4bbdba6ad832587c5d79320143a043606de01258e0fe60856e6b2"::*u8)) { ret 5; }
+    if (!pkcs1_hostile_rejected(public_key, input,
+        "233272365c3a415c0d220e45acc4057f0761f825c1279352a1da7a3f1641c6feb3f138b53c443ac8fe0c2e859852540f22fd9bf689579ab7b077b173029966721344417d4b340562ced618f65bb9e14d2347b8a675ec3aec0f717b81cde0cb2c5103dc029d37cf19b948dae1a375f0a0d154963f818c221d655a46743787adca589be5137357ff91d01ea2c1e89811879c511a7c79b99ba8c797d857a1c7245b0cd263340300d517cb93e4df611c155612794647a1c293d41c7533225868b193cfbed142bdf651ec047bbbae9595434899ef62f6434920a8ca21bf94be896b9978f5701108cbd07343c8e51d7b5f1f42aeed8fea98697fdc9574a990c3b3f70c"::*u8)) { ret 6; }
+    if (!pkcs1_hostile_rejected(public_key, input,
+        "82746f2743fcfe9c92e6c4cb69d73cf4b76a834c33fce0e0745966a7c45ffc06fe7eb04d031c3b8f1a918303b4840ca6cd068513a9be38764bebb80064de0912372319da52445c5219e49f7604cbd8b10cfd52a434ec7ab65e0c5d64ee4532ab23c2b6a054f7b62788dadf6e5c617699dcbc7d918622fb621ce5deb2c666f2ef89be54875bc6401b8ffdb2860c89fa3242f544a45a053c1f7013d324aa00f14395ea6eeb34bd909d8a20bee5ab6981fe81fa03ceffed80e6ceb9c7d5e1773d5f522fd84c6c86f2e25b0ce348ab4a7a6734904ab0cfa6b438182043b88cae310533d1735c37cad7ccd812a2b55f8becbfc16bba714c2a9d1a156e32b6cc907f6d"::*u8)) { ret 7; }
+    if (!pkcs1_hostile_rejected(public_key, input,
+        "c8ecd6910d12ced3b593a399c3ea8d4994f04bbb5ca713529fd271a9b10ef4e8043a1079da39243751f72d73fbeec447b12188ec637d11d2fc537c40e7f7278ba431577d4e5bc4edd8b51e9f147eadfa7c69a875aba2f900d41b393dec283c231b58000c59f8304b9f8e96c2fe6c4f428ce9d9acaefe7e3263c90097a032022b486f673419f027377ef15c81284d534c8a42478905d1902cdbfc06893d910ff99fc00afc1a87302250d4f5587015aa632cdbf28ba61006f2b3d1c89e92902197d96b6a06cea26f6d12a02b100e11f46b193acb3c023ac9bd772f9e5449081c83196b8aec968bef4f9c66fc2ebda4c515e8352cfde9e308f8f217a0f788c8544f"::*u8)) { ret 8; }
+    if (!pkcs1_sha384_hostile_rejected(public_key, input,
+        "6a832651e6ba11d051bd565bbcb09c22f03892e57a0c023f636991a0ce26658c9a95cb5d10c61627a8e0bb6857b623ac9b94ed86e97019d8e8e517d4bd40818edec211650bcc8c4f485018cb153250377fb0b48c825525cec643dbe836866da62c7567459b2925469528e1b21d30f12c56952d5cb499b100695e5e9d03b3ed4bb3197e3979a02640da5da3e27f58f55da868a517e89887eb5945a7ff2eebe7842f60653ea0ebcbcbf0be3538293ec4dabb643cab672db47120f50cbf0ac2d9e4068fef245a6e767803110c53a5d5b70cb5eaf6069eb1f88d5ebe81044cc9f6f7e18e5ca3d31e8620b6b3b79d05aef5d3444fe848c5fbb74218090a1cc64c5b7b"::*u8)) { ret 9; }
+    if (!pkcs1_sha384_hostile_rejected(public_key, input,
+        "64ef4c2dadb1a72380a177c0efad1816e6db1406c6aaff415f34dcbd469b95818045f79d8c2c581f2c4bb3bacd35c500b79d05fcbd8f6767cf389ebe4b3b08c7c8e51ec68349366b20d66fbe6ac4e356e291eb7d934cfbd65b444136bccfa8286f46d0d7b4a1c6158eeb658f7056f50c749afa4a88aadb244d73f13e017b00d3efa95ba369e7460e1047eb95fdfb70d797e4d8329152e5956ecad2cb2a84d781c0e0873069161efd27f5f180589026b5d49ec36a2038ae9df06f7566e2745def96aa3587d65cce7c8c57c8877e3e1fdd826ed48ca97ac7cece23a5f68252052e3ceea75d78fc938829753e8a72d9edf20b7e7f4a90003ec92c7651851165c85f"::*u8)) { ret 10; }
+    ret 0;
+}
+
+test "rsa-pkcs1: validation and authentication errors are distinct" {
+    var modulus: [260]u8;
+    var message: [33]u8;
+    var encoded: [256]u8;
+    if (!decode_hex(
+        "cd0d4a9e79ece89342b35e97d4dfc9461b68b46cda89f0bc9681d7056ddaf8713b5ada74e9e26c5178e84f01ae2abb072b7591f6d0fb82d245dffc107eae711c1c966a3c1016e38a1cc3bd93daabbda4ecd5c6307813b9e5ac195a30a05debf13d83afa1bcd20d992b4c0634bfc6aeca3b0c21a2c89d914064848c724ccad4b31a3efede42a7de0f6cbedeee7a0cd9809e1052f7583ae9b81188b436b0f5da5bd94ca77cce5cb7ae5293937024660e63ca43a38d33d8a49a2133c426156a1860d2a6cf0253ca7cdcb66b4b0111f1107aeeece92d806d26626784016262ba1e9a1436ecac8fd1cccdb8e57f1a7e1da27200514fcd8fd399852fe745c239520ee1"::*u8,
+        512, ?modulus[0]) || !decode_hex(
+        "6d6163682072736120706b63733120636572746966696361746520766563746f72"::*u8,
+        66, ?message[0]) || !decode_hex(
+        "c447f3b9ffa9cf464eb8e63d48949081f198902121d0fc310079b981aa80d9bf3f781f9052f9f32ac55d5639d57f53b479702619ffdd57a565726e315c933ffc1a3be331568072efcf990f43e96663d13992ce942a79880b968ae45bb148354d42f6aaeb522249bd30c28efd983321f166f9d13c81d65ff9a92f23e98a4e44e8edce9e134f84059f28e0892ab6f9d91a0eed72c32142d6c34f6d8c58f4a231c3be8bf12373f7fb3b80a70004818cf779962a3174bbdcbf2ab7e770142193fabf20d394a66f928881519bb48eaed01603d517acb155fe4be54d34ee5836eef5cf11fe53a9f9af061585d95013fab3a0afe4f10f84d9f761bd4524cb859933c8ca"::*u8,
+        512, ?encoded[0])) { ret 1; }
+    val exponent: [3]u8 = [3]u8{1, 0, 1};
+    var public_key: signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus: contracts.Bytes{data: ?modulus[0], len: 256},
+        exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
+    };
+    val input: contracts.Bytes = contracts.Bytes{data: ?message[0], len: 33};
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 255}) != contracts.AUTH_FAILED) { ret 2; }
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: nil, len: 256}) != contracts.INVALID_INPUT) { ret 3; }
+    if (signature.verify_rsa_pkcs1_sha256(public_key,
+        contracts.Bytes{data: nil, len: 1},
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_INPUT) { ret 4; }
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        public_key.modulus) != contracts.AUTH_FAILED) { ret 5; }
+
+    public_key.modulus.len = 255;
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 6; }
+    public_key.modulus.len = 256;
+    public_key.modulus.data = nil;
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 7; }
+    public_key.modulus.data = ?modulus[0];
+    modulus[255] = modulus[255] ^ 1;
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 8; }
+    modulus[255] = modulus[255] ^ 1;
+    modulus[0] = modulus[0] & 0x7f;
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 9; }
+    modulus[0] = modulus[0] | 0x80;
+    modulus[257] = 1;
+    public_key.modulus.len = 258;
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 10; }
+    public_key.modulus.len = 256;
+
+    val leading_zero: [4]u8 = [4]u8{0, 1, 0, 1};
+    public_key.exponent = contracts.Bytes{data: (?leading_zero[0]):~*u8, len: 4};
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 11; }
+    val even_exponent: [3]u8 = [3]u8{1, 0, 0};
+    public_key.exponent = contracts.Bytes{data: (?even_exponent[0]):~*u8, len: 3};
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 12; }
+    val one: [1]u8 = [1]u8{1};
+    public_key.exponent = contracts.Bytes{data: (?one[0]):~*u8, len: 1};
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 13; }
+    public_key.exponent = contracts.Bytes{data: nil, len: 3};
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 14; }
+    public_key.exponent = contracts.Bytes{data: ?modulus[0], len: 256};
+    if (signature.verify_rsa_pkcs1_sha256(public_key, input,
+        contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 15; }
     ret 0;
 }

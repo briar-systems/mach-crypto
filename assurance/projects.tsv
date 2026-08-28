@@ -1,0 +1,9 @@
+project	algorithm
+.	package
+test/secret	secret-storage
+test/hash	sha-2
+test/mac	hmac-hkdf
+test/aead	aead
+test/group	key-agreement
+test/signature	signatures
+test/encoding	encoding

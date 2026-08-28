@@ -1,0 +1,54 @@
+category	project	algorithm	vector_source	filter
+official-vector	test/hash	sha-256,sha-384	NIST FIPS 180-4	hash: NIST empty and abc vectors preserve snapshots
+official-vector	test/hash	sha-256,sha-384	NIST FIPS 180-4	hash: every split and byte fragment matches NIST multiblock vectors
+official-vector	test/hash	sha-256,sha-384	NIST FIPS 180-4	hash: million-byte NIST vectors span repeated fragments
+official-vector	test/mac	hmac-sha-256,hmac-sha-384	RFC 4231	hmac: rfc 4231 sha-256 and sha-384 vectors
+official-vector	test/mac	hmac-sha-256,hmac-sha-384	RFC 4231	hmac: rfc 4231 multiblock message vectors
+official-vector	test/mac	hkdf-sha-256	RFC 5869	hkdf: rfc 5869 sha-256 case one
+official-vector	test/aead	aes-128-gcm	NIST SP 800-38D	aes-gcm: nist empty and single-block aes-128 vectors
+official-vector	test/aead	aes-256-gcm	NIST SP 800-38D	aes-gcm: nist empty and single-block aes-256 vectors
+official-vector	test/aead	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	aes-gcm: nist aad and partial-block vector seals and opens
+official-vector	test/aead	chacha20-poly1305	RFC 8439	chacha20-poly1305: rfc 8439 aead vector seals and opens
+official-vector	test/group	p-256-ecdh	NIST CAVP KAS-ECC	p256: nist cavp p-256 cdh count zero
+official-vector	test/group	x25519	RFC 7748	x25519: rfc 7748 alice and bob exchange
+official-vector	test/group	x25519	RFC 7748	x25519: rfc 7748 direct function vectors
+official-vector	test/group	x25519	RFC 7748	x25519: rfc 7748 one-thousand iteration vector
+official-vector	test/signature	ecdsa-p256-sha256	RFC 6979	ecdsa p-256: rfc 6979 sha-256 sample
+official-vector	test/signature	ed25519	RFC 8032	ed25519: rfc 8032 vectors
+official-vector	test/signature	rsa-pss-sha256	NIST CAVP	rsa-pss: nist cavp sha256 verification
+official-vector	test/signature	rsa-pss-sha384	NIST CAVP	rsa-pss: nist cavp sha384 verification
+official-vector	test/signature	rsa-pkcs1-sha256,rsa-pkcs1-sha384	NIST CAVP	rsa-pkcs1: nist cavp sha-256 and sha-384 verification
+official-vector	test/encoding	key-containers	RFC 8410	keys: rfc 8410 Ed25519 and X25519 containers are exact and bounded
+differential	test/mac	hkdf-sha-384	independent Python hashlib vector	hkdf: sha-384 extract and expand agree with independent vectors
+differential	test/aead	aes-128-gcm,aes-256-gcm	independent AES-GCM implementation	aes-gcm: independent counter-carry differential vector
+differential	test/aead	chacha20-poly1305	independent RFC-compatible implementation	chacha20-poly1305: empty independent vector
+differential	test/aead	chacha20-poly1305	independent RFC-compatible implementation	chacha20-poly1305: independent counter-carry differential vector
+differential	test/group	x25519	independent X25519 implementation	x25519: independent differential vector and private output overlap
+differential	test/signature	rsa-pss-sha256,rsa-pss-sha384	independent OpenSSL vectors	rsa-pss: independent sha-256 and sha-384 vectors
+differential	test/signature	rsa-pkcs1-sha256,rsa-pkcs1-sha384	independent OpenSSL vectors	rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs
+differential	test/encoding	p-256-ecdh	independent OpenSSL vectors	keys: independent P-256 SEC1, PKCS8, and SPKI vectors agree
+differential	test/encoding	key-containers	independent OpenSSL vectors	keys: OpenSSL RSA containers preserve exact public and private parts
+invalid-input	test/hash	sha-256,sha-384	mach-crypto bounded transcript contract	hash: validation and overflow failures preserve state and output
+invalid-input	test/mac	hmac-sha-256,hmac-sha-384	mach-crypto bounded output contract	hmac: output overlap and failures have defined behavior
+invalid-input	test/mac	hkdf-sha-256,hkdf-sha-384	RFC 5869 and mach-crypto bounded output contract	hkdf: limits, capacities, and invalid inputs do not write
+invalid-input	test/aead	aes-128-gcm,aes-256-gcm	mach-crypto AEAD contract	aes-gcm: validation and capacity failures leave output unchanged
+invalid-input	test/aead	chacha20-poly1305	RFC 8439 and mach-crypto AEAD contract	chacha20-poly1305: malformed and bounded failures do not write
+invalid-input	test/group	p-256-ecdh	SEC 1 and mach-crypto agreement contract	p256: invalid scalars and sec1 points preserve output
+invalid-input	test/group	x25519	RFC 7748 and mach-crypto agreement contract	x25519: low-order inputs reject without changing output
+invalid-input	test/group	x25519	mach-crypto bounded agreement contract	x25519: validation and capacity failures leave output unchanged
+invalid-input	test/signature	ecdsa-p256-sha256	Wycheproof-style hostile corpus	ecdsa p-256: wycheproof-style tampering and strict der rejection
+invalid-input	test/signature	rsa-pkcs1-sha256,rsa-pkcs1-sha384	RFC 8017 hostile encodings	rsa-pkcs1: hostile padding and digestinfo encodings are rejected
+invalid-input	test/signature	rsa-pkcs1-sha256,rsa-pkcs1-sha384	mach-crypto verification contract	rsa-pkcs1: validation and authentication errors are distinct
+invalid-input	test/encoding	der	ITU-T X.690 and mach-crypto parser contract	der: canonical lengths, values, depth, and transactions are strict
+invalid-input	test/encoding	pem	RFC 7468 and mach-crypto parser contract	pem: canonical base64, bounds, overlap, and every truncation are enforced
+invalid-input	test/encoding	key-containers	mach-crypto ownership contract	keys: allocation and cleanup failures retain exact ownership
+invalid-input	test/encoding	key-containers	RFC 7468 and mach-crypto parser contract	keys: private PEM truncation fails before allocation at every boundary
+zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: partial allocation failure is wiped and cleanup ownership is retained
+zeroization	test/secret	secret-storage	mach-crypto entropy contract	secret: entropy failure is distinct and wipes partial output
+zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: failed cleanup retains wiped ownership without a second wipe
+zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: destruction failure is retry-safe and zeroizes once
+zeroization	test/hash	sha-256,sha-384	mach-crypto transcript lifecycle contract	hash: snapshot continues and final consumes only after success
+zeroization	test/aead	aes-128-gcm,aes-256-gcm	mach-crypto authenticated release contract	aes-gcm: authentication failures clear output before release
+zeroization	test/aead	chacha20-poly1305	mach-crypto authenticated release contract	chacha20-poly1305: authentication failures clear output before release
+zeroization	test/encoding	key-containers	mach-crypto secret ownership contract	keys: PEM round trips once-owned private DER and borrowed public DER
+zeroization	test/encoding	key-containers	mach-crypto secret ownership contract	keys: allocation and cleanup failures retain exact ownership
