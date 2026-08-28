@@ -997,10 +997,12 @@ test "rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs" {
         exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
     };
     var modulus_snapshot: [256]u8;
+    var exponent_snapshot: [3]u8;
     var message_snapshot: [33]u8;
     var encoded256_snapshot: [256]u8;
     var encoded384_snapshot: [256]u8;
     copy_public(?modulus_snapshot[0], ?modulus[0], 256);
+    copy_public(?exponent_snapshot[0], (?exponent[0]):~*u8, 3);
     copy_public(?message_snapshot[0], ?message[0], 33);
     copy_public(?encoded256_snapshot[0], ?encoded256[0], 256);
     copy_public(?encoded384_snapshot[0], ?encoded384[0], 256);
@@ -1011,6 +1013,7 @@ test "rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs" {
         contracts.Bytes{data: ?message[0], len: 33},
         contracts.Bytes{data: ?encoded384[0], len: 256}) != contracts.OK) { ret 3; }
     if (!public_equal(?modulus[0], ?modulus_snapshot[0], 256) ||
+        !public_equal((?exponent[0]):~*u8, ?exponent_snapshot[0], 3) ||
         !public_equal(?message[0], ?message_snapshot[0], 33) ||
         !public_equal(?encoded256[0], ?encoded256_snapshot[0], 256) ||
         !public_equal(?encoded384[0], ?encoded384_snapshot[0], 256)) { ret 4; }
