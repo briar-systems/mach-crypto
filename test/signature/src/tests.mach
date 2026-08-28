@@ -1,0 +1,294 @@
+# ecdsa p-256 production contract tests
+
+use crypto.contracts;
+use crypto.group.p256;
+use crypto.signature;
+use std.runtime;
+use std.types.bool.bool;
+use std.types.bool.false;
+use std.types.bool.true;
+use std.types.size.usize;
+
+fun public_equal(actual: *u8, expected: *u8, len: usize) bool {
+    var i: usize = 0;
+    for (i < len) {
+        if (actual[i] != expected[i]) { ret false; }
+        i = i + 1;
+    }
+    ret true;
+}
+
+fun public_filled(actual: *u8, value: u8, len: usize) bool {
+    var i: usize = 0;
+    for (i < len) {
+        if (actual[i] != value) { ret false; }
+        i = i + 1;
+    }
+    ret true;
+}
+
+fun set_rfc_private(output: *^u8) {
+    val value: [32]u8 = [32]u8{
+        0xc9, 0xaf, 0xa9, 0xd8, 0x45, 0xba, 0x75, 0x16,
+        0x6b, 0x5c, 0x21, 0x57, 0x67, 0xb1, 0xd6, 0x93,
+        0x4e, 0x50, 0xc3, 0xdb, 0x36, 0xe8, 0x9b, 0x12,
+        0x7b, 0x8a, 0x62, 0x2b, 0x12, 0x0f, 0x67, 0x21
+    };
+    var i: usize = 0;
+    for (i < 32) {
+        output[i] = value[i];
+        i = i + 1;
+    }
+}
+
+test "ecdsa p-256: rfc 6979 sha-256 sample" {
+    var private_key: [32]^u8 = [32]^u8{
+        0xc9, 0xaf, 0xa9, 0xd8, 0x45, 0xba, 0x75, 0x16,
+        0x6b, 0x5c, 0x21, 0x57, 0x67, 0xb1, 0xd6, 0x93,
+        0x4e, 0x50, 0xc3, 0xdb, 0x36, 0xe8, 0x9b, 0x12,
+        0x7b, 0x8a, 0x62, 0x2b, 0x12, 0x0f, 0x67, 0x21
+    };
+    val public_key: [65]u8 = [65]u8{
+        0x04,
+        0x60, 0xfe, 0xd4, 0xba, 0x25, 0x5a, 0x9d, 0x31,
+        0xc9, 0x61, 0xeb, 0x74, 0xc6, 0x35, 0x6d, 0x68,
+        0xc0, 0x49, 0xb8, 0x92, 0x3b, 0x61, 0xfa, 0x6c,
+        0xe6, 0x69, 0x62, 0x2e, 0x60, 0xf2, 0x9f, 0xb6,
+        0x79, 0x03, 0xfe, 0x10, 0x08, 0xb8, 0xbc, 0x99,
+        0xa4, 0x1a, 0xe9, 0xe9, 0x56, 0x28, 0xbc, 0x64,
+        0xf2, 0xf1, 0xb2, 0x0c, 0x2d, 0x7e, 0x9f, 0x51,
+        0x77, 0xa3, 0xc2, 0x94, 0xd4, 0x46, 0x22, 0x99
+    };
+    val expected: [72]u8 = [72]u8{
+        0x30, 0x46, 0x02, 0x21, 0x00,
+        0xef, 0xd4, 0x8b, 0x2a, 0xac, 0xb6, 0xa8, 0xfd,
+        0x11, 0x40, 0xdd, 0x9c, 0xd4, 0x5e, 0x81, 0xd6,
+        0x9d, 0x2c, 0x87, 0x7b, 0x56, 0xaa, 0xf9, 0x91,
+        0xc3, 0x4d, 0x0e, 0xa8, 0x4e, 0xaf, 0x37, 0x16,
+        0x02, 0x21, 0x00,
+        0xf7, 0xcb, 0x1c, 0x94, 0x2d, 0x65, 0x7c, 0x41,
+        0xd4, 0x36, 0xc7, 0xa1, 0xb6, 0xe2, 0x9f, 0x65,
+        0xf3, 0xe9, 0x00, 0xdb, 0xb9, 0xaf, 0xf4, 0x06,
+        0x4d, 0xc4, 0xab, 0x2f, 0x84, 0x3a, 0xcd, 0xa8
+    };
+    val message: [6]u8 = [6]u8{'s', 'a', 'm', 'p', 'l', 'e'};
+    var derived: [65]u8;
+    var operation: contracts.Operation = p256.derive_public(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Buffer{data: ?derived[0], capacity: 65});
+    if (operation.error != contracts.OK || operation.written != 65 ||
+        !public_equal(?derived[0], (?public_key[0]):~*u8, 65)) { ret 1; }
+    var encoded: [72]u8;
+    operation = signature.sign_ecdsa_p256_sha256(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 6},
+        contracts.Buffer{data: ?encoded[0], capacity: 72});
+    if (operation.error != contracts.OK || operation.written != 72 ||
+        !public_equal(?encoded[0], (?expected[0]):~*u8, 72)) { ret 2; }
+    val verified: contracts.Error = signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: (?public_key[0]):~*u8, len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 6},
+        contracts.Bytes{data: ?encoded[0], len: operation.written});
+    if (verified != contracts.OK) { ret 3; }
+    ret 0;
+}
+
+test "ecdsa p-256: deterministic signing and failures preserve output" {
+    var private_key: [32]^u8;
+    set_rfc_private(?private_key[0]);
+    val sample: [6]u8 = [6]u8{'s', 'a', 'm', 'p', 'l', 'e'};
+    var first: [72]u8;
+    var second: [72]u8;
+    var i: usize = 0;
+    for (i < 72) { first[i] = 0xa5; second[i] = 0x5a; i = i + 1; }
+    var result: contracts.Operation = signature.sign_ecdsa_p256_sha256(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Bytes{data: (?sample[0]):~*u8, len: 6},
+        contracts.Buffer{data: ?first[0], capacity: 72});
+    if (result.error != contracts.OK || result.written != 72) { ret 1; }
+    val again: contracts.Operation = signature.sign_ecdsa_p256_sha256(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Bytes{data: (?sample[0]):~*u8, len: 6},
+        contracts.Buffer{data: ?second[0], capacity: 72});
+    if (again.error != contracts.OK || again.written != result.written ||
+        !public_equal(?first[0], ?second[0], result.written)) { ret 2; }
+
+    i = 0;
+    for (i < 72) { second[i] = 0x5a; i = i + 1; }
+    result = signature.sign_ecdsa_p256_sha256(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Bytes{data: (?sample[0]):~*u8, len: 6},
+        contracts.Buffer{data: ?second[0], capacity: 71});
+    if (result.error != contracts.OUTPUT_TOO_SMALL || result.written != 0 ||
+        !public_filled(?second[0], 0x5a, 72)) { ret 3; }
+
+    i = 0;
+    for (i < 32) { private_key[i] = 0; i = i + 1; }
+    result = signature.sign_ecdsa_p256_sha256(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Bytes{data: (?sample[0]):~*u8, len: 6},
+        contracts.Buffer{data: ?second[0], capacity: 72});
+    if (result.error != contracts.INVALID_KEY || result.written != 0 ||
+        !public_filled(?second[0], 0x5a, 72)) { ret 4; }
+
+    set_rfc_private(?private_key[0]);
+    result = signature.sign_ecdsa_p256_sha256(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Bytes{data: nil, len: 1},
+        contracts.Buffer{data: ?second[0], capacity: 72});
+    if (result.error != contracts.INVALID_INPUT || result.written != 0 ||
+        !public_filled(?second[0], 0x5a, 72)) { ret 5; }
+    ret 0;
+}
+
+test "ecdsa p-256: empty messages and high-s signatures verify" {
+    var private_key: [32]^u8;
+    set_rfc_private(?private_key[0]);
+    var public_key: [65]u8;
+    var signature_bytes: [72]u8;
+    var operation: contracts.Operation = p256.derive_public(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Buffer{data: ?public_key[0], capacity: 65});
+    if (operation.error != contracts.OK) { ret 1; }
+    operation = signature.sign_ecdsa_p256_sha256(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Bytes{data: nil, len: 0},
+        contracts.Buffer{data: ?signature_bytes[0], capacity: 72});
+    if (operation.error != contracts.OK) { ret 2; }
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: nil, len: 0},
+        contracts.Bytes{data: ?signature_bytes[0], len: operation.written}) != contracts.OK) {
+        ret 3;
+    }
+    ret 0;
+}
+
+test "ecdsa p-256: wycheproof-style tampering and strict der rejection" {
+    var private_key: [32]^u8;
+    var i: usize = 0;
+    for (i < 32) { private_key[i] = 0; i = i + 1; }
+    private_key[31] = 1;
+    var public_key: [65]u8;
+    val message: [4]u8 = [4]u8{'t', 'e', 's', 't'};
+    var encoded: [73]u8;
+    var operation: contracts.Operation = p256.derive_public(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Buffer{data: ?public_key[0], capacity: 65});
+    if (operation.error != contracts.OK) { ret 1; }
+    operation = signature.sign_ecdsa_p256_sha256(
+        contracts.SecretBytes{data: ?private_key[0], len: 32},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Buffer{data: ?encoded[0], capacity: 72});
+    if (operation.error != contracts.OK) { ret 2; }
+    val encoded_len: usize = operation.written;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 3},
+        contracts.Bytes{data: ?encoded[0], len: encoded_len}) != contracts.AUTH_FAILED) {
+        ret 3;
+    }
+    encoded[encoded_len - 1] = encoded[encoded_len - 1] ^ 1;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: ?encoded[0], len: encoded_len}) != contracts.AUTH_FAILED) {
+        ret 4;
+    }
+    encoded[encoded_len - 1] = encoded[encoded_len - 1] ^ 1;
+    encoded[encoded_len] = 0;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: ?encoded[0], len: encoded_len + 1}) != contracts.AUTH_FAILED) {
+        ret 5;
+    }
+    encoded[1] = encoded[1] - 1;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: ?encoded[0], len: encoded_len}) != contracts.AUTH_FAILED) {
+        ret 6;
+    }
+    encoded[1] = encoded[1] + 1;
+    public_key[64] = public_key[64] ^ 1;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: ?encoded[0], len: encoded_len}) != contracts.INVALID_KEY) {
+        ret 7;
+    }
+    public_key[64] = public_key[64] ^ 1;
+
+    var malformed: [40]u8;
+    i = 0;
+    for (i < 40) { malformed[i] = 0; i = i + 1; }
+    malformed[0] = 0x30;
+    malformed[1] = 0x06;
+    malformed[2] = 0x02;
+    malformed[3] = 0x01;
+    malformed[4] = 0x00;
+    malformed[5] = 0x02;
+    malformed[6] = 0x01;
+    malformed[7] = 0x01;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: ?malformed[0], len: 8}) != contracts.AUTH_FAILED) {
+        ret 8;
+    }
+    malformed[1] = 0x07;
+    malformed[3] = 0x02;
+    malformed[4] = 0x00;
+    malformed[5] = 0x01;
+    malformed[6] = 0x02;
+    malformed[7] = 0x01;
+    malformed[8] = 0x01;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: ?malformed[0], len: 9}) != contracts.AUTH_FAILED) {
+        ret 9;
+    }
+    malformed[1] = 0x06;
+    malformed[3] = 0x01;
+    malformed[4] = 0x80;
+    malformed[5] = 0x02;
+    malformed[6] = 0x01;
+    malformed[7] = 0x01;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: ?malformed[0], len: 8}) != contracts.AUTH_FAILED) {
+        ret 10;
+    }
+    val order: [32]u8 = [32]u8{
+        0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84,
+        0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51
+    };
+    malformed[0] = 0x30;
+    malformed[1] = 0x26;
+    malformed[2] = 0x02;
+    malformed[3] = 0x21;
+    malformed[4] = 0;
+    i = 0;
+    for (i < 32) { malformed[5 + i] = order[i]; i = i + 1; }
+    malformed[37] = 0x02;
+    malformed[38] = 0x01;
+    malformed[39] = 0x01;
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: ?malformed[0], len: 40}) != contracts.AUTH_FAILED) {
+        ret 11;
+    }
+    if (signature.verify_ecdsa_p256_sha256(
+        contracts.Bytes{data: ?public_key[0], len: 65},
+        contracts.Bytes{data: (?message[0]):~*u8, len: 4},
+        contracts.Bytes{data: nil, len: 0}) != contracts.AUTH_FAILED) {
+        ret 12;
+    }
+    ret 0;
+}

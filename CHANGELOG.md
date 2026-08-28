@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Canonical SEC1 P-256 public-key derivation and ECDH agreement.
+- Deterministic RFC 6979 ECDSA P-256 signing with SHA-256 and strict DER.
+- Strict P-256 point, scalar, and ECDSA signature validation.
+- NIST CAVP, RFC 6979, hostile-input, failure-preservation, and overlap tests.
+
 ## [0.2.0] - 2026-08-28
 
 ### Added
