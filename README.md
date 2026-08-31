@@ -16,8 +16,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
 - `crypto.group.x25519` provides X25519 key agreement.
 - `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
-- `crypto.signature` provides ECDSA P-256, Ed25519, RSA-PSS, and strict
-  RSA PKCS#1 v1.5 signatures.
+- `crypto.signature` provides ECDSA P-256 and P-384 verification, Ed25519,
+  RSA-PSS, and strict RSA PKCS#1 v1.5 signatures.
 - `crypto.encoding.der`, `crypto.encoding.pem`, and `crypto.encoding.keys`
   provide strict TLS key-container parsing and exact serialization.
 - `crypto.vectors` defines a common test vector contract.
@@ -69,6 +69,7 @@ by contract.
 
 - RFC 8410 Ed25519 and X25519 PKCS#8 private keys and SPKI public keys
 - P-256 SEC1 and PKCS#8 private keys and uncompressed SPKI public keys
+- P-384 uncompressed SPKI public keys
 - PKCS#1 RSA private keys, RSA PKCS#8 private keys, and RSA SPKI public keys
 
 Algorithm identifiers and parameters are exact. P-256 private scalars are
@@ -214,7 +215,7 @@ multiplication rather than secret hardware multiplication or division. Scalar,
 field, inversion, encoded result, and rejected shared-secret state are
 explicitly zeroized.
 
-## P-256 and ECDSA
+## P-256, P-384, and ECDSA
 
 `group.p256.derive_public` accepts an exact 32-byte big-endian private scalar
 in `1..n-1` and writes the exact 65-byte uncompressed SEC1 public point.
@@ -235,11 +236,21 @@ Signing evaluates eight nonce candidates before selecting the first valid one,
 which hides the RFC rejection count and bounds all-candidate failure below the
 P-256 security level.
 
+`signature.verify_ecdsa_p384_sha384` hashes the public message with SHA-384 and
+accepts an exact 97-byte uncompressed secp384r1 public key and strict DER
+signature of at most 104 bytes. It validates canonical coordinates, the curve
+equation, and scalar ranges. P-384 private signing and ECDH are not exposed.
+
 Field and scalar values use fixed eight-limb storage. Multiplication uses a
 fixed 256-step masked shift-and-add operation, inversions use fixed public
 exponents, and scalar multiplication uses a fixed 256-step point loop without
 secret-indexed tables. Private scalars, nonce state, hashes, field and scalar
 temporaries, and projective points are explicitly zeroized.
+
+P-384 verification uses the same ownership and constant-shape contract with
+fixed twelve-limb storage and fixed 384-step multiplication and point loops.
+Hashes, field and scalar temporaries, and projective points remain welded until
+they are explicitly zeroized.
 
 ## Ed25519 and RSA signatures
 
@@ -287,10 +298,11 @@ signatures are explicitly zeroized. `signature.algorithm_status` returns
 
 The repository combines callable primitives with contracts for algorithms that
 are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
-P-256 ECDH, ECDSA P-256 with SHA-256, Ed25519, RSA-PSS and RSA PKCS#1 v1.5 with
-SHA-256 and SHA-384, HMAC-SHA-256, HMAC-SHA-384, HKDF-Extract, HKDF-Expand,
-incremental SHA-256 and SHA-384, strict DER and PEM, and TLS key containers are
-callable in this revision. Their tests include NIST,
+P-256 ECDH, ECDSA P-256 with SHA-256, ECDSA P-384 verification with SHA-384,
+Ed25519, RSA-PSS and RSA PKCS#1 v1.5 with SHA-256 and SHA-384, HMAC-SHA-256,
+HMAC-SHA-384, HKDF-Extract, HKDF-Expand, incremental SHA-256 and SHA-384,
+strict DER and PEM, and TLS key containers are callable in this revision. Their
+tests include NIST,
 RFC 4231, RFC 5869, RFC 6979, RFC 7468, RFC 7748, RFC 8017, RFC 8032, RFC 8410,
 RFC 8439, SEC 1, and independent OpenSSL vectors. They cover
 strict-encoding and tamper cases, counter and output
