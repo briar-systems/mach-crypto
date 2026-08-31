@@ -12,6 +12,7 @@ chacha20-poly1305	yes	RFC 8439
 x25519	yes	RFC 7748
 p-256-ecdh	yes	NIST CAVP KAS-ECC
 ecdsa-p256-sha256	yes	RFC 6979
+ecdsa-p384-sha384	yes	NIST P-384 with SHA-384 example
 ed25519	yes	RFC 8032
 rsa-pss-sha256	yes	NIST CAVP and RFC 8017
 rsa-pss-sha384	yes	NIST CAVP and RFC 8017

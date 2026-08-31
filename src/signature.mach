@@ -4,6 +4,7 @@ use crypto.contracts;
 use ed: crypto.internal.ed25519;
 use crypto.internal.hmac;
 use core: crypto.internal.p256;
+use crypto.internal.p384;
 use crypto.internal.rsa;
 use crypto.internal.sha2;
 use std.crypto.ct;
@@ -15,6 +16,7 @@ use std.types.size.usize;
 pub def Algorithm: u16;
 
 pub val ECDSA_P256_SHA256: Algorithm = 0x0403;
+pub val ECDSA_P384_SHA384: Algorithm = 0x0503;
 pub val ED25519:           Algorithm = 0x0807;
 pub val RSA_PKCS1_SHA256:  Algorithm = 0x0401;
 pub val RSA_PKCS1_SHA384:  Algorithm = 0x0501;
@@ -22,7 +24,8 @@ pub val RSA_PSS_RSAE_SHA256: Algorithm = 0x0804;
 pub val RSA_PSS_RSAE_SHA384: Algorithm = 0x0805;
 
 pub fun algorithm_status(algorithm: Algorithm) contracts.Error {
-    if (algorithm == ECDSA_P256_SHA256 || algorithm == ED25519 ||
+    if (algorithm == ECDSA_P256_SHA256 || algorithm == ECDSA_P384_SHA384 ||
+        algorithm == ED25519 ||
         algorithm == RSA_PKCS1_SHA256 || algorithm == RSA_PKCS1_SHA384 ||
         algorithm == RSA_PSS_RSAE_SHA256 || algorithm == RSA_PSS_RSAE_SHA384) {
         ret contracts.OK;
@@ -34,6 +37,10 @@ pub val ECDSA_P256_PRIVATE_KEY_SIZE: usize = 32;
 pub val ECDSA_P256_PUBLIC_KEY_SIZE: usize = 65;
 pub val ECDSA_P256_SIGNATURE_MIN_SIZE: usize = 8;
 pub val ECDSA_P256_SIGNATURE_MAX_SIZE: usize = 72;
+
+pub val ECDSA_P384_PUBLIC_KEY_SIZE: usize = 97;
+pub val ECDSA_P384_SIGNATURE_MIN_SIZE: usize = 8;
+pub val ECDSA_P384_SIGNATURE_MAX_SIZE: usize = 104;
 
 pub val ED25519_PRIVATE_KEY_SIZE: usize = 32;
 pub val ED25519_PUBLIC_KEY_SIZE: usize = 32;
@@ -1211,8 +1218,16 @@ pub fun verify_ecdsa_p256_sha256(public_key: contracts.Bytes,
     ret result;
 }
 
+# verify a strict der p-384 signature over sha-384(message)
+#[oblivious]
+pub fun verify_ecdsa_p384_sha384(public_key: contracts.Bytes,
+    message: contracts.Bytes, signature: contracts.Bytes) contracts.Error {
+    ret p384.verify_sha384(public_key, message, signature);
+}
+
 test "signature: algorithm ids match the tls registry" {
     if (ECDSA_P256_SHA256 != 0x0403) { ret 1; }
+    if (ECDSA_P384_SHA384 != 0x0503) { ret 1; }
     if (ED25519 != 0x0807) { ret 1; }
     if (RSA_PKCS1_SHA256 != 0x0401) { ret 1; }
     if (RSA_PKCS1_SHA384 != 0x0501) { ret 1; }

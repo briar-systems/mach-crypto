@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Verification-only ECDSA P-384 with SHA-384, strict DER signatures, and
+  uncompressed P-384 SPKI public keys.
+- A release evidence budget requiring median P-384 verification at or below
+  250 milliseconds.
+
+### Changed
+
+- P-384 field arithmetic now keeps coordinates in Montgomery form and evaluates
+  both ECDSA point products in one fixed interleaved loop.
+
+### Security
+
+- The dependency-visible P-384 module exposes only complete public-point
+  validation and signature-verification operations. Raw points, scalars,
+  decoding, arithmetic, and affine conversion remain private.
+- Fixed-bound software limb products avoid target-dependent secret multiply
+  latency while removing the former multi-second verification exposure.
+
 ## [0.6.0] - 2026-08-28
 
 ### Changed

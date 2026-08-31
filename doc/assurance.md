@@ -97,3 +97,16 @@ source constant claiming evidence that is absent on the verifying machine.
 `independent_review` field reports only third-party review evidence. A
 successful automated run does not change `independent_review` from
 `NOT_RECORDED`.
+
+## Performance gate
+
+The release evidence gate runs a warmed five-sample P-384 verification test and
+requires its monotonic-clock median to stay at or below 250 milliseconds. The
+budget is intentionally more than twice the current measurement while rejecting
+the former multi-second arithmetic and its CPU-exhaustion exposure.
+
+On 2026-08-31, nine isolated warm release-profile NIST P-384 verification runs
+took 110 through 113 milliseconds, with a 111-millisecond median, on an AMD
+Ryzen 7 5800X3D 8-Core Processor with frequency boost disabled and Mach 4.26.5.
+This machine-specific measurement characterizes the implementation. The
+250-millisecond release gate is the enforced regression contract.
