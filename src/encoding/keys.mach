@@ -187,11 +187,7 @@ fun valid_p256_public(value: contracts.Bytes) bool {
 
 #[oblivious]
 fun valid_p384_public(value: contracts.Bytes) bool {
-    if (value.len != 97 || value.data == nil || value.data[0] != 4) { ret false; }
-    var point: p384.Point;
-    val valid: ^u8 = p384.parse_point(?point, value.data);
-    p384.destroy_point(?point);
-    ret valid:^ == 1;
+    ret p384.valid_public_point(value);
 }
 
 fun parse_public_algorithm(element: *der.Element,
