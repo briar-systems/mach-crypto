@@ -474,6 +474,57 @@ test "keys: independent P-256 SEC1, PKCS8, and SPKI vectors agree" {
     ret 0;
 }
 
+fun set_p384_spki(output: *u8) bool {
+    ret decode_hex(
+        "3076301006072a8648ce3d020106052b8104002203620004aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab73617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f"::*u8,
+        240, output);
+}
+
+test "keys: P-384 SPKI validates the named curve and every boundary" {
+    var spki: [121]u8;
+    var key: keys.PublicKey;
+    if (!set_p384_spki(?spki[0]) ||
+        keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 120}, ?key) !=
+        contracts.OK || key.algorithm != keys.P384 || key.container != keys.SPKI ||
+        key.first.len != 97 || key.first.data[0] != 4 ||
+        key.first.data[1] != 0xaa || key.first.data[96] != 0x5f) { ret 1; }
+
+    spki[119] = spki[119] ^ 1;
+    if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 120}, ?key) !=
+        contracts.INVALID_KEY) { ret 2; }
+    if (!set_p384_spki(?spki[0])) { ret 3; }
+    spki[19] = 0x23;
+    if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 120}, ?key) !=
+        contracts.UNSUPPORTED) { ret 4; }
+    if (!set_p384_spki(?spki[0])) { ret 5; }
+    spki[23] = 0x02;
+    if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 120}, ?key) !=
+        contracts.INVALID_KEY) { ret 6; }
+
+    if (!set_p384_spki(?spki[0])) { ret 7; }
+    spki[1] = 0x75;
+    spki[21] = 0x61;
+    if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 119}, ?key) !=
+        contracts.INVALID_KEY) { ret 8; }
+    if (!set_p384_spki(?spki[0])) { ret 9; }
+    spki[1] = 0x77;
+    spki[21] = 0x63;
+    spki[120] = 0;
+    if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 121}, ?key) !=
+        contracts.INVALID_KEY) { ret 10; }
+
+    if (!set_p384_spki(?spki[0])) { ret 11; }
+    var i: usize = 0;
+    for (i < 120) {
+        if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: i}, ?key) ==
+            contracts.OK) { ret 12; }
+        i = i + 1;
+    }
+    if (keys.decode_spki(contracts.Bytes{data: nil, len: 120}, ?key) !=
+        contracts.INVALID_INPUT) { ret 13; }
+    ret 0;
+}
+
 fun set_rsa_pkcs8(output: *^u8) bool {
     ret decode_secret_hex(
         "308204bd020100300d06092a864886f70d0101010500048204a7308204a30201000282010100cd0d4a9e79ece89342b35e97d4dfc9461b68b46cda89f0bc9681d7056ddaf8713b5ada74e9e26c5178e84f01ae2abb072b7591f6d0fb82d245dffc107eae711c1c966a3c1016e38a1cc3bd93daabbda4ecd5c6307813b9e5ac195a30a05debf13d83afa1bcd20d992b4c0634bfc6aeca3b0c21a2c89d914064848c724ccad4b31a3efede42a7de0f6cbedeee7a0cd9809e1052f7583ae9b81188b436b0f5da5bd94ca77cce5cb7ae5293937024660e63ca43a38d33d8a49a2133c426156a1860d2a6cf0253ca7cdcb66b4b0111f1107aeeece92d806d26626784016262ba1e9a1436ecac8fd1cccdb8e57f1a7e1da27200514fcd8fd399852fe745c239520ee1020301000102820100378c743c7e5739a23b1d90709d508a9c1d6cbe040727fb397ba46cf5a18f0262da6b8066cfbd710e992c85cab4be0ab0a48b532183f7beb6ec0b03a40c4d8182d613c16fc8040b5c2cf2b1f6cdf45c89c3471e4b9f1be8ee5932fd05d34bde511a13048f5231ad51633353331308e5ed0f15f83ebb0e447d273de93645ab64f72b2e0e4c7040f058ed75fc7e6f298f7538a95f01358c805cabab3ca7337699a6927330b8b3ed6e2c5c4c78b937e1eba9e9e35b95c66f92f989ced994ec4dce4670a1de0fd9f9de79eeec91703446b6c76cb7699c814e9b03c286d8d75b7b25f5c5b807d0ebda7781632461f36607a1f4458076dae686e108d3b2ffe8af75fb6902818100ffe09bf7aaa7ad65880b683ece2776bd5c72f34ca91166029f57b20dedeeabadcfe0e3f26ed83ebe1e34a0a5463a7b61e606485ba7384c781be7174cca8d0223ea580d7a9471b138dc14520671952b18c5f63e4c34d9e33e008e72389c0a00868a7facbbbbf1b05b8e9210b48eb751d869021d9451d0a86253e857c19c3d280702818100cd26727007c9bbf4b410e6b7cf1444b39fc39e5317efd6b074dff045e319732ef19a8d4bf503c3b0de46980abc8e8e054d0caf2f19059ae0ce2ef39072a67cb2a46ace4f4f50232affc3d53ca45ab2cc6ffb1a9a145cb95140b5e48d1ecfb42af5a1f1dc6a297c561897ef991fb7dedcad6afdcde298ad99b8abcb32e368c7d702818100bf05d1aa3daedc5636103e0cd51ec5186d122bec893341f2a73e72e0cf4624c8a7ae7ebe185e3bc8f707d6fe4bc59122eef4b5c426bc72ea1ffa8f7c76a27a7c919096cf724ec63d6a9f88f4e28ab817d0821ad40d88b48b2f2328c67647494927d05505fa335eb39b66142e9774e817259dbcb363b8e05c37c3f6efc5522ab5028180719061f3206c8d4e95cb715cb916783d93285fe191b3a3fe0484dee66123fa7e37229e2b3913ff654e7677be21c92c5744e2cbab5fc79987eebb50fb5a6c4d453afd20fe0862cd450556ac1928c6488a214738dfa87bf7de41db2f0cebcc80e8f316d5e3752547fe05193e7a5e7393bc47879dbe363cdc84e714baa48dfcb7fb0281806a8b308c0cdc8699b188a55e042a7361884d243788e27ac90ef32769e7d02b166e6fbdf60542e293a8f77dc1be98d03ac7360e1d6768876cfad1f335596d19579c5eb6e79118be3103a46452a508282f9bda23c248d326691afb99bb827dac7cd56ba0517097b44d18fd20cc050c47808f42bcca54dd954d6008c1cddeb7a6ae"::*u8,

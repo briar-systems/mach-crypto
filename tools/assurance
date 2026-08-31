@@ -149,6 +149,9 @@ run_independent_tests() {
         [[ "$category" == category ]] && continue
         index=$((index + 1))
         for profile in "${profiles[@]}"; do
+            if [[ "$category" == performance && "$profile" != release ]]; then
+                continue
+            fi
             printf -v relative 'logs/tests/%s/%03d-%s.ndjson' "$category" "$index" "$profile"
             log="$stage/$relative"
             mkdir -p "$(dirname -- "$log")"
@@ -333,7 +336,7 @@ inspect_zeroization() {
 
 assert_complete_results() {
     local category
-    for category in functional official-vector differential invalid-input \
+    for category in functional official-vector differential invalid-input performance \
         generated-code leakage zeroization reproducibility; do
         awk -F '\t' -v category="$category" '$1 == category && $8 == "PASS" { found = 1 } END { exit !found }' \
             "$results" || die "required evidence category did not pass: $category"
