@@ -5,6 +5,7 @@ use crypto.encoding.der;
 use crypto.encoding.pem;
 use p256_group: crypto.group.p256;
 use crypto.internal.p256;
+use crypto.internal.p384;
 use crypto.secret;
 use std.crypto.ct;
 use std.memory;
@@ -18,6 +19,7 @@ pub val ED25519: Algorithm = 1;
 pub val X25519:  Algorithm = 2;
 pub val P256:    Algorithm = 3;
 pub val RSA:     Algorithm = 4;
+pub val P384:    Algorithm = 5;
 
 pub def Container: u8;
 pub val PKCS8:       Container = 1;
@@ -29,6 +31,7 @@ val OID_ED25519: [3]u8 = [3]u8{0x2b, 0x65, 0x70};
 val OID_X25519:  [3]u8 = [3]u8{0x2b, 0x65, 0x6e};
 val OID_EC: [7]u8 = [7]u8{0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01};
 val OID_P256: [8]u8 = [8]u8{0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07};
+val OID_P384: [5]u8 = [5]u8{0x2b, 0x81, 0x04, 0x00, 0x22};
 val OID_RSA: [9]u8 = [9]u8{0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01};
 
 pub rec PublicKey {
@@ -182,6 +185,15 @@ fun valid_p256_public(value: contracts.Bytes) bool {
     ret valid:^ == 1;
 }
 
+#[oblivious]
+fun valid_p384_public(value: contracts.Bytes) bool {
+    if (value.len != 97 || value.data == nil || value.data[0] != 4) { ret false; }
+    var point: p384.Point;
+    val valid: ^u8 = p384.parse_point(?point, value.data);
+    p384.destroy_point(?point);
+    ret valid:^ == 1;
+}
+
 fun parse_public_algorithm(element: *der.Element,
     algorithm: *Algorithm) contracts.Error {
     if (element.tag != der.SEQUENCE) { ret contracts.INVALID_INPUT; }
@@ -207,10 +219,16 @@ fun parse_public_algorithm(element: *der.Element,
     if (public_equal(oid.content, (?OID_EC[0]):~*u8, 7)) {
         var curve: der.Element;
         if (der.next(?body, ?curve) != contracts.OK || curve.tag != der.OBJECT_ID ||
-            !public_equal(curve.content, (?OID_P256[0]):~*u8, 8) ||
             !der.complete(?body)) { ret contracts.INVALID_INPUT; }
-        @algorithm = P256;
-        ret contracts.OK;
+        if (public_equal(curve.content, (?OID_P256[0]):~*u8, 8)) {
+            @algorithm = P256;
+            ret contracts.OK;
+        }
+        if (public_equal(curve.content, (?OID_P384[0]):~*u8, 5)) {
+            @algorithm = P384;
+            ret contracts.OK;
+        }
+        ret contracts.UNSUPPORTED;
     }
     if (public_equal(oid.content, (?OID_RSA[0]):~*u8, 9)) {
         var parameter: der.Element;
@@ -296,6 +314,7 @@ pub fun decode_spki(input: contracts.Bytes, output: *PublicKey) contracts.Error 
         ret contracts.INVALID_KEY;
     }
     if (algorithm == P256 && !valid_p256_public(raw)) { ret contracts.INVALID_KEY; }
+    if (algorithm == P384 && !valid_p384_public(raw)) { ret contracts.INVALID_KEY; }
     if (algorithm == RSA) {
         var rsa_root: der.Element;
         if (der.exact(raw, ?rsa_root) != contracts.OK || rsa_root.tag != der.SEQUENCE) {
