@@ -11,9 +11,10 @@ chacha20-poly1305	crypto/internal/chacha20	yes
 ed25519	crypto/internal/ed25519	yes
 hmac-sha-256,hmac-sha-384	crypto/internal/hmac	yes
 p-256-ecdh,ecdsa-p256-sha256	crypto/internal/p256	yes
+ecdsa-p384-sha384	crypto/internal/p384	yes
 chacha20-poly1305	crypto/internal/poly1305	yes
 rsa-pss-sha256,rsa-pss-sha384,rsa-pkcs1-sha256,rsa-pkcs1-sha384	crypto/internal/rsa	yes
 sha-256,sha-384	crypto/internal/sha2	yes
 x25519	crypto/internal/x25519	yes
 secret-storage	crypto/secret	yes
-ecdsa-p256-sha256,ed25519,rsa-pss-sha256,rsa-pss-sha384,rsa-pkcs1-sha256,rsa-pkcs1-sha384	crypto/signature	yes
+ecdsa-p256-sha256,ecdsa-p384-sha384,ed25519,rsa-pss-sha256,rsa-pss-sha384,rsa-pkcs1-sha256,rsa-pkcs1-sha384	crypto/signature	yes

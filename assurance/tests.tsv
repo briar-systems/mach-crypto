@@ -14,6 +14,7 @@ official-vector	test/group	x25519	RFC 7748	x25519: rfc 7748 alice and bob exchan
 official-vector	test/group	x25519	RFC 7748	x25519: rfc 7748 direct function vectors
 official-vector	test/group	x25519	RFC 7748	x25519: rfc 7748 one-thousand iteration vector
 official-vector	test/signature	ecdsa-p256-sha256	RFC 6979	ecdsa p-256: rfc 6979 sha-256 sample
+official-vector	test/signature	ecdsa-p384-sha384	NIST P-384 with SHA-384 example	ecdsa p-384: nist sha-384 verification vector
 official-vector	test/signature	ed25519	RFC 8032	ed25519: rfc 8032 vectors
 official-vector	test/signature	rsa-pss-sha256	NIST CAVP	rsa-pss: nist cavp sha256 verification
 official-vector	test/signature	rsa-pss-sha384	NIST CAVP	rsa-pss: nist cavp sha384 verification
@@ -26,6 +27,7 @@ differential	test/aead	chacha20-poly1305	independent RFC-compatible implementati
 differential	test/group	x25519	independent X25519 implementation	x25519: independent differential vector and private output overlap
 differential	test/signature	rsa-pss-sha256,rsa-pss-sha384	independent OpenSSL vectors	rsa-pss: independent sha-256 and sha-384 vectors
 differential	test/signature	rsa-pkcs1-sha256,rsa-pkcs1-sha384	independent OpenSSL vectors	rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs
+differential	test/signature	ecdsa-p384-sha384	independent OpenSSL vector	ecdsa p-384: independent OpenSSL vector rejects tampering
 differential	test/encoding	p-256-ecdh	independent OpenSSL vectors	keys: independent P-256 SEC1, PKCS8, and SPKI vectors agree
 differential	test/encoding	key-containers	independent OpenSSL vectors	keys: OpenSSL RSA containers preserve exact public and private parts
 invalid-input	test/hash	sha-256,sha-384	mach-crypto bounded transcript contract	hash: validation and overflow failures preserve state and output
@@ -37,11 +39,13 @@ invalid-input	test/group	p-256-ecdh	SEC 1 and mach-crypto agreement contract	p25
 invalid-input	test/group	x25519	RFC 7748 and mach-crypto agreement contract	x25519: low-order inputs reject without changing output
 invalid-input	test/group	x25519	mach-crypto bounded agreement contract	x25519: validation and capacity failures leave output unchanged
 invalid-input	test/signature	ecdsa-p256-sha256	Wycheproof-style hostile corpus	ecdsa p-256: wycheproof-style tampering and strict der rejection
+invalid-input	test/signature	ecdsa-p384-sha384	SEC 1 and strict DER verification contract	ecdsa p-384: scalars, strict DER, points, and nil inputs are bounded
 invalid-input	test/signature	rsa-pkcs1-sha256,rsa-pkcs1-sha384	RFC 8017 hostile encodings	rsa-pkcs1: hostile padding and digestinfo encodings are rejected
 invalid-input	test/signature	rsa-pkcs1-sha256,rsa-pkcs1-sha384	mach-crypto verification contract	rsa-pkcs1: validation and authentication errors are distinct
 invalid-input	test/encoding	der	ITU-T X.690 and mach-crypto parser contract	der: canonical lengths, values, depth, and transactions are strict
 invalid-input	test/encoding	pem	RFC 7468 and mach-crypto parser contract	pem: canonical base64, bounds, overlap, and every truncation are enforced
 invalid-input	test/encoding	key-containers	mach-crypto ownership contract	keys: allocation and cleanup failures retain exact ownership
+invalid-input	test/encoding	key-containers	RFC 5480 and SEC 1 named-curve contract	keys: P-384 SPKI validates the named curve and every boundary
 invalid-input	test/encoding	key-containers	RFC 7468 and mach-crypto parser contract	keys: private PEM truncation fails before allocation at every boundary
 zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: partial allocation failure is wiped and cleanup ownership is retained
 zeroization	test/secret	secret-storage	mach-crypto entropy contract	secret: entropy failure is distinct and wipes partial output
