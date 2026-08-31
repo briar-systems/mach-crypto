@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Verification-only ECDSA P-384 with SHA-384, strict DER signatures, and
+  uncompressed P-384 SPKI public keys.
+
+### Security
+
+- The dependency-visible P-384 module exposes only complete public-point
+  validation and signature-verification operations. Raw points, scalars,
+  decoding, arithmetic, and affine conversion remain private.
+
 ## [0.6.0] - 2026-08-28
 
 ### Changed
