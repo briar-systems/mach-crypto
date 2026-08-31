@@ -4,7 +4,7 @@ use crypto.contracts;
 use ed: crypto.internal.ed25519;
 use crypto.internal.hmac;
 use core: crypto.internal.p256;
-use p384: crypto.internal.p384;
+use crypto.internal.p384;
 use crypto.internal.rsa;
 use crypto.internal.sha2;
 use std.crypto.ct;
