@@ -529,7 +529,14 @@ test "ecdsa p-384: scalars, strict DER, points, and nil inputs are bounded" {
         contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.INVALID_KEY) {
         ret 13;
     }
-    public_key[96] = public_key[96] ^ 1;
+    if (!set_nist_p384_public(?public_key[0]) || !decode_hex(
+        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff"::*u8,
+        96, ?public_key[1]) || signature.verify_ecdsa_p384_sha384(
+        contracts.Bytes{data: ?public_key[0], len: 97}, message,
+        contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.INVALID_KEY) {
+        ret 16;
+    }
+    if (!set_nist_p384_public(?public_key[0])) { ret 17; }
     if (signature.verify_ecdsa_p384_sha384(
         contracts.Bytes{data: ?public_key[0], len: 96}, message,
         contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.INVALID_KEY ||
