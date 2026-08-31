@@ -28,6 +28,7 @@ differential	test/group	x25519	independent X25519 implementation	x25519: indepen
 differential	test/signature	rsa-pss-sha256,rsa-pss-sha384	independent OpenSSL vectors	rsa-pss: independent sha-256 and sha-384 vectors
 differential	test/signature	rsa-pkcs1-sha256,rsa-pkcs1-sha384	independent OpenSSL vectors	rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs
 differential	test/signature	ecdsa-p384-sha384	independent OpenSSL vector	ecdsa p-384: independent OpenSSL vector rejects tampering
+differential	.	ecdsa-p384-sha384	independent Python big-integer products	p384 internal: modular products match independent big integers
 differential	test/encoding	p-256-ecdh	independent OpenSSL vectors	keys: independent P-256 SEC1, PKCS8, and SPKI vectors agree
 differential	test/encoding	key-containers	independent OpenSSL vectors	keys: OpenSSL RSA containers preserve exact public and private parts
 invalid-input	test/hash	sha-256,sha-384	mach-crypto bounded transcript contract	hash: validation and overflow failures preserve state and output
@@ -47,6 +48,7 @@ invalid-input	test/encoding	pem	RFC 7468 and mach-crypto parser contract	pem: ca
 invalid-input	test/encoding	key-containers	mach-crypto ownership contract	keys: allocation and cleanup failures retain exact ownership
 invalid-input	test/encoding	key-containers	RFC 5480 and SEC 1 named-curve contract	keys: P-384 SPKI validates the named curve and every boundary
 invalid-input	test/encoding	key-containers	RFC 7468 and mach-crypto parser contract	keys: private PEM truncation fails before allocation at every boundary
+performance	test/signature	ecdsa-p384-sha384	250 ms median verification budget	ecdsa p-384: median verification stays below 250 ms
 zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: partial allocation failure is wiped and cleanup ownership is retained
 zeroization	test/secret	secret-storage	mach-crypto entropy contract	secret: entropy failure is distinct and wipes partial output
 zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: failed cleanup retains wiped ownership without a second wipe

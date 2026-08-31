@@ -3,6 +3,7 @@
 use crypto.contracts;
 use crypto.group.p256;
 use crypto.signature;
+use std.chrono.time;
 use std.runtime;
 use std.types.bool.bool;
 use std.types.bool.false;
@@ -370,6 +371,44 @@ test "ecdsa p-384: nist sha-384 verification vector" {
         contracts.Bytes{data: ?public_key[0], len: 97},
         contracts.Bytes{data: "Example of ECDSA with P-384"::*u8, len: 27},
         contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.OK) { ret 3; }
+    ret 0;
+}
+
+test "ecdsa p-384: median verification stays below 250 ms" {
+    var public_key: [97]u8;
+    var encoded: [103]u8;
+    if (!set_nist_p384_public(?public_key[0]) ||
+        !set_nist_p384_signature(?encoded[0])) { ret 1; }
+    val key: contracts.Bytes = contracts.Bytes{data: ?public_key[0], len: 97};
+    val message: contracts.Bytes = contracts.Bytes{
+        data: "Example of ECDSA with P-384"::*u8, len: 27};
+    val value: contracts.Bytes = contracts.Bytes{data: ?encoded[0], len: 103};
+    if (signature.verify_ecdsa_p384_sha384(key, message, value) !=
+        contracts.OK) { ret 2; }
+    var samples: [5]i64;
+    var i: usize = 0;
+    for (i < 5) {
+        val started: time.Time = time.monotonic();
+        if (started.sec == 0 && started.nsec == 0) { ret 3; }
+        if (signature.verify_ecdsa_p384_sha384(key, message, value) !=
+            contracts.OK) { ret 4; }
+        val finished: time.Time = time.monotonic();
+        samples[i] = time.time_sub(finished, started);
+        if (samples[i] <= 0) { ret 5; }
+        i = i + 1;
+    }
+    i = 1;
+    for (i < 5) {
+        val current: i64 = samples[i];
+        var position: usize = i;
+        for (position > 0 && samples[position - 1] > current) {
+            samples[position] = samples[position - 1];
+            position = position - 1;
+        }
+        samples[position] = current;
+        i = i + 1;
+    }
+    if (samples[2] > 250000000) { ret 6; }
     ret 0;
 }
 
