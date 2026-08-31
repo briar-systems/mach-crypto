@@ -248,9 +248,13 @@ secret-indexed tables. Private scalars, nonce state, hashes, field and scalar
 temporaries, and projective points are explicitly zeroized.
 
 P-384 verification uses the same ownership and constant-shape contract with
-fixed twelve-limb storage and fixed 384-step multiplication and point loops.
-Hashes, field and scalar temporaries, and projective points remain welded until
-they are explicitly zeroized.
+fixed twelve-limb storage. Field coordinates stay in Montgomery form. Each
+Montgomery product has fixed 12-by-12 limb bounds, and each 32-bit limb product
+uses a fixed 32-step masked operation rather than a variable-latency machine
+multiply. Verification evaluates the two ECDSA point products together in one
+fixed 384-step loop with masked four-way point selection and no secret-indexed
+table. Inversions retain fixed public exponents. Hashes, field and scalar
+temporaries, and projective points remain welded until explicitly zeroized.
 
 ## Ed25519 and RSA signatures
 

@@ -98,12 +98,15 @@ source constant claiming evidence that is absent on the verifying machine.
 successful automated run does not change `independent_review` from
 `NOT_RECORDED`.
 
-## Performance risk
+## Performance gate
 
-The assurance gate does not currently enforce latency or throughput limits.
-On 2026-08-31, the isolated release-profile NIST P-384 verification test took
-3.3, 3.3, and 3.4 seconds after a warm build on an AMD Ryzen 7 5800X3D with
-Mach 4.26.5. The 3.3-second median is environment-specific, not a portable
-benchmark. It records a CPU-exhaustion and handshake-latency risk that remains
-until the constant-shape arithmetic is optimized and a reproducible performance
-threshold is added to release policy.
+The release evidence gate runs a warmed five-sample P-384 verification test and
+requires its monotonic-clock median to stay at or below 250 milliseconds. The
+budget is intentionally more than twice the current measurement while rejecting
+the former multi-second arithmetic and its CPU-exhaustion exposure.
+
+On 2026-08-31, nine isolated warm release-profile NIST P-384 verification runs
+took 110 through 113 milliseconds, with a 111-millisecond median, on an AMD
+Ryzen 7 5800X3D 8-Core Processor with frequency boost disabled and Mach 4.26.5.
+This machine-specific measurement characterizes the implementation. The
+250-millisecond release gate is the enforced regression contract.
