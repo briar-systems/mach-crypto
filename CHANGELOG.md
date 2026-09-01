@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+
+- Secret and typed-array deallocation callbacks now receive fully zeroed
+  storage on every attempt, including cleanup retries.
+- Failed callbacks that retain ownership have any callback mutation wiped
+  again before control returns to the caller.
+
 ## [0.8.0] - 2026-09-01
 
 ### Added
