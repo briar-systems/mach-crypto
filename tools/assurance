@@ -85,6 +85,18 @@ assert_clean_source() {
     tree_is_clean || die "the source tree is dirty; commit the exact source before producing release evidence"
 }
 
+resolve_dependencies() {
+    local project algorithm
+    while IFS=$'\t' read -r project algorithm; do
+        [[ "$project" == project ]] && continue
+        (cd "$root" && mach dep pull "$project" --quiet) >/dev/null 2>&1 </dev/null || \
+            die "dependency resolution failed for $project; run 'mach dep pull $project' for details"
+    done < "$root/assurance/projects.tsv"
+    (cd "$root" && mach dep pull test/leakage-negative --quiet) >/dev/null 2>&1 || \
+        die "dependency resolution failed for test/leakage-negative; run 'mach dep pull test/leakage-negative' for details"
+    tree_is_clean || die "dependency resolution changed the source tree; commit the refreshed lock before producing release evidence"
+}
+
 assert_no_redundant_aliases() {
     local findings
     findings=$(rg --pcre2 -n \
@@ -377,6 +389,7 @@ run_gate() {
     require_command sed
     require_command xargs
     assert_clean_source
+    resolve_dependencies
     assert_no_redundant_aliases
 
     git_commit=$(git -C "$root" rev-parse HEAD)
