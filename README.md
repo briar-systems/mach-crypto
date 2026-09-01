@@ -35,9 +35,10 @@ duplicate ownership.
 
 `secret.bytes` and `secret.buffer` return bounded borrowed views. A view must
 not outlive its owner or any move or destroy operation. `secret.destroy` wipes
-active storage before release. If a deallocator fails, the owner remains in a
-wiped cleanup-pending state and a later destroy retries release without wiping
-twice.
+storage immediately before every release attempt. If a deallocator mutates the
+allocation and fails while retaining ownership, `secret.destroy` wipes it again
+before returning. The owner remains in a wiped cleanup-pending state, and a
+later destroy retries with fully zeroed storage.
 
 `crypto.secret.SecretArray[T]` owns a dynamically sized typed allocation while
 preserving every field's secrecy shape. Initialize an owner with
@@ -50,11 +51,11 @@ values or records with deeply nested secret fields.
 Array initialization checks `count * $size_of(T)`, supplies `$align_of(T)` to
 the typed allocator, and zero-initializes the complete allocation. A zero-count
 array is active with nil data and acquires no allocation. `destroy_array[T]`
-wipes active elements before release. A failed release retains the typed
-pointer, count, byte size, allocator, and cleanup-pending state for retry.
-Custom `ArrayAllocator[T]` callbacks follow the same ownership contract. A
-nonnil output transfers the full requested allocation even when allocation
-reports failure.
+wipes all elements before every release attempt. A failed release rewipes any
+callback mutation, then retains the typed pointer, count, byte size, allocator,
+and cleanup-pending state for retry. Custom `ArrayAllocator[T]` callbacks follow
+the same ownership contract. A nonnil output transfers the full requested
+allocation even when allocation reports failure.
 
 The native allocator and entropy source delegate to `mach-std` secret-welded OS
 primitives. Storage remains secret-welded through every native boundary,
