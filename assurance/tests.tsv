@@ -53,6 +53,10 @@ zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: 
 zeroization	test/secret	secret-storage	mach-crypto entropy contract	secret: entropy failure is distinct and wipes partial output
 zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: failed cleanup retains wiped ownership without a second wipe
 zeroization	test/secret	secret-storage	mach-crypto destruction contract	secret: destruction failure is retry-safe and zeroizes once
+zeroization	test/secret	secret-storage	mach-crypto typed ownership contract	secret array: allocation failure cleans transferred typed ownership
+zeroization	test/secret	secret-storage	mach-crypto typed ownership contract	secret array: failed cleanup retains exact typed ownership for retry
+zeroization	test/secret	secret-storage	mach-crypto typed destruction contract	secret array: deallocation failure wipes once and retries
+zeroization	test/secret	secret-storage	mach-std typed operating-system boundary	secret array: native allocator owns deeply secret records
 zeroization	test/hash	sha-256,sha-384	mach-crypto transcript lifecycle contract	hash: snapshot continues and final consumes only after success
 zeroization	test/aead	aes-128-gcm,aes-256-gcm	mach-crypto authenticated release contract	aes-gcm: authentication failures clear output before release
 zeroization	test/aead	chacha20-poly1305	mach-crypto authenticated release contract	chacha20-poly1305: authentication failures clear output before release
