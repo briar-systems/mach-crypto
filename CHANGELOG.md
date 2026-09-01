@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `tools/assurance run` resolves the dependencies of every tested project
+  before running, so the gate passes from a fresh clone or worktree.
+
 ### Security
 
 - Secret and typed-array deallocation callbacks now receive fully zeroed

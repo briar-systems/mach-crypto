@@ -10,12 +10,14 @@ facts.
 Run the gate from a clean, committed tree with the release compiler on `PATH`:
 
 ```sh
-mach dep pull .
 tools/assurance run
 ```
 
-The command fails unless every required command, manifest, dependency lock,
-test, target, profile, and generated artifact is present. It publishes only a
+The gate first resolves the dependencies of the package and of every project it
+tests, so it runs from a fresh clone or worktree. Resolution that would rewrite
+a lock fails the clean-tree assertion instead. The command fails unless every
+required command, manifest, dependency lock, test, target, profile, and
+generated artifact is present. It publishes only a
 complete run. Partial work remains in a temporary directory and is removed on
 exit.
 
