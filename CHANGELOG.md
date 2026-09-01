@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.0] - 2026-09-01
+
+### Added
+
+- Generic typed secret-array ownership for public, directly secret, and deeply
+  secret element shapes.
+- Native typed secret allocation with checked geometry, exact alignment,
+  zero initialization, and retry-safe destruction.
+
+### Changed
+
+- Pinned `mach-std` to `v0.34.0` for typed secret operating-system storage.
+
+### Security
+
+- Typed owners preserve `*T` across allocation, access, wiping, and release.
+  Deeply secret records require no raw pointer cast or declassification.
+- Failed allocation cleanup and failed deallocation retain wiped typed
+  ownership for deterministic retry.
+
 ## [0.7.0] - 2026-08-31
 
 ### Added

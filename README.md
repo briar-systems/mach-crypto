@@ -39,6 +39,23 @@ active storage before release. If a deallocator fails, the owner remains in a
 wiped cleanup-pending state and a later destroy retries release without wiping
 twice.
 
+`crypto.secret.SecretArray[T]` owns a dynamically sized typed allocation while
+preserving every field's secrecy shape. Initialize an owner with
+`secret.empty_array[T]`, construct the native allocator with
+`secret.system_array_allocator[T]`, and call `secret.init_array[T]` with the
+element count. `secret.array_data[T]` returns `*T` only while the owner is
+active. No raw pointer or declassification cast is needed for directly secret
+values or records with deeply nested secret fields.
+
+Array initialization checks `count * $size_of(T)`, supplies `$align_of(T)` to
+the typed allocator, and zero-initializes the complete allocation. A zero-count
+array is active with nil data and acquires no allocation. `destroy_array[T]`
+wipes active elements before release. A failed release retains the typed
+pointer, count, byte size, allocator, and cleanup-pending state for retry.
+Custom `ArrayAllocator[T]` callbacks follow the same ownership contract. A
+nonnil output transfers the full requested allocation even when allocation
+reports failure.
+
 The native allocator and entropy source delegate to `mach-std` secret-welded OS
 primitives. Storage remains secret-welded through every native boundary,
 allocation begins zeroed, entropy fills are complete or leave a fully wiped
