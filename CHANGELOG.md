@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.2] - 2026-09-02
+
+### Added
+
+- GitHub Actions CI: every pull request builds the library, runs the suite in both profiles and every per-algorithm project, verifies IR across all six targets, and produces and verifies the assurance evidence.
+
 ## [0.8.1] - 2026-09-01
 
 ### Fixed

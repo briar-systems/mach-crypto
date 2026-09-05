@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  # release branches also build on push. a pull_request trigger is selected from
+  # the base branch, so adding `main` above cannot take effect for the very PR
+  # that adds it -- the first release PR would still land untested.
+  push:
+    branches:
+      - 'chore/release-*'
+      - 'hotfix/*'
+
+jobs:
+  linux-x86_64:
+    name: linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Seed mach
+        uses: ./.github/actions/seed-mach
+
+      - name: Report the seed
+        run: mach info
+
+      - name: Resolve dependencies
+        run: |
+          set -euo pipefail
+          mach dep pull .
+          mach dep pull test/secret
+          mach dep pull test/hash
+          mach dep pull test/mac
+          mach dep pull test/aead
+          mach dep pull test/group
+          mach dep pull test/signature
+          mach dep pull test/encoding
+          mach dep pull test/leakage-negative
+
+      - name: Build
+        run: mach build .
+
+      - name: Test
+        run: mach test .
+
+      - name: Test (release)
+        run: mach test . --profile release
+
+      - name: Test the per-algorithm projects
+        run: |
+          set -euo pipefail
+          for project in test/secret test/hash test/mac test/aead \
+                         test/group test/signature test/encoding; do
+            echo "== $project =="
+            mach test "$project"
+          done
+
+      - name: Verify IR across every target
+        run: mach build . --all-targets --verify-ir --profile release
+
+  # `tools/assurance run` is the release gate the README documents. it resolves
+  # every project, runs the suite over six targets and both profiles, rebuilds
+  # with --all-targets, and re-derives the leakage-negative evidence. that takes
+  # several minutes, so it is a job of its own rather than another step above.
+  assurance:
+    name: assurance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Seed mach
+        uses: ./.github/actions/seed-mach
+
+      - name: Report the seed
+        run: mach info
+
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Produce release evidence
+        run: tools/assurance run
+
+      - name: Verify release evidence
+        run: tools/assurance verify
+
+      - name: Retain the assurance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: assurance-evidence
+          path: out/assurance/current
+          if-no-files-found: warn
+          retention-days: 14
