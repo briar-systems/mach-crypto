@@ -23,12 +23,12 @@ fun failed(error: contracts.Error) contracts.Operation {
 # complete tag exists. a nonempty public output cannot alias the secret key.
 pub fun sha256(key: contracts.SecretBytes, message: contracts.Bytes,
     output: contracts.Buffer) contracts.Operation {
-    if (key.len != 0 && key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (key.len != 0 && key.data == nil)         { ret failed(contracts.INVALID_INPUT); }
     if (message.len != 0 && message.data == nil) { ret failed(contracts.INVALID_INPUT); }
-    if (output.capacity < SHA256_TAG_SIZE) { ret failed(contracts.OUTPUT_TOO_SMALL); }
-    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < SHA256_TAG_SIZE)       { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil)                      { ret failed(contracts.INVALID_INPUT); }
 
-    var context: core.Context256;
+    var context:     core.Context256;
     val initialized: contracts.Error = core.init256(?context, key);
     if (initialized != contracts.OK) { ret failed(initialized); }
     var tag: [32]^u8;
@@ -47,7 +47,7 @@ pub fun sha256(key: contracts.SecretBytes, message: contracts.Bytes,
     var i: usize = 0;
     for (i < SHA256_TAG_SIZE) {
         output.data[i] = tag[i]:>u8;
-        i = i + 1;
+        i              = i + 1;
     }
     ct.zeroize(?tag[0], SHA256_TAG_SIZE);
     ret contracts.Operation{error: contracts.OK, written: SHA256_TAG_SIZE};
@@ -59,12 +59,12 @@ pub fun sha256(key: contracts.SecretBytes, message: contracts.Bytes,
 # complete tag exists. a nonempty public output cannot alias the secret key.
 pub fun sha384(key: contracts.SecretBytes, message: contracts.Bytes,
     output: contracts.Buffer) contracts.Operation {
-    if (key.len != 0 && key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (key.len != 0 && key.data == nil)         { ret failed(contracts.INVALID_INPUT); }
     if (message.len != 0 && message.data == nil) { ret failed(contracts.INVALID_INPUT); }
-    if (output.capacity < SHA384_TAG_SIZE) { ret failed(contracts.OUTPUT_TOO_SMALL); }
-    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < SHA384_TAG_SIZE)       { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil)                      { ret failed(contracts.INVALID_INPUT); }
 
-    var context: core.Context384;
+    var context:     core.Context384;
     val initialized: contracts.Error = core.init384(?context, key);
     if (initialized != contracts.OK) { ret failed(initialized); }
     var tag: [48]^u8;
@@ -83,14 +83,14 @@ pub fun sha384(key: contracts.SecretBytes, message: contracts.Bytes,
     var i: usize = 0;
     for (i < SHA384_TAG_SIZE) {
         output.data[i] = tag[i]:>u8;
-        i = i + 1;
+        i              = i + 1;
     }
     ct.zeroize(?tag[0], SHA384_TAG_SIZE);
     ret contracts.Operation{error: contracts.OK, written: SHA384_TAG_SIZE};
 }
 
 test "hmac: sha-2 dimensions match their hash functions" {
-    if (SHA256_BLOCK_SIZE != 64 || SHA256_TAG_SIZE != 32) { ret 1; }
+    if (SHA256_BLOCK_SIZE != 64 || SHA256_TAG_SIZE != 32)  { ret 1; }
     if (SHA384_BLOCK_SIZE != 128 || SHA384_TAG_SIZE != 48) { ret 1; }
     ret 0;
 }

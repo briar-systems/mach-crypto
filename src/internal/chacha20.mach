@@ -7,7 +7,7 @@ use std.types.bool.false;
 use std.types.bool.true;
 use std.types.size.usize;
 
-pub val KEY_SIZE: usize = 32;
+pub val KEY_SIZE:   usize = 32;
 pub val NONCE_SIZE: usize = 12;
 pub val BLOCK_SIZE: usize = 64;
 
@@ -17,12 +17,14 @@ pub rec Context {
     active: bool;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun rotate_left(value: ^u32, shift: u32) ^u32 {
     ret (value << shift) | (value >> (32 - shift));
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun read_secret(input: *^u8, offset: usize) ^u32 {
     ret input[offset]::^u32 | (input[offset + 1]::^u32 << 8) |
         (input[offset + 2]::^u32 << 16) | (input[offset + 3]::^u32 << 24);
@@ -33,9 +35,10 @@ fun read_public(input: *u8, offset: usize) u32 {
         (input[offset + 2]::u32 << 16) | (input[offset + 3]::u32 << 24);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun write_secret(output: *^u8, offset: usize, value: ^u32) {
-    output[offset] = value::^u8;
+    output[offset]     = value::^u8;
     output[offset + 1] = (value >> 8)::^u8;
     output[offset + 2] = (value >> 16)::^u8;
     output[offset + 3] = (value >> 24)::^u8;
@@ -60,18 +63,19 @@ pub fun init(context: *Context, key: contracts.SecretBytes, nonce: contracts.Byt
     var i: usize = 0;
     for (i < 8) {
         context.key[i] = read_secret(key.data, i * 4);
-        i = i + 1;
+        i              = i + 1;
     }
     i = 0;
     for (i < 3) {
         context.nonce[i] = read_public(nonce.data, i * 4);
-        i = i + 1;
+        i                = i + 1;
     }
     context.active = true;
     ret contracts.OK;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun quarter_round(state: *^u32, a: usize, b: usize, c: usize, d: usize) {
     state[a] = state[a] + state[b];
     state[d] = rotate_left(state[d] ^ state[a], 16);
@@ -92,13 +96,19 @@ pub fun block(context: *Context, counter: u32, output: *^u8) {
     initial[2] = 0x79622d32;
     initial[3] = 0x6b206574;
     var i: usize = 0;
-    for (i < 8) { initial[4 + i] = context.key[i]; i = i + 1; }
+    for (i < 8) {
+        initial[4 + i] = context.key[i];
+        i              = i + 1;
+    }
     initial[12] = counter;
     initial[13] = context.nonce[0];
     initial[14] = context.nonce[1];
     initial[15] = context.nonce[2];
-    i = 0;
-    for (i < 16) { working[i] = initial[i]; i = i + 1; }
+    i           = 0;
+    for (i < 16) {
+        working[i] = initial[i];
+        i          = i + 1;
+    }
 
     var round: usize = 0;
     for (round < 10) {
@@ -123,13 +133,16 @@ pub fun block(context: *Context, counter: u32, output: *^u8) {
 }
 
 test "chacha20: rfc 8439 block vector" {
-    var key: [32]^u8;
+    var key:   [32]^u8;
     var nonce: [12]u8 = [12]u8{
         0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x4a,
         0x00, 0x00, 0x00, 0x00
     };
     var i: usize = 0;
-    for (i < 32) { key[i] = i::u8; i = i + 1; }
+    for (i < 32) {
+        key[i] = i::u8;
+        i      = i + 1;
+    }
     var context: Context;
     if (init(?context, contracts.SecretBytes{data: ?key[0], len: 32},
         contracts.Bytes{data: ?nonce[0], len: 12}) != contracts.OK) { ret 1; }
@@ -147,7 +160,10 @@ test "chacha20: rfc 8439 block vector" {
     };
     i = 0;
     for (i < 64) {
-        if (output[i]:>u8 != expected[i]) { destroy(?context); ret 2; }
+        if (output[i]:>u8 != expected[i]) {
+            destroy(?context);
+            ret 2;
+        }
         i = i + 1;
     }
     destroy(?context);
