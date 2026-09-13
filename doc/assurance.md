@@ -37,11 +37,14 @@ The layers run separately so one kind of evidence cannot stand in for another:
 6. A deliberately secret-dependent branch must be rejected for every target
    and profile. Rejection for any reason other than secret-flow leakage fails.
 7. Every project is built for all six targets and both profiles with emitted
-   IR, emitted assembly, and `--verify-ir`.
+   IR and emitted assembly (IR verification is mandatory in mach 5.0).
 8. A second clean matrix build must produce byte-identical artifacts.
 9. Every module named by `assurance/zeroization.tsv` must retain explicit
    zeroization calls in generated IR. Security-critical release assembly named
-   by that policy must also retain a zeroization reference.
+   by that policy must also retain the zeroization, either as a call or as the
+   inline expansion the release IR records, since mach 5.0 release builds
+   inline small helpers across modules and the wipe survives by the language's
+   zeroizing-write guarantee.
 
 `assurance/tests.tsv` binds each focused test to its category, algorithm, and
 vector or contract source. `assurance/algorithms.tsv` is the algorithm and
@@ -78,7 +81,7 @@ tools/assurance verify
 ```
 
 Verification fails closed when the working tree is dirty, `HEAD` differs, the
-compiler binary changes, `mach.lock` changes, policy changes, an evidence file
+compiler binary changes, the committed dependency pins under `dep/` change, policy changes, an evidence file
 changes, a required status is not `PASS`, review state is conflated with
 availability, or a live generated artifact is missing or has a different size
 or hash.

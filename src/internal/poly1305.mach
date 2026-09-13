@@ -10,7 +10,7 @@ use std.types.size.usize;
 pub val KEY_SIZE: usize = 32;
 pub val TAG_SIZE: usize = 16;
 
-val LIMB_MASK: u64 = 0x3FFFFFF;
+val LIMB_MASK:      u64 = 0x3FFFFFF;
 val FULL_BLOCK_BIT: u64 = 0x1000000;
 
 pub rec Context {
@@ -20,34 +20,37 @@ pub rec Context {
     active: bool;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun read_u32(input: *^u8, offset: usize) ^u32 {
     ret input[offset]::^u32 | (input[offset + 1]::^u32 << 8) |
         (input[offset + 2]::^u32 << 16) | (input[offset + 3]::^u32 << 24);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun write_u32(output: *^u8, offset: usize, value: ^u32) {
-    output[offset] = value::^u8;
+    output[offset]     = value::^u8;
     output[offset + 1] = (value >> 8)::^u8;
     output[offset + 2] = (value >> 16)::^u8;
     output[offset + 3] = (value >> 24)::^u8;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun multiply29(left: ^u64, right: ^u64) ^u64 {
-    var result: ^u64 = 0;
-    var shifted: ^u64 = left;
-    var multiplier: ^u64 = right;
-    var i: usize = 0;
+    var result:     ^u64  = 0;
+    var shifted:    ^u64  = left;
+    var multiplier: ^u64  = right;
+    var i:          usize = 0;
     for (i < 29) {
         val mask: ^u64 = 0 - (multiplier & 1);
-        result = result + (shifted & mask);
-        shifted = shifted << 1;
+        result     = result + (shifted & mask);
+        shifted    = shifted << 1;
         multiplier = multiplier >> 1;
-        i = i + 1;
+        i          = i + 1;
     }
-    shifted = 0;
+    shifted    = 0;
     multiplier = 0;
     ret result;
 }
@@ -65,18 +68,21 @@ pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     destroy(context);
     if (key.len != KEY_SIZE) { ret contracts.INVALID_KEY; }
-    if (key.data == nil) { ret contracts.INVALID_INPUT; }
+    if (key.data == nil)     { ret contracts.INVALID_INPUT; }
     context.r[0] = read_u32(key.data, 0)::^u64 & 0x3FFFFFF;
     context.r[1] = (read_u32(key.data, 3)::^u64 >> 2) & 0x3FFFF03;
     context.r[2] = (read_u32(key.data, 6)::^u64 >> 4) & 0x3FFC0FF;
     context.r[3] = (read_u32(key.data, 9)::^u64 >> 6) & 0x3F03FFF;
     context.r[4] = (read_u32(key.data, 12)::^u64 >> 8) & 0x00FFFFF;
     var i: usize = 0;
-    for (i < 5) { context.h[i] = 0; i = i + 1; }
+    for (i < 5) {
+        context.h[i] = 0;
+        i            = i + 1;
+    }
     i = 0;
     for (i < 4) {
         context.pad[i] = read_u32(key.data, 16 + i * 4);
-        i = i + 1;
+        i              = i + 1;
     }
     context.active = true;
     ret contracts.OK;
@@ -90,10 +96,10 @@ fun process_block(context: *Context, block: *^u8) {
     context.h[3] = context.h[3] + ((read_u32(block, 9)::^u64 >> 6) & LIMB_MASK);
     context.h[4] = context.h[4] + (read_u32(block, 12)::^u64 >> 8) + FULL_BLOCK_BIT;
 
-    val r1x5: ^u64 = context.r[1] + (context.r[1] << 2);
-    val r2x5: ^u64 = context.r[2] + (context.r[2] << 2);
-    val r3x5: ^u64 = context.r[3] + (context.r[3] << 2);
-    val r4x5: ^u64 = context.r[4] + (context.r[4] << 2);
+    val r1x5:    ^u64 = context.r[1] + (context.r[1] << 2);
+    val r2x5:    ^u64 = context.r[2] + (context.r[2] << 2);
+    val r3x5:    ^u64 = context.r[3] + (context.r[3] << 2);
+    val r4x5:    ^u64 = context.r[4] + (context.r[4] << 2);
     var product: [5]^u64;
     product[0] = multiply29(context.h[0], context.r[0]) + multiply29(context.h[1], r4x5) +
         multiply29(context.h[2], r3x5) + multiply29(context.h[3], r2x5) +
@@ -113,23 +119,23 @@ fun process_block(context: *Context, block: *^u8) {
 
     var carry: ^u64 = product[0] >> 26;
     context.h[0] = product[0] & LIMB_MASK;
-    product[1] = product[1] + carry;
-    carry = product[1] >> 26;
+    product[1]   = product[1] + carry;
+    carry        = product[1] >> 26;
     context.h[1] = product[1] & LIMB_MASK;
-    product[2] = product[2] + carry;
-    carry = product[2] >> 26;
+    product[2]   = product[2] + carry;
+    carry        = product[2] >> 26;
     context.h[2] = product[2] & LIMB_MASK;
-    product[3] = product[3] + carry;
-    carry = product[3] >> 26;
+    product[3]   = product[3] + carry;
+    carry        = product[3] >> 26;
     context.h[3] = product[3] & LIMB_MASK;
-    product[4] = product[4] + carry;
-    carry = product[4] >> 26;
+    product[4]   = product[4] + carry;
+    carry        = product[4] >> 26;
     context.h[4] = product[4] & LIMB_MASK;
     context.h[0] = context.h[0] + carry + (carry << 2);
-    carry = context.h[0] >> 26;
+    carry        = context.h[0] >> 26;
     context.h[0] = context.h[0] & LIMB_MASK;
     context.h[1] = context.h[1] + carry;
-    carry = 0;
+    carry        = 0;
     ct.zeroize((?product[0]):~*^u8, 40);
 }
 
@@ -144,7 +150,7 @@ pub fun update_padded(context: *Context, data: *u8, len: usize) {
         var i: usize = 0;
         for (i < take) {
             block[i] = data[offset + i];
-            i = i + 1;
+            i        = i + 1;
         }
         process_block(context, ?block[0]);
         offset = offset + take;
@@ -153,7 +159,7 @@ pub fun update_padded(context: *Context, data: *u8, len: usize) {
 }
 
 fun write_length(output: *^u8, offset: usize, value: u64) {
-    output[offset] = value::u8;
+    output[offset]     = value::u8;
     output[offset + 1] = (value >> 8)::u8;
     output[offset + 2] = (value >> 16)::u8;
     output[offset + 3] = (value >> 24)::u8;
@@ -177,39 +183,39 @@ pub fun final(context: *Context, tag: *^u8) {
     var carry: ^u64 = context.h[1] >> 26;
     context.h[1] = context.h[1] & LIMB_MASK;
     context.h[2] = context.h[2] + carry;
-    carry = context.h[2] >> 26;
+    carry        = context.h[2] >> 26;
     context.h[2] = context.h[2] & LIMB_MASK;
     context.h[3] = context.h[3] + carry;
-    carry = context.h[3] >> 26;
+    carry        = context.h[3] >> 26;
     context.h[3] = context.h[3] & LIMB_MASK;
     context.h[4] = context.h[4] + carry;
-    carry = context.h[4] >> 26;
+    carry        = context.h[4] >> 26;
     context.h[4] = context.h[4] & LIMB_MASK;
     context.h[0] = context.h[0] + carry + (carry << 2);
-    carry = context.h[0] >> 26;
+    carry        = context.h[0] >> 26;
     context.h[0] = context.h[0] & LIMB_MASK;
     context.h[1] = context.h[1] + carry;
 
     var reduced: [5]^u64;
     reduced[0] = context.h[0] + 5;
-    carry = reduced[0] >> 26;
+    carry      = reduced[0] >> 26;
     reduced[0] = reduced[0] & LIMB_MASK;
     reduced[1] = context.h[1] + carry;
-    carry = reduced[1] >> 26;
+    carry      = reduced[1] >> 26;
     reduced[1] = reduced[1] & LIMB_MASK;
     reduced[2] = context.h[2] + carry;
-    carry = reduced[2] >> 26;
+    carry      = reduced[2] >> 26;
     reduced[2] = reduced[2] & LIMB_MASK;
     reduced[3] = context.h[3] + carry;
-    carry = reduced[3] >> 26;
+    carry      = reduced[3] >> 26;
     reduced[3] = reduced[3] & LIMB_MASK;
     reduced[4] = context.h[4] + carry - 0x4000000;
-    val use_reduced: ^u64 = (reduced[4] >> 63) - 1;
-    val use_original: ^u64 = ~use_reduced;
-    var i: usize = 0;
+    val use_reduced:  ^u64  = (reduced[4] >> 63) - 1;
+    val use_original: ^u64  = ~use_reduced;
+    var i:            usize = 0;
     for (i < 5) {
         context.h[i] = (context.h[i] & use_original) | (reduced[i] & use_reduced);
-        i = i + 1;
+        i            = i + 1;
     }
 
     var words: [4]^u64;

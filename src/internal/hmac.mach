@@ -45,8 +45,8 @@ pub fun init256(context: *Context256, key: contracts.SecretBytes) contracts.Erro
         ret contracts.INVALID_INPUT;
     }
 
-    var key_block: [64]^u8;
-    var inner_pad: [64]^u8;
+    var key_block:  [64]^u8;
+    var inner_pad:  [64]^u8;
     var key_digest: [32]^u8;
     ct.zeroize(?key_block[0], sha2.SHA256_BLOCK_SIZE);
     ct.zeroize(?inner_pad[0], sha2.SHA256_BLOCK_SIZE);
@@ -68,21 +68,22 @@ pub fun init256(context: *Context256, key: contracts.SecretBytes) contracts.Erro
         var i: usize = 0;
         for (i < sha2.SHA256_DIGEST_SIZE) {
             key_block[i] = key_digest[i];
-            i = i + 1;
+            i            = i + 1;
         }
-    } or {
+    }
+    or {
         var i: usize = 0;
         for (i < key.len) {
             key_block[i] = key.data[i];
-            i = i + 1;
+            i            = i + 1;
         }
     }
 
     var i: usize = 0;
     for (i < sha2.SHA256_BLOCK_SIZE) {
-        inner_pad[i] = key_block[i] ^ 0x36;
+        inner_pad[i]         = key_block[i] ^ 0x36;
         context.outer_pad[i] = key_block[i] ^ 0x5C;
-        i = i + 1;
+        i                    = i + 1;
     }
     if (!sha2.update256_secret(?context.inner, ?inner_pad[0], sha2.SHA256_BLOCK_SIZE)) {
         ct.zeroize(?key_block[0], sha2.SHA256_BLOCK_SIZE);
@@ -109,8 +110,8 @@ pub fun init384(context: *Context384, key: contracts.SecretBytes) contracts.Erro
         ret contracts.INVALID_INPUT;
     }
 
-    var key_block: [128]^u8;
-    var inner_pad: [128]^u8;
+    var key_block:  [128]^u8;
+    var inner_pad:  [128]^u8;
     var key_digest: [48]^u8;
     ct.zeroize(?key_block[0], sha2.SHA384_BLOCK_SIZE);
     ct.zeroize(?inner_pad[0], sha2.SHA384_BLOCK_SIZE);
@@ -132,21 +133,22 @@ pub fun init384(context: *Context384, key: contracts.SecretBytes) contracts.Erro
         var i: usize = 0;
         for (i < sha2.SHA384_DIGEST_SIZE) {
             key_block[i] = key_digest[i];
-            i = i + 1;
+            i            = i + 1;
         }
-    } or {
+    }
+    or {
         var i: usize = 0;
         for (i < key.len) {
             key_block[i] = key.data[i];
-            i = i + 1;
+            i            = i + 1;
         }
     }
 
     var i: usize = 0;
     for (i < sha2.SHA384_BLOCK_SIZE) {
-        inner_pad[i] = key_block[i] ^ 0x36;
+        inner_pad[i]         = key_block[i] ^ 0x36;
         context.outer_pad[i] = key_block[i] ^ 0x5C;
-        i = i + 1;
+        i                    = i + 1;
     }
     if (!sha2.update384_secret(?context.inner, ?inner_pad[0], sha2.SHA384_BLOCK_SIZE)) {
         ct.zeroize(?key_block[0], sha2.SHA384_BLOCK_SIZE);
@@ -163,29 +165,29 @@ pub fun init384(context: *Context384, key: contracts.SecretBytes) contracts.Erro
 }
 
 pub fun update256_public(context: *Context256, data: *u8, len: usize) contracts.Error {
-    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
-    if (len != 0 && data == nil) { ret contracts.INVALID_INPUT; }
+    if (context == nil || !context.active)                 { ret contracts.INVALID_STATE; }
+    if (len != 0 && data == nil)                           { ret contracts.INVALID_INPUT; }
     if (!sha2.update256_public(?context.inner, data, len)) { ret contracts.INVALID_INPUT; }
     ret contracts.OK;
 }
 
 pub fun update256_secret(context: *Context256, data: *^u8, len: usize) contracts.Error {
-    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
-    if (len != 0 && data == nil) { ret contracts.INVALID_INPUT; }
+    if (context == nil || !context.active)                 { ret contracts.INVALID_STATE; }
+    if (len != 0 && data == nil)                           { ret contracts.INVALID_INPUT; }
     if (!sha2.update256_secret(?context.inner, data, len)) { ret contracts.INVALID_INPUT; }
     ret contracts.OK;
 }
 
 pub fun update384_public(context: *Context384, data: *u8, len: usize) contracts.Error {
-    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
-    if (len != 0 && data == nil) { ret contracts.INVALID_INPUT; }
+    if (context == nil || !context.active)                 { ret contracts.INVALID_STATE; }
+    if (len != 0 && data == nil)                           { ret contracts.INVALID_INPUT; }
     if (!sha2.update384_public(?context.inner, data, len)) { ret contracts.INVALID_INPUT; }
     ret contracts.OK;
 }
 
 pub fun update384_secret(context: *Context384, data: *^u8, len: usize) contracts.Error {
-    if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
-    if (len != 0 && data == nil) { ret contracts.INVALID_INPUT; }
+    if (context == nil || !context.active)                 { ret contracts.INVALID_STATE; }
+    if (len != 0 && data == nil)                           { ret contracts.INVALID_INPUT; }
     if (!sha2.update384_secret(?context.inner, data, len)) { ret contracts.INVALID_INPUT; }
     ret contracts.OK;
 }

@@ -63,7 +63,7 @@ fun valid_tag(tag: Tag) bool {
     if (tag == 0 || (tag & 0x1f) == 0x1f) { ret false; }
     if ((tag & 0xc0) == 0) {
         val number: u8 = tag & 0x1f;
-        if ((tag & 0x20) != 0) { ret tag == 0x30 || tag == 0x31; }
+        if ((tag & 0x20) != 0)                { ret tag == 0x30 || tag == 0x31; }
         if (number == 0x10 || number == 0x11) { ret false; }
     }
     ret true;
@@ -75,14 +75,14 @@ fun valid_public_content(tag: Tag, data: *u8, len: usize) bool {
         ret len == 1 && (data[0] == 0 || data[0] == 0xff);
     }
     if (tag == INTEGER) {
-        if (len == 0) { ret false; }
-        if (len > 1 && data[0] == 0 && (data[1] & 0x80) == 0) { ret false; }
+        if (len == 0)                                            { ret false; }
+        if (len > 1 && data[0] == 0 && (data[1] & 0x80) == 0)    { ret false; }
         if (len > 1 && data[0] == 0xff && (data[1] & 0x80) != 0) { ret false; }
         ret true;
     }
     if (tag == BIT_STRING) {
         if (len == 0 || data[0] > 7) { ret false; }
-        if (len == 1) { ret data[0] == 0; }
+        if (len == 1)                { ret data[0] == 0; }
         if (data[0] > 0) {
             val mask: u8 = ((1::u16 << data[0]) - 1)::u8;
             if ((data[len - 1] & mask) != 0) { ret false; }
@@ -92,12 +92,12 @@ fun valid_public_content(tag: Tag, data: *u8, len: usize) bool {
     if (tag == NULL) { ret len == 0; }
     if (tag == OBJECT_ID) {
         if (len == 0) { ret false; }
-        var start: bool = true;
-        var i: usize = 0;
+        var start: bool  = true;
+        var i:     usize = 0;
         for (i < len) {
             if (start && data[i] == 0x80) { ret false; }
             start = (data[i] & 0x80) == 0;
-            i = i + 1;
+            i     = i + 1;
         }
         ret start;
     }
@@ -108,32 +108,32 @@ fun valid_public_content(tag: Tag, data: *u8, len: usize) bool {
 fun valid_secret_content(tag: Tag, data: *^u8, len: usize) bool {
     if (len > 0 && data == nil) { ret false; }
     if (tag == BOOLEAN) {
-        ret len == 1 && (data[0]:^ == 0 || data[0]:^ == 0xff);
+        ret len == 1 && (data[0]:>u8 == 0 || data[0]:>u8 == 0xff);
     }
     if (tag == INTEGER) {
-        if (len == 0) { ret false; }
-        if (len > 1 && data[0]:^ == 0 && (data[1]:^ & 0x80) == 0) { ret false; }
-        if (len > 1 && data[0]:^ == 0xff && (data[1]:^ & 0x80) != 0) { ret false; }
+        if (len == 0)                                                    { ret false; }
+        if (len > 1 && data[0]:>u8 == 0 && (data[1]:>u8 & 0x80) == 0)    { ret false; }
+        if (len > 1 && data[0]:>u8 == 0xff && (data[1]:>u8 & 0x80) != 0) { ret false; }
         ret true;
     }
     if (tag == BIT_STRING) {
-        if (len == 0 || data[0]:^ > 7) { ret false; }
-        if (len == 1) { ret data[0]:^ == 0; }
-        if (data[0]:^ > 0) {
-            val mask: u8 = ((1::u16 << data[0]:^) - 1)::u8;
-            if ((data[len - 1]:^ & mask) != 0) { ret false; }
+        if (len == 0 || data[0]:>u8 > 7) { ret false; }
+        if (len == 1)                    { ret data[0]:>u8 == 0; }
+        if (data[0]:>u8 > 0) {
+            val mask: u8 = ((1::u16 << data[0]:>u8) - 1)::u8;
+            if ((data[len - 1]:>u8 & mask) != 0) { ret false; }
         }
         ret true;
     }
     if (tag == NULL) { ret len == 0; }
     if (tag == OBJECT_ID) {
         if (len == 0) { ret false; }
-        var start: bool = true;
-        var i: usize = 0;
+        var start: bool  = true;
+        var i:     usize = 0;
         for (i < len) {
-            if (start && data[i]:^ == 0x80) { ret false; }
-            start = (data[i]:^ & 0x80) == 0;
-            i = i + 1;
+            if (start && data[i]:>u8 == 0x80) { ret false; }
+            start = (data[i]:>u8 & 0x80) == 0;
+            i     = i + 1;
         }
         ret start;
     }
@@ -148,7 +148,7 @@ fun read_length(data: *u8, available: usize, length: *usize,
     val first: u8 = data[0];
     if ((first & 0x80) == 0) {
         @length = first::usize;
-        @width = 1;
+        @width  = 1;
         ret contracts.OK;
     }
     val count: usize = (first & 0x7f)::usize;
@@ -156,16 +156,16 @@ fun read_length(data: *u8, available: usize, length: *usize,
         ret contracts.INVALID_INPUT;
     }
     var result: usize = 0;
-    var i: usize = 0;
+    var i:      usize = 0;
     for (i < count) {
         val value: usize = data[1 + i]::usize;
         if (result > ((0 - 1) - value) >> 8) { ret contracts.INVALID_INPUT; }
         result = (result << 8) | value;
-        i = i + 1;
+        i      = i + 1;
     }
     if (result < 128) { ret contracts.INVALID_INPUT; }
     @length = result;
-    @width = 1 + count;
+    @width  = 1 + count;
     ret contracts.OK;
 }
 
@@ -175,27 +175,27 @@ fun read_secret_length(data: *^u8, available: usize, length: *usize,
     if (available == 0 || data == nil || length == nil || width == nil) {
         ret contracts.INVALID_INPUT;
     }
-    val first: u8 = data[0]:^;
+    val first: u8 = data[0]:>u8;
     if ((first & 0x80) == 0) {
         @length = first::usize;
-        @width = 1;
+        @width  = 1;
         ret contracts.OK;
     }
     val count: usize = (first & 0x7f)::usize;
-    if (count == 0 || count > 8 || count > available - 1 || data[1]:^ == 0) {
+    if (count == 0 || count > 8 || count > available - 1 || data[1]:>u8 == 0) {
         ret contracts.INVALID_INPUT;
     }
     var result: usize = 0;
-    var i: usize = 0;
+    var i:      usize = 0;
     for (i < count) {
-        val value: usize = (data[1 + i]:^)::usize;
+        val value: usize = (data[1 + i]:>u8)::usize;
         if (result > ((0 - 1) - value) >> 8) { ret contracts.INVALID_INPUT; }
         result = (result << 8) | value;
-        i = i + 1;
+        i      = i + 1;
     }
     if (result < 128) { ret contracts.INVALID_INPUT; }
     @length = result;
-    @width = 1 + count;
+    @width  = 1 + count;
     ret contracts.OK;
 }
 
@@ -205,13 +205,13 @@ pub fun next(value: *Cursor, output: *Element) contracts.Error {
     if (value.offset == value.input.len || value.input.data == nil) {
         ret contracts.INVALID_INPUT;
     }
-    val start: usize = value.offset;
+    val start:     usize = value.offset;
     val remaining: usize = value.input.len - start;
     if (remaining < 2) { ret contracts.INVALID_INPUT; }
     val tag: Tag = value.input.data[start];
     if (!valid_tag(tag)) { ret contracts.INVALID_INPUT; }
-    var content_len: usize = 0;
-    var length_width: usize = 0;
+    var content_len:   usize           = 0;
+    var length_width:  usize           = 0;
     val length_status: contracts.Error = read_length(?value.input.data[start + 1],
         remaining - 1, ?content_len, ?length_width);
     if (length_status != contracts.OK) { ret length_status; }
@@ -224,7 +224,7 @@ pub fun next(value: *Cursor, output: *Element) contracts.Error {
     if (!valid_public_content(tag, content, content_len)) {
         ret contracts.INVALID_INPUT;
     }
-    output.tag = tag;
+    output.tag     = tag;
     output.content = contracts.Bytes{data: content, len: content_len};
     output.encoded = contracts.Bytes{data: ?value.input.data[start],
         len: header_len + content_len};
@@ -239,13 +239,13 @@ pub fun next_secret(value: *SecretCursor, output: *SecretElement) contracts.Erro
     if (value.offset == value.input.len || value.input.data == nil) {
         ret contracts.INVALID_INPUT;
     }
-    val start: usize = value.offset;
+    val start:     usize = value.offset;
     val remaining: usize = value.input.len - start;
     if (remaining < 2) { ret contracts.INVALID_INPUT; }
-    val tag: Tag = value.input.data[start]:^;
+    val tag: Tag = value.input.data[start]:>u8;
     if (!valid_tag(tag)) { ret contracts.INVALID_INPUT; }
-    var content_len: usize = 0;
-    var length_width: usize = 0;
+    var content_len:   usize           = 0;
+    var length_width:  usize           = 0;
     val length_status: contracts.Error = read_secret_length(
         ?value.input.data[start + 1], remaining - 1, ?content_len, ?length_width);
     if (length_status != contracts.OK) { ret length_status; }
@@ -258,7 +258,7 @@ pub fun next_secret(value: *SecretCursor, output: *SecretElement) contracts.Erro
     if (!valid_secret_content(tag, content, content_len)) {
         ret contracts.INVALID_INPUT;
     }
-    output.tag = tag;
+    output.tag     = tag;
     output.content = contracts.SecretBytes{data: content, len: content_len};
     output.encoded = contracts.SecretBytes{data: ?value.input.data[start],
         len: header_len + content_len};
@@ -299,11 +299,11 @@ fun validate_secret_tree(input: contracts.SecretBytes, depth: usize) bool {
 
 pub fun exact(input: contracts.Bytes, output: *Element) contracts.Error {
     if (output == nil) { ret contracts.INVALID_INPUT; }
-    var value: Cursor = cursor(input);
+    var value:  Cursor          = cursor(input);
     var parsed: Element;
     val status: contracts.Error = next(?value, ?parsed);
     if (status != contracts.OK) { ret status; }
-    if (!complete(?value)) { ret contracts.INVALID_INPUT; }
+    if (!complete(?value))      { ret contracts.INVALID_INPUT; }
     if ((parsed.tag & 0x20) != 0 &&
         !validate_public_tree(parsed.content, 1)) { ret contracts.INVALID_INPUT; }
     @output = parsed;
@@ -314,10 +314,10 @@ pub fun exact(input: contracts.Bytes, output: *Element) contracts.Error {
 pub fun exact_secret(input: contracts.SecretBytes,
     output: *SecretElement) contracts.Error {
     if (output == nil) { ret contracts.INVALID_INPUT; }
-    var value: SecretCursor = secret_cursor(input);
+    var value:  SecretCursor    = secret_cursor(input);
     var parsed: SecretElement;
     val status: contracts.Error = next_secret(?value, ?parsed);
-    if (status != contracts.OK) { ret status; }
+    if (status != contracts.OK)   { ret status; }
     if (!secret_complete(?value)) { ret contracts.INVALID_INPUT; }
     if ((parsed.tag & 0x20) != 0 &&
         !validate_secret_tree(parsed.content, 1)) { ret contracts.INVALID_INPUT; }
@@ -329,9 +329,9 @@ pub fun enter(parent: *Cursor, element: *Element,
     child: *Cursor) contracts.Error {
     if (parent == nil || element == nil || child == nil ||
         parent.depth >= MAX_DEPTH) { ret contracts.INVALID_INPUT; }
-    child.input = element.content;
+    child.input  = element.content;
     child.offset = 0;
-    child.depth = parent.depth + 1;
+    child.depth  = parent.depth + 1;
     ret contracts.OK;
 }
 
@@ -339,9 +339,9 @@ pub fun enter_secret(parent: *SecretCursor, element: *SecretElement,
     child: *SecretCursor) contracts.Error {
     if (parent == nil || element == nil || child == nil ||
         parent.depth >= MAX_DEPTH) { ret contracts.INVALID_INPUT; }
-    child.input = element.content;
+    child.input  = element.content;
     child.offset = 0;
-    child.depth = parent.depth + 1;
+    child.depth  = parent.depth + 1;
     ret contracts.OK;
 }
 
@@ -352,7 +352,8 @@ pub fun positive_integer(element: *Element, output: *contracts.Bytes) contracts.
     if (element.content.data[0] == 0) {
         offset = 1;
         if (offset == element.content.len) { ret contracts.INVALID_INPUT; }
-    } or {
+    }
+    or {
         if ((element.content.data[0] & 0x80) != 0) { ret contracts.INVALID_INPUT; }
     }
     @output = contracts.Bytes{data: ?element.content.data[offset],
@@ -366,11 +367,12 @@ pub fun positive_secret_integer(element: *SecretElement,
     if (element == nil || output == nil || element.tag != INTEGER ||
         element.content.len == 0) { ret contracts.INVALID_INPUT; }
     var offset: usize = 0;
-    if (element.content.data[0]:^ == 0) {
+    if (element.content.data[0]:>u8 == 0) {
         offset = 1;
         if (offset == element.content.len) { ret contracts.INVALID_INPUT; }
-    } or {
-        if ((element.content.data[0]:^ & 0x80) != 0) {
+    }
+    or {
+        if ((element.content.data[0]:>u8 & 0x80) != 0) {
             ret contracts.INVALID_INPUT;
         }
     }
@@ -383,7 +385,10 @@ fun length_width(content_len: usize) usize {
     if (content_len < 128) { ret 1; }
     var value: usize = content_len;
     var bytes: usize = 0;
-    for (value > 0) { bytes = bytes + 1; value = value >> 8; }
+    for (value > 0) {
+        bytes = bytes + 1;
+        value = value >> 8;
+    }
     ret 1 + bytes;
 }
 
@@ -400,12 +405,15 @@ fun write_length(output: *u8, content_len: usize) usize {
     }
     var value: usize = content_len;
     var bytes: usize = 0;
-    for (value > 0) { bytes = bytes + 1; value = value >> 8; }
+    for (value > 0) {
+        bytes = bytes + 1;
+        value = value >> 8;
+    }
     output[0] = (0x80 | bytes)::u8;
     var i: usize = 0;
     for (i < bytes) {
         output[1 + i] = (content_len >> ((bytes - 1 - i) << 3))::u8;
-        i = i + 1;
+        i             = i + 1;
     }
     ret 1 + bytes;
 }

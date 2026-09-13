@@ -64,18 +64,19 @@ pub fun destroy_point(point: *Point) {
     destroy_uint(?point.z);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun nonzero_bit(value: ^u64) ^u8 {
     ret ((value | (0 - value)) >> 63)::^u8;
 }
 
 #[oblivious]
 pub fun is_zero(value: *UInt) ^u8 {
-    var combined: ^u64 = 0;
-    var i: usize = 0;
+    var combined: ^u64  = 0;
+    var i:        usize = 0;
     for (i < 8) {
         combined = combined | value.limb[i];
-        i = i + 1;
+        i        = i + 1;
     }
     val result: ^u8 = 1 ^ nonzero_bit(combined);
     combined = 0;
@@ -84,11 +85,11 @@ pub fun is_zero(value: *UInt) ^u8 {
 
 #[oblivious]
 pub fun equal(left: *UInt, right: *UInt) ^u8 {
-    var difference: ^u64 = 0;
-    var i: usize = 0;
+    var difference: ^u64  = 0;
+    var i:          usize = 0;
     for (i < 8) {
         difference = difference | (left.limb[i] ^ right.limb[i]);
-        i = i + 1;
+        i          = i + 1;
     }
     val result: ^u8 = 1 ^ nonzero_bit(difference);
     difference = 0;
@@ -100,7 +101,7 @@ pub fun copy(output: *UInt, input: *UInt) {
     var i: usize = 0;
     for (i < 8) {
         output.limb[i] = input.limb[i];
-        i = i + 1;
+        i              = i + 1;
     }
 }
 
@@ -109,7 +110,7 @@ fun copy_constant(output: *UInt, input: *u64) {
     var i: usize = 0;
     for (i < 8) {
         output.limb[i] = input[i];
-        i = i + 1;
+        i              = i + 1;
     }
 }
 
@@ -119,28 +120,28 @@ pub fun set_small(output: *UInt, value: u64) {
     var i: usize = 1;
     for (i < 8) {
         output.limb[i] = 0;
-        i = i + 1;
+        i              = i + 1;
     }
 }
 
 #[oblivious]
 pub fun select(output: *UInt, left: *UInt, right: *UInt, choose_right: ^u8) {
-    val mask: ^u64 = 0 - choose_right::^u64;
-    var i: usize = 0;
+    val mask: ^u64  = 0 - choose_right::^u64;
+    var i:    usize = 0;
     for (i < 8) {
         output.limb[i] = (left.limb[i] & ~mask) | (right.limb[i] & mask);
-        i = i + 1;
+        i              = i + 1;
     }
 }
 
 #[oblivious]
 fun less_than_modulus(value: *UInt, modulus: *u64) ^u8 {
-    var borrow: ^u64 = 0;
-    var i: usize = 0;
+    var borrow: ^u64  = 0;
+    var i:      usize = 0;
     for (i < 8) {
         val difference: ^u64 = value.limb[i] - modulus[i] - borrow;
         borrow = difference >> 63;
-        i = i + 1;
+        i      = i + 1;
     }
     val result: ^u8 = borrow::^u8;
     borrow = 0;
@@ -149,27 +150,27 @@ fun less_than_modulus(value: *UInt, modulus: *u64) ^u8 {
 
 #[oblivious]
 fun add_mod(output: *UInt, left: *UInt, right: *UInt, modulus: *u64) {
-    var sum: UInt;
+    var sum:     UInt;
     var reduced: UInt;
-    var carry: ^u64 = 0;
-    var i: usize = 0;
+    var carry:   ^u64  = 0;
+    var i:       usize = 0;
     for (i < 8) {
         val word: ^u64 = left.limb[i] + right.limb[i] + carry;
         sum.limb[i] = word & WORD_MASK;
-        carry = word >> 32;
-        i = i + 1;
+        carry       = word >> 32;
+        i           = i + 1;
     }
     var borrow: ^u64 = 0;
     i = 0;
     for (i < 8) {
         val difference: ^u64 = sum.limb[i] - modulus[i] - borrow;
         reduced.limb[i] = difference & WORD_MASK;
-        borrow = difference >> 63;
-        i = i + 1;
+        borrow          = difference >> 63;
+        i               = i + 1;
     }
     val use_reduced: ^u8 = (carry | (borrow ^ 1))::^u8;
     select(output, ?sum, ?reduced, use_reduced);
-    carry = 0;
+    carry  = 0;
     borrow = 0;
     destroy_uint(?sum);
     destroy_uint(?reduced);
@@ -178,45 +179,45 @@ fun add_mod(output: *UInt, left: *UInt, right: *UInt, modulus: *u64) {
 #[oblivious]
 fun subtract_mod(output: *UInt, left: *UInt, right: *UInt, modulus: *u64) {
     var difference: UInt;
-    var borrow: ^u64 = 0;
-    var i: usize = 0;
+    var borrow:     ^u64  = 0;
+    var i:          usize = 0;
     for (i < 8) {
         val word: ^u64 = left.limb[i] - right.limb[i] - borrow;
         difference.limb[i] = word & WORD_MASK;
-        borrow = word >> 63;
-        i = i + 1;
+        borrow             = word >> 63;
+        i                  = i + 1;
     }
-    val mask: ^u64 = 0 - borrow;
+    val mask:  ^u64 = 0 - borrow;
     var carry: ^u64 = 0;
     i = 0;
     for (i < 8) {
         val word: ^u64 = difference.limb[i] + (modulus[i] & mask) + carry;
         output.limb[i] = word & WORD_MASK;
-        carry = word >> 32;
-        i = i + 1;
+        carry          = word >> 32;
+        i              = i + 1;
     }
     borrow = 0;
-    carry = 0;
+    carry  = 0;
     destroy_uint(?difference);
 }
 
 #[oblivious]
 fun multiply_mod(output: *UInt, left: *UInt, right: *UInt, modulus: *u64) {
-    var result: UInt;
-    var addend: UInt;
+    var result:   UInt;
+    var addend:   UInt;
     var selected: UInt;
     set_small(?result, 0);
     copy(?addend, left);
     var bit: usize = 0;
     for (bit < 256) {
         val limb_index: usize = bit >> 5;
-        val shift: usize = bit & 31;
-        val take: ^u8 = ((right.limb[limb_index] >> shift) & 1)::^u8;
-        val mask: ^u64 = 0 - take::^u64;
-        var i: usize = 0;
+        val shift:      usize = bit & 31;
+        val take:       ^u8   = ((right.limb[limb_index] >> shift) & 1)::^u8;
+        val mask:       ^u64  = 0 - take::^u64;
+        var i:          usize = 0;
         for (i < 8) {
             selected.limb[i] = addend.limb[i] & mask;
-            i = i + 1;
+            i                = i + 1;
         }
         add_mod(?result, ?result, ?selected, modulus);
         add_mod(?addend, ?addend, ?addend, modulus);
@@ -242,7 +243,7 @@ fun inverse_mod(output: *UInt, input: *UInt, modulus: *u64, exponent: *u64) {
         position = position - 1;
         square_mod(?result, ?result, modulus);
         val limb_index: usize = position >> 5;
-        val shift: usize = position & 31;
+        val shift:      usize = position & 31;
         if (((exponent[limb_index] >> shift) & 1) == 1) {
             multiply_mod(?result, ?result, input, modulus);
         }
@@ -294,13 +295,13 @@ pub fun scalar_inverse(output: *UInt, input: *UInt) {
 #[oblivious]
 pub fun reduce_scalar_once(value: *UInt) {
     var reduced: UInt;
-    var borrow: ^u64 = 0;
-    var i: usize = 0;
+    var borrow:  ^u64  = 0;
+    var i:       usize = 0;
     for (i < 8) {
         val difference: ^u64 = value.limb[i] - ORDER[i] - borrow;
         reduced.limb[i] = difference & WORD_MASK;
-        borrow = difference >> 63;
-        i = i + 1;
+        borrow          = difference >> 63;
+        i               = i + 1;
     }
     select(value, ?reduced, value, borrow::^u8);
     borrow = 0;
@@ -336,12 +337,12 @@ pub fun encode_secret(output: *^u8, input: *UInt) {
     var word: usize = 0;
     for (word < 8) {
         val offset: usize = 28 - (word << 2);
-        val value: ^u64 = input.limb[word];
-        output[offset] = (value >> 24)::^u8;
+        val value:  ^u64  = input.limb[word];
+        output[offset]     = (value >> 24)::^u8;
         output[offset + 1] = (value >> 16)::^u8;
         output[offset + 2] = (value >> 8)::^u8;
         output[offset + 3] = value::^u8;
-        word = word + 1;
+        word               = word + 1;
     }
 }
 
@@ -350,12 +351,12 @@ pub fun encode_public(output: *u8, base: usize, input: *UInt) {
     var word: usize = 0;
     for (word < 8) {
         val offset: usize = 28 - (word << 2);
-        val value: ^u64 = input.limb[word];
-        output[base + offset] = (value >> 24)::^u8:^;
-        output[base + offset + 1] = (value >> 16)::^u8:^;
-        output[base + offset + 2] = (value >> 8)::^u8:^;
-        output[base + offset + 3] = value::^u8:^;
-        word = word + 1;
+        val value:  ^u64  = input.limb[word];
+        output[base + offset]     = (value >> 24)::^u8:>u8;
+        output[base + offset + 1] = (value >> 16)::^u8:>u8;
+        output[base + offset + 2] = (value >> 8)::^u8:>u8;
+        output[base + offset + 3] = value::^u8:>u8;
+        word                      = word + 1;
     }
 }
 
@@ -399,15 +400,15 @@ pub fun point_is_infinity(point: *Point) ^u8 {
 
 #[oblivious]
 fun point_double(output: *Point, input: *Point) {
-    var delta: UInt;
-    var gamma: UInt;
-    var beta: UInt;
-    var alpha: UInt;
-    var first: UInt;
-    var second: UInt;
-    var temporary: UInt;
+    var delta:         UInt;
+    var gamma:         UInt;
+    var beta:          UInt;
+    var alpha:         UInt;
+    var first:         UInt;
+    var second:        UInt;
+    var temporary:     UInt;
     var gamma_squared: UInt;
-    var result: Point;
+    var result:        Point;
 
     field_square(?delta, ?input.z);
     field_square(?gamma, ?input.y);
@@ -453,26 +454,26 @@ fun point_double(output: *Point, input: *Point) {
 
 #[oblivious]
 pub fun point_add(output: *Point, left: *Point, right: *Point) {
-    var left_saved: Point;
+    var left_saved:  Point;
     var right_saved: Point;
     point_copy(?left_saved, left);
     point_copy(?right_saved, right);
-    val left_infinity: ^u8 = point_is_infinity(?left_saved);
+    val left_infinity:  ^u8 = point_is_infinity(?left_saved);
     val right_infinity: ^u8 = point_is_infinity(?right_saved);
-    var z1z1: UInt;
-    var z2z2: UInt;
-    var u1: UInt;
-    var u2: UInt;
-    var s1: UInt;
-    var s2: UInt;
-    var h: UInt;
-    var i_value: UInt;
-    var j: UInt;
-    var r: UInt;
-    var v: UInt;
-    var temporary: UInt;
-    var generic: Point;
-    var doubled: Point;
+    var z1z1:           UInt;
+    var z2z2:           UInt;
+    var u1:             UInt;
+    var u2:             UInt;
+    var s1:             UInt;
+    var s2:             UInt;
+    var h:              UInt;
+    var i_value:        UInt;
+    var j:              UInt;
+    var r:              UInt;
+    var v:              UInt;
+    var temporary:      UInt;
+    var generic:        Point;
+    var doubled:        Point;
 
     field_square(?z1z1, ?left.z);
     field_square(?z2z2, ?right.z);
@@ -532,16 +533,16 @@ pub fun point_add(output: *Point, left: *Point, right: *Point) {
 
 #[oblivious]
 pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
-    var result: Point;
-    var addend: Point;
+    var result:   Point;
+    var addend:   Point;
     var selected: Point;
     point_infinity(?result);
     point_copy(?addend, point);
     var bit: usize = 0;
     for (bit < 256) {
         val limb_index: usize = bit >> 5;
-        val shift: usize = bit & 31;
-        val take: ^u8 = ((scalar.limb[limb_index] >> shift) & 1)::^u8;
+        val shift:      usize = bit & 31;
+        val take:       ^u8   = ((scalar.limb[limb_index] >> shift) & 1)::^u8;
         point_infinity(?selected);
         point_select(?selected, ?selected, ?addend, take);
         point_add(?result, ?result, ?selected);
@@ -556,9 +557,9 @@ pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
 
 #[oblivious]
 pub fun to_affine(x: *UInt, y: *UInt, point: *Point) {
-    var inverse: UInt;
+    var inverse:         UInt;
     var inverse_squared: UInt;
-    var inverse_cubed: UInt;
+    var inverse_cubed:   UInt;
     field_inverse(?inverse, ?point.z);
     field_square(?inverse_squared, ?inverse);
     field_multiply(?inverse_cubed, ?inverse_squared, ?inverse);
@@ -576,9 +577,9 @@ pub fun parse_point(output: *Point, input: *u8) ^u8 {
     set_small(?output.z, 1);
     val x_canonical: ^u8 = less_than_modulus(?output.x, (?PRIME[0]):~*u64);
     val y_canonical: ^u8 = less_than_modulus(?output.y, (?PRIME[0]):~*u64);
-    var left: UInt;
-    var right: UInt;
-    var temporary: UInt;
+    var left:        UInt;
+    var right:       UInt;
+    var temporary:   UInt;
     field_square(?left, ?output.y);
     field_square(?right, ?output.x);
     field_multiply(?right, ?right, ?output.x);
@@ -595,7 +596,7 @@ pub fun parse_point(output: *Point, input: *u8) ^u8 {
 }
 
 test "p256 internal: constants have canonical low words" {
-    if (PRIME[0] != 0xFFFFFFFF || ORDER[0] != 0xFC632551) { ret 1; }
+    if (PRIME[0] != 0xFFFFFFFF || ORDER[0] != 0xFC632551)             { ret 1; }
     if (GENERATOR_X[7] != 0x6B17D1F2 || GENERATOR_Y[0] != 0x37BF51F5) { ret 2; }
     ret 0;
 }

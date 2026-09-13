@@ -45,18 +45,18 @@ fun valid_sha256(context: *Sha256) bool {
         context.inner.block_len < sha2.SHA256_BLOCK_SIZE &&
         context.inner.total <= sha2.SHA256_MAX_BYTES &&
         context.inner.block_len ==
-            (context.inner.total % sha2.SHA256_BLOCK_SIZE::u64)::usize;
+        (context.inner.total % sha2.SHA256_BLOCK_SIZE::u64)::usize;
 }
 
 fun valid_sha384(context: *Sha384) bool {
     ret context != nil && context.state == ACTIVE &&
         context.inner.block_len < sha2.SHA384_BLOCK_SIZE &&
         context.inner.block_len ==
-            (context.inner.total % sha2.SHA384_BLOCK_SIZE::u64)::usize;
+        (context.inner.total % sha2.SHA384_BLOCK_SIZE::u64)::usize;
 }
 
 pub fun init_sha256(context: *Sha256) contracts.Error {
-    if (context == nil) { ret contracts.INVALID_INPUT; }
+    if (context == nil)         { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
     sha2.destroy256(?context.inner);
     sha2.init256(?context.inner);
@@ -65,7 +65,7 @@ pub fun init_sha256(context: *Sha256) contracts.Error {
 }
 
 pub fun init_sha384(context: *Sha384) contracts.Error {
-    if (context == nil) { ret contracts.INVALID_INPUT; }
+    if (context == nil)         { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
     sha2.destroy384(?context.inner);
     sha2.init384(?context.inner);
@@ -74,8 +74,8 @@ pub fun init_sha384(context: *Sha384) contracts.Error {
 }
 
 pub fun update_sha256(context: *Sha256, input: contracts.Bytes) contracts.Error {
-    if (context == nil) { ret contracts.INVALID_INPUT; }
-    if (!valid_sha256(context)) { ret contracts.INVALID_STATE; }
+    if (context == nil)                     { ret contracts.INVALID_INPUT; }
+    if (!valid_sha256(context))             { ret contracts.INVALID_STATE; }
     if (input.len > 0 && input.data == nil) { ret contracts.INVALID_INPUT; }
     if (!sha2.update256_public(?context.inner, input.data, input.len)) {
         ret contracts.INVALID_INPUT;
@@ -84,8 +84,8 @@ pub fun update_sha256(context: *Sha256, input: contracts.Bytes) contracts.Error 
 }
 
 pub fun update_sha384(context: *Sha384, input: contracts.Bytes) contracts.Error {
-    if (context == nil) { ret contracts.INVALID_INPUT; }
-    if (!valid_sha384(context)) { ret contracts.INVALID_STATE; }
+    if (context == nil)                     { ret contracts.INVALID_INPUT; }
+    if (!valid_sha384(context))             { ret contracts.INVALID_STATE; }
     if (input.len > 0 && input.data == nil) { ret contracts.INVALID_INPUT; }
     if (!sha2.update384_public(?context.inner, input.data, input.len)) {
         ret contracts.INVALID_INPUT;
@@ -108,14 +108,14 @@ pub fun snapshot_sha256(context: *Sha256,
     if (output.data == nil) {
         ret contracts.Operation{error: contracts.INVALID_INPUT, written: 0};
     }
-    var copy: sha2.State256 = context.inner;
+    var copy:   sha2.State256 = context.inner;
     var digest: [32]^u8;
     sha2.final256(?copy, ?digest[0]);
     sha2.destroy256(?copy);
     var i: usize = 0;
     for (i < SHA256_DIGEST_SIZE) {
-        output.data[i] = digest[i]:^;
-        i = i + 1;
+        output.data[i] = digest[i]:>u8;
+        i              = i + 1;
     }
     ct.zeroize(?digest[0], SHA256_DIGEST_SIZE);
     ret contracts.Operation{error: contracts.OK, written: SHA256_DIGEST_SIZE};
@@ -136,14 +136,14 @@ pub fun snapshot_sha384(context: *Sha384,
     if (output.data == nil) {
         ret contracts.Operation{error: contracts.INVALID_INPUT, written: 0};
     }
-    var copy: sha2.State384 = context.inner;
+    var copy:   sha2.State384 = context.inner;
     var digest: [48]^u8;
     sha2.final384(?copy, ?digest[0]);
     sha2.destroy384(?copy);
     var i: usize = 0;
     for (i < SHA384_DIGEST_SIZE) {
-        output.data[i] = digest[i]:^;
-        i = i + 1;
+        output.data[i] = digest[i]:>u8;
+        i              = i + 1;
     }
     ct.zeroize(?digest[0], SHA384_DIGEST_SIZE);
     ret contracts.Operation{error: contracts.OK, written: SHA384_DIGEST_SIZE};

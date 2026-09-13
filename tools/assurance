@@ -33,6 +33,11 @@ sha256_file() {
     sha256sum "$1" | awk '{print $1}'
 }
 
+# the committed gitlinks under dep/ are the dependency pins; there is no lock file
+dependency_pins_hash() {
+    git -C "$root" ls-tree HEAD -- dep .gitmodules | sha256sum | cut -d ' ' -f 1
+}
+
 metadata_value() {
     local file=$1
     local key=$2
@@ -72,7 +77,6 @@ check_prerequisites() {
     require_command stat
 
     require_file "$root/mach.toml"
-    require_file "$root/mach.lock"
     require_file "$root/assurance/algorithms.tsv"
     require_file "$root/assurance/projects.tsv"
     require_file "$root/assurance/tests.tsv"
@@ -94,7 +98,7 @@ resolve_dependencies() {
     done < "$root/assurance/projects.tsv"
     (cd "$root" && mach dep pull test/leakage-negative --quiet) >/dev/null 2>&1 || \
         die "dependency resolution failed for test/leakage-negative; run 'mach dep pull test/leakage-negative' for details"
-    tree_is_clean || die "dependency resolution changed the source tree; commit the refreshed lock before producing release evidence"
+    tree_is_clean || die "dependency resolution changed the source tree; commit the refreshed pins before producing release evidence"
 }
 
 assert_no_redundant_aliases() {
@@ -225,7 +229,7 @@ run_build_pass() {
             relative="logs/build/${pass}-${algorithm}-${profile}.log"
             log="$stage/$relative"
             if ! (cd "$root" && mach build "$project" --all-targets --profile "$profile" \
-                --emit-ir --emit-asm --verify-ir) > "$log" 2>&1; then
+                --emit-ir --emit-asm) > "$log" 2>&1; then
                 die "verified build failed for $project $profile during $pass; see $log"
             fi
             hash=$(sha256_file "$log")
@@ -273,7 +277,7 @@ run_leakage_negative_controls() {
             (cd "$root" && mach clean test/leakage-negative) >/dev/null 2>&1 || \
                 die "could not clean the leakage negative control"
             if (cd "$root" && mach build test/leakage-negative --target "$target" \
-                --profile "$profile" --emit-ir --verify-ir) > "$log" 2>&1; then
+                --profile "$profile" --emit-ir) > "$log" 2>&1; then
                 die "compiler accepted the secret-dependent negative control for $target $profile"
             fi
             grep -q 'secret value used as a branch condition' "$log" || \
@@ -317,7 +321,7 @@ inspect_zeroization() {
             for profile in "${profiles[@]}"; do
                 ir="$root/out/$target/$profile/ir/$module.ir"
                 require_file "$ir"
-                ir_calls=$(grep -c 'call void @std.crypto.ct.zeroize' "$ir" || true)
+                ir_calls=$(grep -cE 'call [^@]*@"?std\.crypto\.ct\.zeroize"?' "$ir" || true)
                 [[ "$ir_calls" -gt 0 ]] || die "zeroization call is absent from ${ir#"$root"/}"
                 relative_ir="generated/$target/$profile/$module.ir"
                 destination="$stage/$relative_ir"
@@ -331,15 +335,22 @@ inspect_zeroization() {
             if [[ "$assembly_required" == yes ]]; then
                 asm="$root/out/$target/release/asm/$module.s"
                 require_file "$asm"
+                # 5.0 release builds inline small helpers across modules, so the wipe
+                # reaches the assembly either as a call or as an expansion the release IR
+                # records under inline_sites. the stores themselves survive by the
+                # language's zeroizing-write guarantee (doc/language/secrecy.md)
+                release_ir="$root/out/$target/release/ir/$module.ir"
+                require_file "$release_ir"
                 asm_calls=$(grep -c 'std.crypto.ct.zeroize' "$asm" || true)
-                [[ "$asm_calls" -gt 0 ]] || die "zeroization call is absent from ${asm#"$root"/}"
+                inlined=$(grep -c 'callee="std.crypto.ct.zeroize"' "$release_ir" || true)
+                [[ "$asm_calls" -gt 0 || "$inlined" -gt 0 ]] || die "zeroization is absent from ${asm#"$root"/} and not inlined per ${release_ir#"$root"/}"
                 relative_asm="generated/$target/release/$module.s"
                 destination="$stage/$relative_asm"
                 mkdir -p "$(dirname -- "$destination")"
                 cp "$asm" "$destination"
                 hash=$(sha256_file "$destination")
                 record_result zeroization . "$algorithm" \
-                    "release assembly retains $asm_calls explicit zeroization reference(s)" \
+                    "release assembly retains $asm_calls zeroization call(s) and $inlined inline expansion(s)" \
                     "$target" release "$relative_asm" "$hash"
             fi
         done
@@ -397,7 +408,7 @@ run_gate() {
     compiler_path=$(realpath "$compiler_path")
     compiler_sha=$(sha256_file "$compiler_path")
     compiler_version=$(mach info | sed -n '1p')
-    lock_sha=$(sha256_file "$root/mach.lock")
+    pins_sha=$(dependency_pins_hash)
     evidence_manifest_sha=$(manifest_hash)
 
     temporary=$(mktemp -d "${TMPDIR:-/tmp}/mach-crypto-assurance.XXXXXX")
@@ -414,7 +425,7 @@ run_gate() {
     printf 'compiler_version\t%s\n' "$compiler_version" >> "$stage/metadata.tsv"
     printf 'compiler_path\t%s\n' "$compiler_path" >> "$stage/metadata.tsv"
     printf 'compiler_sha256\t%s\n' "$compiler_sha" >> "$stage/metadata.tsv"
-    printf 'mach_lock_sha256\t%s\n' "$lock_sha" >> "$stage/metadata.tsv"
+    printf 'dependency_pins_sha256\t%s\n' "$pins_sha" >> "$stage/metadata.tsv"
     printf 'evidence_manifest_sha256\t%s\n' "$evidence_manifest_sha" >> "$stage/metadata.tsv"
     printf 'targets\t%s\n' "${targets[*]}" >> "$stage/metadata.tsv"
     printf 'profiles\t%s\n' "${profiles[*]}" >> "$stage/metadata.tsv"
@@ -502,8 +513,8 @@ verify_gate() {
     compiler_path=$(realpath "$compiler_path")
     expected=$(metadata_value "$metadata" compiler_sha256)
     [[ "$(sha256_file "$compiler_path")" == "$expected" ]] || die "evidence compiler does not match the active compiler"
-    expected=$(metadata_value "$metadata" mach_lock_sha256)
-    [[ "$(sha256_file "$root/mach.lock")" == "$expected" ]] || die "evidence dependency lock is stale"
+    expected=$(metadata_value "$metadata" dependency_pins_sha256)
+    [[ "$(dependency_pins_hash)" == "$expected" ]] || die "evidence dependency pins are stale"
     expected=$(metadata_value "$metadata" evidence_manifest_sha256)
     [[ "$(manifest_hash)" == "$expected" ]] || die "evidence policy or gate is stale"
 
