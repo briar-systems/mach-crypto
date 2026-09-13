@@ -2,7 +2,7 @@
 
 use crypto.contracts;
 use stream: crypto.internal.chacha20;
-use mac: crypto.internal.poly1305;
+use mac:    crypto.internal.poly1305;
 use std.crypto.ct;
 use std.types.size.usize;
 
@@ -39,26 +39,29 @@ fun wipe_contexts(chacha: *stream.Context, poly: *mac.Context, key_block: *^u8, 
 #[oblivious]
 pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
     plaintext: contracts.SecretBytes, output: contracts.Buffer) contracts.Operation {
-    if (key.len != KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
-    if (key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (key.len != KEY_SIZE)                          { ret failed(contracts.INVALID_KEY); }
+    if (key.data == nil)                              { ret failed(contracts.INVALID_INPUT); }
     if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
-    if (aad.len != 0 && aad.data == nil) { ret failed(contracts.INVALID_INPUT); }
-    if (plaintext.len != 0 && plaintext.data == nil) { ret failed(contracts.INVALID_INPUT); }
-    if (plaintext.len > MAX_PLAINTEXT_SIZE) { ret failed(contracts.INVALID_INPUT); }
+    if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
+    if (plaintext.len != 0 && plaintext.data == nil)  { ret failed(contracts.INVALID_INPUT); }
+    if (plaintext.len > MAX_PLAINTEXT_SIZE)           { ret failed(contracts.INVALID_INPUT); }
     val required: usize = plaintext.len + TAG_SIZE;
     if (output.capacity < required) { ret failed(contracts.OUTPUT_TOO_SMALL); }
-    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (output.data == nil)         { ret failed(contracts.INVALID_INPUT); }
 
     ct.begin();
-    var chacha: stream.Context;
+    var chacha:       stream.Context;
     val stream_ready: contracts.Error = stream.init(?chacha, key, nonce);
-    if (stream_ready != contracts.OK) { ct.end(); ret failed(stream_ready); }
+    if (stream_ready != contracts.OK) {
+        ct.end();
+        ret failed(stream_ready);
+    }
     var key_block: [64]^u8;
-    var tag: [16]^u8;
+    var tag:       [16]^u8;
     ct.zeroize(?key_block[0], 64);
     ct.zeroize(?tag[0], 16);
     stream.block(?chacha, 0, ?key_block[0]);
-    var poly: mac.Context;
+    var poly:      mac.Context;
     val mac_ready: contracts.Error = mac.init(?poly,
         contracts.SecretBytes{data: ?key_block[0], len: 32});
     if (mac_ready != contracts.OK) {
@@ -71,16 +74,16 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
 
     var keystream: [64]^u8;
     ct.zeroize(?keystream[0], 64);
-    var offset: usize = 0;
-    var counter: u32 = 1;
+    var offset:  usize = 0;
+    var counter: u32   = 1;
     for (offset < plaintext.len) {
         stream.block(?chacha, counter, ?keystream[0]);
         var take: usize = plaintext.len - offset;
         if (take > 64) { take = 64; }
         var i: usize = 0;
         for (i < take) {
-            output.data[offset + i] = (plaintext.data[offset + i] ^ keystream[i]):^;
-            i = i + 1;
+            output.data[offset + i] = (plaintext.data[offset + i] ^ keystream[i]):>u8;
+            i                       = i + 1;
         }
         offset = offset + take;
         if (offset < plaintext.len) { counter = counter + 1; }
@@ -91,8 +94,8 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     mac.final(?poly, ?tag[0]);
     var i: usize = 0;
     for (i < TAG_SIZE) {
-        output.data[plaintext.len + i] = tag[i]:^;
-        i = i + 1;
+        output.data[plaintext.len + i] = tag[i]:>u8;
+        i                              = i + 1;
     }
     wipe_contexts(?chacha, ?poly, ?key_block[0], ?tag[0]);
     ct.end();
@@ -108,28 +111,31 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
 #[oblivious]
 pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
     input: contracts.Bytes, output: contracts.SecretBuffer) contracts.Operation {
-    if (key.len != KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
-    if (key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (key.len != KEY_SIZE)                          { ret failed(contracts.INVALID_KEY); }
+    if (key.data == nil)                              { ret failed(contracts.INVALID_INPUT); }
     if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
-    if (aad.len != 0 && aad.data == nil) { ret failed(contracts.INVALID_INPUT); }
-    if (input.len < TAG_SIZE || input.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
+    if (input.len < TAG_SIZE || input.data == nil)    { ret failed(contracts.INVALID_INPUT); }
     val ciphertext_len: usize = input.len - TAG_SIZE;
-    if (ciphertext_len > MAX_PLAINTEXT_SIZE) { ret failed(contracts.INVALID_INPUT); }
-    if (output.capacity < ciphertext_len) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (ciphertext_len > MAX_PLAINTEXT_SIZE)       { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < ciphertext_len)          { ret failed(contracts.OUTPUT_TOO_SMALL); }
     if (ciphertext_len != 0 && output.data == nil) { ret failed(contracts.INVALID_INPUT); }
 
     ct.begin();
-    var chacha: stream.Context;
+    var chacha:       stream.Context;
     val stream_ready: contracts.Error = stream.init(?chacha, key, nonce);
-    if (stream_ready != contracts.OK) { ct.end(); ret failed(stream_ready); }
+    if (stream_ready != contracts.OK) {
+        ct.end();
+        ret failed(stream_ready);
+    }
     var key_block: [64]^u8;
-    var expected: [16]^u8;
-    var provided: [16]^u8;
+    var expected:  [16]^u8;
+    var provided:  [16]^u8;
     ct.zeroize(?key_block[0], 64);
     ct.zeroize(?expected[0], 16);
     ct.zeroize(?provided[0], 16);
     stream.block(?chacha, 0, ?key_block[0]);
-    var poly: mac.Context;
+    var poly:      mac.Context;
     val mac_ready: contracts.Error = mac.init(?poly,
         contracts.SecretBytes{data: ?key_block[0], len: 32});
     if (mac_ready != contracts.OK) {
@@ -146,11 +152,11 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     var i: usize = 0;
     for (i < TAG_SIZE) {
         provided[i] = input.data[ciphertext_len + i];
-        i = i + 1;
+        i           = i + 1;
     }
     val authenticated: ^u8 = ct.eq_bytes(?expected[0], ?provided[0], TAG_SIZE);
     ct.zeroize(?provided[0], 16);
-    if (authenticated:^ != 1) {
+    if (authenticated:>u8 != 1) {
         ct.zeroize(output.data, ciphertext_len);
         wipe_contexts(?chacha, ?poly, ?key_block[0], ?expected[0]);
         ct.end();
@@ -160,8 +166,8 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
 
     var keystream: [64]^u8;
     ct.zeroize(?keystream[0], 64);
-    var offset: usize = 0;
-    var counter: u32 = 1;
+    var offset:  usize = 0;
+    var counter: u32   = 1;
     for (offset < ciphertext_len) {
         stream.block(?chacha, counter, ?keystream[0]);
         var take: usize = ciphertext_len - offset;
@@ -169,7 +175,7 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
         i = 0;
         for (i < take) {
             output.data[offset + i] = input.data[offset + i] ^ keystream[i];
-            i = i + 1;
+            i                       = i + 1;
         }
         offset = offset + take;
         if (offset < ciphertext_len) { counter = counter + 1; }
@@ -182,6 +188,6 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
 
 test "chacha20-poly1305: tls and quic dimensions are fixed" {
     if (KEY_SIZE != 32 || NONCE_SIZE != 12 || TAG_SIZE != 16) { ret 1; }
-    if (MAX_PLAINTEXT_SIZE != 274877906880) { ret 1; }
+    if (MAX_PLAINTEXT_SIZE != 274877906880)                   { ret 1; }
     ret 0;
 }

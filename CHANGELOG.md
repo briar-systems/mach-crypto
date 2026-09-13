@@ -1,6 +1,14 @@
 # Changelog
 
-## [0.8.2] - 2026-09-02
+## [0.9.0] - 2026-09-13
+
+### Changed
+
+- Migrated to mach 5.0 and std 2.0.0 (#51): every fallible or absent outcome is a `res`, `opt` or `err` tag, `:^` is the typed `:>T` strip, the manifest is on the 5.0 schema and the dependency pins are the committed gitlinks under `dep/`.
+- Every `:^` declassification is now the typed `:>T` strip. The nested per-algorithm test projects take crypto as a path dependency.
+- `--verify-ir` dropped from CI and `tools/assurance`, as IR verification is mandatory in 5.0. The debug profile carries no debug info because 5.0 refuses `-g` on windows-x86_64, which the all-targets assurance build covers.
+- Assurance evidence records a hash of the committed `dep/` gitlinks in place of `mach.lock`, its IR detector matches the 5.0 spelling of a call, and the release assembly check accepts the inline expansion of `ct.zeroize` that 5.0's cross-module inliner produces, since the wipe survives by the language's zeroizing-write guarantee.
+
 
 ### Added
 

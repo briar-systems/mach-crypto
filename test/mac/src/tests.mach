@@ -25,7 +25,7 @@ fun public_equal(actual: *u8, expected: *u8, len: usize) bool {
 fun secret_equal(actual: *^u8, expected: *u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
-        if (actual[i]:^ != expected[i]) { ret false; }
+        if (actual[i]:>u8 != expected[i]) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -43,7 +43,7 @@ fun public_filled(actual: *u8, value: u8, len: usize) bool {
 fun secret_filled(actual: *^u8, value: u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
-        if (actual[i]:^ != value) { ret false; }
+        if (actual[i]:>u8 != value) { ret false; }
         i = i + 1;
     }
     ret true;

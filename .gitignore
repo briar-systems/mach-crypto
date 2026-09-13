@@ -1,5 +1,6 @@
 out/
-dep/
+test/*/dep/
+test/*/out/
 *.swp
 *~
 .wt/

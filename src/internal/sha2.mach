@@ -6,9 +6,9 @@ use std.types.bool.false;
 use std.types.bool.true;
 use std.types.size.usize;
 
-pub val SHA256_BLOCK_SIZE: usize = 64;
+pub val SHA256_BLOCK_SIZE:  usize = 64;
 pub val SHA256_DIGEST_SIZE: usize = 32;
-pub val SHA384_BLOCK_SIZE: usize = 128;
+pub val SHA384_BLOCK_SIZE:  usize = 128;
 pub val SHA384_DIGEST_SIZE: usize = 48;
 pub val SHA512_DIGEST_SIZE: usize = 64;
 
@@ -72,83 +72,99 @@ pub rec State384 {
     total:     u64;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun rotr32(x: ^u32, n: u32) ^u32 {
     ret (x >> n) | (x << (32 - n));
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun rotr64(x: ^u64, n: u64) ^u64 {
     ret (x >> n) | (x << (64 - n));
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun choose32(x: ^u32, y: ^u32, z: ^u32) ^u32 {
     ret (x & y) ^ (~x & z);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun choose64(x: ^u64, y: ^u64, z: ^u64) ^u64 {
     ret (x & y) ^ (~x & z);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun majority32(x: ^u32, y: ^u32, z: ^u32) ^u32 {
     ret (x & y) ^ (x & z) ^ (y & z);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun majority64(x: ^u64, y: ^u64, z: ^u64) ^u64 {
     ret (x & y) ^ (x & z) ^ (y & z);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun big_sigma256_0(x: ^u32) ^u32 {
     ret rotr32(x, 2) ^ rotr32(x, 13) ^ rotr32(x, 22);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun big_sigma256_1(x: ^u32) ^u32 {
     ret rotr32(x, 6) ^ rotr32(x, 11) ^ rotr32(x, 25);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun small_sigma256_0(x: ^u32) ^u32 {
     ret rotr32(x, 7) ^ rotr32(x, 18) ^ (x >> 3);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun small_sigma256_1(x: ^u32) ^u32 {
     ret rotr32(x, 17) ^ rotr32(x, 19) ^ (x >> 10);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun big_sigma512_0(x: ^u64) ^u64 {
     ret rotr64(x, 28) ^ rotr64(x, 34) ^ rotr64(x, 39);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun big_sigma512_1(x: ^u64) ^u64 {
     ret rotr64(x, 14) ^ rotr64(x, 18) ^ rotr64(x, 41);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun small_sigma512_0(x: ^u64) ^u64 {
     ret rotr64(x, 1) ^ rotr64(x, 8) ^ (x >> 7);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun small_sigma512_1(x: ^u64) ^u64 {
     ret rotr64(x, 19) ^ rotr64(x, 61) ^ (x >> 6);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun read32(block: *^u8, offset: usize) ^u32 {
     ret (block[offset]::^u32 << 24) | (block[offset + 1]::^u32 << 16) |
         (block[offset + 2]::^u32 << 8) | block[offset + 3]::^u32;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun read64(block: *^u8, offset: usize) ^u64 {
     ret (block[offset]::^u64 << 56) | (block[offset + 1]::^u64 << 48) |
         (block[offset + 2]::^u64 << 40) | (block[offset + 3]::^u64 << 32) |
@@ -156,17 +172,19 @@ fun read64(block: *^u8, offset: usize) ^u64 {
         (block[offset + 6]::^u64 << 8) | block[offset + 7]::^u64;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun write32(output: *^u8, offset: usize, value: ^u32) {
-    output[offset] = (value >> 24)::^u8;
+    output[offset]     = (value >> 24)::^u8;
     output[offset + 1] = (value >> 16)::^u8;
     output[offset + 2] = (value >> 8)::^u8;
     output[offset + 3] = value::^u8;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun write64(output: *^u8, offset: usize, value: ^u64) {
-    output[offset] = (value >> 56)::^u8;
+    output[offset]     = (value >> 56)::^u8;
     output[offset + 1] = (value >> 48)::^u8;
     output[offset + 2] = (value >> 40)::^u8;
     output[offset + 3] = (value >> 32)::^u8;
@@ -179,10 +197,10 @@ fun write64(output: *^u8, offset: usize, value: ^u64) {
 #[oblivious]
 fun compress256(state: *State256, block: *^u8) {
     var schedule: [64]^u32;
-    var i: usize = 0;
+    var i:        usize = 0;
     for (i < 16) {
         schedule[i] = read32(block, i * 4);
-        i = i + 1;
+        i           = i + 1;
     }
     for (i < 64) {
         schedule[i] = small_sigma256_1(schedule[i - 2]) + schedule[i - 7] +
@@ -201,7 +219,7 @@ fun compress256(state: *State256, block: *^u8) {
 
     i = 0;
     for (i < 64) {
-        val first: ^u32 = h + big_sigma256_1(e) + choose32(e, f, g) + K256[i] + schedule[i];
+        val first:  ^u32 = h + big_sigma256_1(e) + choose32(e, f, g) + K256[i] + schedule[i];
         val second: ^u32 = big_sigma256_0(a) + majority32(a, b, c);
         h = g;
         g = f;
@@ -237,10 +255,10 @@ fun compress256(state: *State256, block: *^u8) {
 #[oblivious]
 fun compress384(state: *State384, block: *^u8) {
     var schedule: [80]^u64;
-    var i: usize = 0;
+    var i:        usize = 0;
     for (i < 16) {
         schedule[i] = read64(block, i * 8);
-        i = i + 1;
+        i           = i + 1;
     }
     for (i < 80) {
         schedule[i] = small_sigma512_1(schedule[i - 2]) + schedule[i - 7] +
@@ -259,7 +277,7 @@ fun compress384(state: *State384, block: *^u8) {
 
     i = 0;
     for (i < 80) {
-        val first: ^u64 = h + big_sigma512_1(e) + choose64(e, f, g) + K512[i] + schedule[i];
+        val first:  ^u64 = h + big_sigma512_1(e) + choose64(e, f, g) + K512[i] + schedule[i];
         val second: ^u64 = big_sigma512_0(a) + majority64(a, b, c);
         h = g;
         g = f;
@@ -303,7 +321,7 @@ pub fun init256(state: *State256) {
     state.h[7] = 0x5be0cd19;
     ct.zeroize(?state.block[0], SHA256_BLOCK_SIZE);
     state.block_len = 0;
-    state.total = 0;
+    state.total     = 0;
 }
 
 pub fun init384(state: *State384) {
@@ -317,7 +335,7 @@ pub fun init384(state: *State384) {
     state.h[7] = 0x47b5481dbefa4fa4;
     ct.zeroize(?state.block[0], SHA384_BLOCK_SIZE);
     state.block_len = 0;
-    state.total = 0;
+    state.total     = 0;
 }
 
 pub fun init512(state: *State384) {
@@ -331,7 +349,7 @@ pub fun init512(state: *State384) {
     state.h[7] = 0x5be0cd19137e2179;
     ct.zeroize(?state.block[0], SHA384_BLOCK_SIZE);
     state.block_len = 0;
-    state.total = 0;
+    state.total     = 0;
 }
 
 fun reserve256(state: *State256, len: usize) bool {
@@ -354,10 +372,10 @@ pub fun update256_public(state: *State256, data: *u8, len: usize) bool {
         var i: usize = 0;
         for (i < take) {
             state.block[state.block_len + i] = data[offset + i];
-            i = i + 1;
+            i                                = i + 1;
         }
         state.block_len = state.block_len + take;
-        offset = offset + take;
+        offset          = offset + take;
         if (state.block_len == SHA256_BLOCK_SIZE) {
             compress256(state, ?state.block[0]);
             state.block_len = 0;
@@ -377,10 +395,10 @@ pub fun update256_secret(state: *State256, data: *^u8, len: usize) bool {
         var i: usize = 0;
         for (i < take) {
             state.block[state.block_len + i] = data[offset + i];
-            i = i + 1;
+            i                                = i + 1;
         }
         state.block_len = state.block_len + take;
-        offset = offset + take;
+        offset          = offset + take;
         if (state.block_len == SHA256_BLOCK_SIZE) {
             compress256(state, ?state.block[0]);
             state.block_len = 0;
@@ -400,10 +418,10 @@ pub fun update384_public(state: *State384, data: *u8, len: usize) bool {
         var i: usize = 0;
         for (i < take) {
             state.block[state.block_len + i] = data[offset + i];
-            i = i + 1;
+            i                                = i + 1;
         }
         state.block_len = state.block_len + take;
-        offset = offset + take;
+        offset          = offset + take;
         if (state.block_len == SHA384_BLOCK_SIZE) {
             compress384(state, ?state.block[0]);
             state.block_len = 0;
@@ -423,10 +441,10 @@ pub fun update384_secret(state: *State384, data: *^u8, len: usize) bool {
         var i: usize = 0;
         for (i < take) {
             state.block[state.block_len + i] = data[offset + i];
-            i = i + 1;
+            i                                = i + 1;
         }
         state.block_len = state.block_len + take;
-        offset = offset + take;
+        offset          = offset + take;
         if (state.block_len == SHA384_BLOCK_SIZE) {
             compress384(state, ?state.block[0]);
             state.block_len = 0;
@@ -446,18 +464,18 @@ pub fun update512_secret(state: *State384, data: *^u8, len: usize) bool {
 pub fun final256(state: *State256, digest: *^u8) {
     val total_bits: u64 = state.total * 8;
     state.block[state.block_len] = 0x80;
-    state.block_len = state.block_len + 1;
+    state.block_len              = state.block_len + 1;
     if (state.block_len > 56) {
         for (state.block_len < SHA256_BLOCK_SIZE) {
             state.block[state.block_len] = 0;
-            state.block_len = state.block_len + 1;
+            state.block_len              = state.block_len + 1;
         }
         compress256(state, ?state.block[0]);
         state.block_len = 0;
     }
     for (state.block_len < 56) {
         state.block[state.block_len] = 0;
-        state.block_len = state.block_len + 1;
+        state.block_len              = state.block_len + 1;
     }
     state.block[56] = (total_bits >> 56)::u8;
     state.block[57] = (total_bits >> 48)::u8;
@@ -477,26 +495,26 @@ pub fun final256(state: *State256, digest: *^u8) {
 
 pub fun final384(state: *State384, digest: *^u8) {
     val high_bits: u64 = state.total >> 61;
-    val low_bits: u64 = state.total << 3;
+    val low_bits:  u64 = state.total << 3;
     state.block[state.block_len] = 0x80;
-    state.block_len = state.block_len + 1;
+    state.block_len              = state.block_len + 1;
     if (state.block_len > 112) {
         for (state.block_len < SHA384_BLOCK_SIZE) {
             state.block[state.block_len] = 0;
-            state.block_len = state.block_len + 1;
+            state.block_len              = state.block_len + 1;
         }
         compress384(state, ?state.block[0]);
         state.block_len = 0;
     }
     for (state.block_len < 112) {
         state.block[state.block_len] = 0;
-        state.block_len = state.block_len + 1;
+        state.block_len              = state.block_len + 1;
     }
     var i: usize = 0;
     for (i < 8) {
         state.block[112 + i] = (high_bits >> ((7 - i) * 8))::u8;
         state.block[120 + i] = (low_bits >> ((7 - i) * 8))::u8;
-        i = i + 1;
+        i                    = i + 1;
     }
     compress384(state, ?state.block[0]);
     i = 0;
@@ -508,26 +526,26 @@ pub fun final384(state: *State384, digest: *^u8) {
 
 pub fun final512(state: *State384, digest: *^u8) {
     val high_bits: u64 = state.total >> 61;
-    val low_bits: u64 = state.total << 3;
+    val low_bits:  u64 = state.total << 3;
     state.block[state.block_len] = 0x80;
-    state.block_len = state.block_len + 1;
+    state.block_len              = state.block_len + 1;
     if (state.block_len > 112) {
         for (state.block_len < SHA384_BLOCK_SIZE) {
             state.block[state.block_len] = 0;
-            state.block_len = state.block_len + 1;
+            state.block_len              = state.block_len + 1;
         }
         compress384(state, ?state.block[0]);
         state.block_len = 0;
     }
     for (state.block_len < 112) {
         state.block[state.block_len] = 0;
-        state.block_len = state.block_len + 1;
+        state.block_len              = state.block_len + 1;
     }
     var i: usize = 0;
     for (i < 8) {
         state.block[112 + i] = (high_bits >> ((7 - i) << 3))::u8;
         state.block[120 + i] = (low_bits >> ((7 - i) << 3))::u8;
-        i = i + 1;
+        i                    = i + 1;
     }
     compress384(state, ?state.block[0]);
     i = 0;
@@ -541,14 +559,14 @@ pub fun destroy256(state: *State256) {
     ct.zeroize((?state.h[0]):~*^u8, 32);
     ct.zeroize(?state.block[0], SHA256_BLOCK_SIZE);
     state.block_len = 0;
-    state.total = 0;
+    state.total     = 0;
 }
 
 pub fun destroy384(state: *State384) {
     ct.zeroize((?state.h[0]):~*^u8, 64);
     ct.zeroize(?state.block[0], SHA384_BLOCK_SIZE);
     state.block_len = 0;
-    state.total = 0;
+    state.total     = 0;
 }
 
 pub fun destroy512(state: *State384) {

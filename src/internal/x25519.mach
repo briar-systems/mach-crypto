@@ -5,8 +5,8 @@ use std.crypto.ct;
 use std.types.size.usize;
 
 val LIMB_BITS: usize = 51;
-val LIMB_MASK: u64 = 2251799813685247;
-val PRIME_LOW: u64 = 2251799813685229;
+val LIMB_MASK: u64   = 2251799813685247;
+val PRIME_LOW: u64   = 2251799813685229;
 
 pub rec Field {
     limb: [5]^u64;
@@ -22,52 +22,55 @@ pub fun destroy(value: *Field) {
     ct.zeroize((?value.limb[0]):~*^u8, 40);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun times_19(value: ^u64) ^u64 {
     ret value + (value << 1) + (value << 4);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun multiply51(left: ^u64, right: ^u64) Wide {
-    var result: Wide = Wide{low: 0, high: 0};
-    var shifted_low: ^u64 = left;
-    var shifted_high: ^u64 = 0;
-    var multiplier: ^u64 = right;
-    var i: usize = 0;
+    var result:       Wide  = Wide{low: 0, high: 0};
+    var shifted_low:  ^u64  = left;
+    var shifted_high: ^u64  = 0;
+    var multiplier:   ^u64  = right;
+    var i:            usize = 0;
     for (i < LIMB_BITS) {
         val mask: ^u64 = 0 - (multiplier & 1);
-        val sum: ^u64 = result.low + (shifted_low & mask);
-        result.low = sum & LIMB_MASK;
-        result.high = result.high + (shifted_high & mask) + (sum >> LIMB_BITS);
+        val sum:  ^u64 = result.low + (shifted_low & mask);
+        result.low   = sum & LIMB_MASK;
+        result.high  = result.high + (shifted_high & mask) + (sum >> LIMB_BITS);
         shifted_high = (shifted_high << 1) | (shifted_low >> (LIMB_BITS - 1));
-        shifted_low = (shifted_low << 1) & LIMB_MASK;
-        multiplier = multiplier >> 1;
-        i = i + 1;
+        shifted_low  = (shifted_low << 1) & LIMB_MASK;
+        multiplier   = multiplier >> 1;
+        i            = i + 1;
     }
-    shifted_low = 0;
+    shifted_low  = 0;
     shifted_high = 0;
-    multiplier = 0;
+    multiplier   = 0;
     ret result;
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun normalize(value: *Field) {
     var carry: ^u64 = value.limb[0] >> LIMB_BITS;
     value.limb[0] = value.limb[0] & LIMB_MASK;
     value.limb[1] = value.limb[1] + carry;
-    carry = value.limb[1] >> LIMB_BITS;
+    carry         = value.limb[1] >> LIMB_BITS;
     value.limb[1] = value.limb[1] & LIMB_MASK;
     value.limb[2] = value.limb[2] + carry;
-    carry = value.limb[2] >> LIMB_BITS;
+    carry         = value.limb[2] >> LIMB_BITS;
     value.limb[2] = value.limb[2] & LIMB_MASK;
     value.limb[3] = value.limb[3] + carry;
-    carry = value.limb[3] >> LIMB_BITS;
+    carry         = value.limb[3] >> LIMB_BITS;
     value.limb[3] = value.limb[3] & LIMB_MASK;
     value.limb[4] = value.limb[4] + carry;
-    carry = value.limb[4] >> LIMB_BITS;
+    carry         = value.limb[4] >> LIMB_BITS;
     value.limb[4] = value.limb[4] & LIMB_MASK;
     value.limb[0] = value.limb[0] + times_19(carry);
-    carry = 0;
+    carry         = 0;
 }
 
 #[oblivious]
@@ -75,19 +78,19 @@ pub fun canonicalize(value: *Field) {
     normalize(value);
     normalize(value);
     normalize(value);
-    var reduced: Field;
+    var reduced:    Field;
     var difference: ^u64 = value.limb[0] - PRIME_LOW;
-    var borrow: ^u64 = difference >> 63;
+    var borrow:     ^u64 = difference >> 63;
     reduced.limb[0] = difference + (borrow << LIMB_BITS);
     var i: usize = 1;
     for (i < 5) {
-        difference = value.limb[i] - LIMB_MASK - borrow;
-        borrow = difference >> 63;
+        difference      = value.limb[i] - LIMB_MASK - borrow;
+        borrow          = difference >> 63;
         reduced.limb[i] = difference + (borrow << LIMB_BITS);
-        i = i + 1;
+        i               = i + 1;
     }
     val original_mask: ^u64 = 0 - borrow;
-    val reduced_mask: ^u64 = ~original_mask;
+    val reduced_mask:  ^u64 = ~original_mask;
     i = 0;
     for (i < 5) {
         value.limb[i] = (value.limb[i] & original_mask) |
@@ -95,21 +98,27 @@ pub fun canonicalize(value: *Field) {
         i = i + 1;
     }
     difference = 0;
-    borrow = 0;
+    borrow     = 0;
     destroy(?reduced);
 }
 
 #[oblivious]
 pub fun copy(output: *Field, input: *Field) {
     var i: usize = 0;
-    for (i < 5) { output.limb[i] = input.limb[i]; i = i + 1; }
+    for (i < 5) {
+        output.limb[i] = input.limb[i];
+        i              = i + 1;
+    }
 }
 
 #[oblivious]
 pub fun set_small(output: *Field, value: u64) {
     output.limb[0] = value;
     var i: usize = 1;
-    for (i < 5) { output.limb[i] = 0; i = i + 1; }
+    for (i < 5) {
+        output.limb[i] = 0;
+        i              = i + 1;
+    }
 }
 
 #[oblivious]
@@ -117,7 +126,7 @@ pub fun add(output: *Field, left: *Field, right: *Field) {
     var i: usize = 0;
     for (i < 5) {
         output.limb[i] = left.limb[i] + right.limb[i];
-        i = i + 1;
+        i              = i + 1;
     }
     normalize(output);
     normalize(output);
@@ -129,7 +138,7 @@ pub fun subtract(output: *Field, left: *Field, right: *Field) {
     var i: usize = 1;
     for (i < 5) {
         output.limb[i] = left.limb[i] + 4503599627370494 - right.limb[i];
-        i = i + 1;
+        i              = i + 1;
     }
     normalize(output);
     normalize(output);
@@ -144,29 +153,33 @@ pub fun multiply(output: *Field, left: *Field, right: *Field) {
         var j: usize = 0;
         for (j < 5) {
             var pair: Wide = multiply51(left.limb[i], right.limb[j]);
-            product[i + j] = product[i + j] + pair.low;
+            product[i + j]     = product[i + j] + pair.low;
             product[i + j + 1] = product[i + j + 1] + pair.high;
-            pair.low = 0;
-            pair.high = 0;
-            j = j + 1;
+            pair.low           = 0;
+            pair.high          = 0;
+            j                  = j + 1;
         }
         i = i + 1;
     }
     i = 10;
     for (i > 5) {
-        i = i - 1;
+        i              = i - 1;
         product[i - 5] = product[i - 5] + times_19(product[i]);
     }
     var result: Field;
     i = 0;
-    for (i < 5) { result.limb[i] = product[i]; i = i + 1; }
+    for (i < 5) {
+        result.limb[i] = product[i];
+        i              = i + 1;
+    }
     canonicalize(?result);
     copy(output, ?result);
     destroy(?result);
     ct.zeroize((?product[0]):~*^u8, 80);
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 pub fun square(output: *Field, input: *Field) {
     multiply(output, input, input);
 }
@@ -178,16 +191,19 @@ fun multiply_a24(output: *Field, input: *Field) {
     var i: usize = 0;
     for (i < 5) {
         var pair: Wide = multiply51(input.limb[i], 121665);
-        product[i] = product[i] + pair.low;
+        product[i]     = product[i] + pair.low;
         product[i + 1] = product[i + 1] + pair.high;
-        pair.low = 0;
-        pair.high = 0;
-        i = i + 1;
+        pair.low       = 0;
+        pair.high      = 0;
+        i              = i + 1;
     }
     product[0] = product[0] + times_19(product[5]);
     var result: Field;
     i = 0;
-    for (i < 5) { result.limb[i] = product[i]; i = i + 1; }
+    for (i < 5) {
+        result.limb[i] = product[i];
+        i              = i + 1;
+    }
     canonicalize(?result);
     copy(output, ?result);
     destroy(?result);
@@ -260,31 +276,32 @@ pub fun decode(output: *Field, input: *u8) {
 pub fun encode(output: *^u8, input: *Field) {
     canonicalize(input);
     ct.zeroize(output, 32);
-    var position: usize = 0;
+    var position:   usize = 0;
     var limb_index: usize = 0;
     for (limb_index < 5) {
         var limb_bit: usize = 0;
         for (limb_bit < LIMB_BITS) {
             val byte_index: usize = position >> 3;
-            val byte_bit: usize = position & 7;
-            val bit: ^u8 = ((input.limb[limb_index] >> limb_bit) & 1)::^u8;
+            val byte_bit:   usize = position & 7;
+            val bit:        ^u8   = ((input.limb[limb_index] >> limb_bit) & 1)::^u8;
             output[byte_index] = output[byte_index] | (bit << byte_bit);
-            position = position + 1;
-            limb_bit = limb_bit + 1;
+            position           = position + 1;
+            limb_bit           = limb_bit + 1;
         }
         limb_index = limb_index + 1;
     }
 }
 
-#[oblivious] #[inline]
+#[oblivious]
+#[inline]
 fun conditional_swap(swap: ^u8, left: *Field, right: *Field) {
-    val mask: ^u64 = 0 - swap::^u64;
-    var i: usize = 0;
+    val mask: ^u64  = 0 - swap::^u64;
+    var i:    usize = 0;
     for (i < 5) {
         val difference: ^u64 = (left.limb[i] ^ right.limb[i]) & mask;
-        left.limb[i] = left.limb[i] ^ difference;
+        left.limb[i]  = left.limb[i] ^ difference;
         right.limb[i] = right.limb[i] ^ difference;
-        i = i + 1;
+        i             = i + 1;
     }
 }
 
@@ -292,9 +309,12 @@ fun conditional_swap(swap: ^u8, left: *Field, right: *Field) {
 pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
     output: *^u8) {
     var scalar: [32]^u8;
-    var i: usize = 0;
-    for (i < 32) { scalar[i] = private_key.data[i]; i = i + 1; }
-    scalar[0] = scalar[0] & 248;
+    var i:      usize = 0;
+    for (i < 32) {
+        scalar[i] = private_key.data[i];
+        i         = i + 1;
+    }
+    scalar[0]  = scalar[0] & 248;
     scalar[31] = (scalar[31] & 127) | 64;
 
     var x1: Field;
@@ -307,27 +327,27 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
     set_small(?z2, 0);
     copy(?x3, ?x1);
     set_small(?z3, 1);
-    var swap: ^u8 = 0;
+    var swap:     ^u8   = 0;
     var position: usize = 255;
     for (position > 0) {
         position = position - 1;
-        val scalar_byte: usize = position >> 3;
+        val scalar_byte:  usize = position >> 3;
         val scalar_shift: usize = position & 7;
-        val bit: ^u8 = (scalar[scalar_byte] >> scalar_shift) & 1;
+        val bit:          ^u8   = (scalar[scalar_byte] >> scalar_shift) & 1;
         swap = swap ^ bit;
         conditional_swap(swap, ?x2, ?x3);
         conditional_swap(swap, ?z2, ?z3);
         swap = bit;
 
-        var a: Field;
-        var aa: Field;
-        var b: Field;
-        var bb: Field;
-        var e: Field;
-        var c: Field;
-        var d: Field;
-        var da: Field;
-        var cb: Field;
+        var a:         Field;
+        var aa:        Field;
+        var b:         Field;
+        var bb:        Field;
+        var e:         Field;
+        var c:         Field;
+        var d:         Field;
+        var da:        Field;
+        var cb:        Field;
         var temporary: Field;
         add(?a, ?x2, ?z2);
         square(?aa, ?a);
@@ -362,7 +382,7 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
     conditional_swap(swap, ?z2, ?z3);
     swap = 0;
     var inverse_z: Field;
-    var result: Field;
+    var result:    Field;
     invert(?inverse_z, ?z2);
     multiply(?result, ?x2, ?inverse_z);
     encode(output, ?result);

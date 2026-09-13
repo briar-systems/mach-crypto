@@ -25,7 +25,7 @@ fun failed(error: contracts.Error) contracts.Operation {
 pub fun derive_public(private_key: contracts.SecretBytes,
     output: contracts.Buffer) contracts.Operation {
     if (private_key.len != PRIVATE_KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
-    if (private_key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (private_key.data == nil)             { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity < PUBLIC_UNCOMPRESSED_SIZE) {
         ret failed(contracts.OUTPUT_TOO_SMALL);
     }
@@ -35,15 +35,15 @@ pub fun derive_public(private_key: contracts.SecretBytes,
     var scalar: core.UInt;
     core.decode_secret(?scalar, private_key.data);
     val valid: ^u8 = core.valid_scalar(?scalar);
-    if (valid:^ != 1) {
+    if (valid:>u8 != 1) {
         core.destroy_uint(?scalar);
         ct.end();
         ret failed(contracts.INVALID_KEY);
     }
-    var basepoint: core.Point;
+    var basepoint:    core.Point;
     var public_point: core.Point;
-    var x: core.UInt;
-    var y: core.UInt;
+    var x:            core.UInt;
+    var y:            core.UInt;
     core.generator(?basepoint);
     core.scalar_multiply(?public_point, ?scalar, ?basepoint);
     core.to_affine(?x, ?y, ?public_point);
@@ -66,33 +66,33 @@ pub fun derive_public(private_key: contracts.SecretBytes,
 #[oblivious]
 pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     output: contracts.SecretBuffer) contracts.Operation {
-    if (private_key.len != PRIVATE_KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
-    if (private_key.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (private_key.len != PRIVATE_KEY_SIZE)         { ret failed(contracts.INVALID_KEY); }
+    if (private_key.data == nil)                     { ret failed(contracts.INVALID_INPUT); }
     if (peer_public.len != PUBLIC_UNCOMPRESSED_SIZE) { ret failed(contracts.INVALID_KEY); }
-    if (peer_public.data == nil) { ret failed(contracts.INVALID_INPUT); }
-    if (peer_public.data[0] != 0x04) { ret failed(contracts.INVALID_KEY); }
-    if (output.capacity < SHARED_SECRET_SIZE) { ret failed(contracts.OUTPUT_TOO_SMALL); }
-    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (peer_public.data == nil)                     { ret failed(contracts.INVALID_INPUT); }
+    if (peer_public.data[0] != 0x04)                 { ret failed(contracts.INVALID_KEY); }
+    if (output.capacity < SHARED_SECRET_SIZE)        { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil)                          { ret failed(contracts.INVALID_INPUT); }
 
     ct.begin();
     var scalar: core.UInt;
-    var peer: core.Point;
+    var peer:   core.Point;
     core.decode_secret(?scalar, private_key.data);
     val scalar_valid: ^u8 = core.valid_scalar(?scalar);
-    val point_valid: ^u8 = core.parse_point(?peer, peer_public.data);
-    if ((scalar_valid & point_valid):^ != 1) {
+    val point_valid:  ^u8 = core.parse_point(?peer, peer_public.data);
+    if ((scalar_valid & point_valid):>u8 != 1) {
         core.destroy_uint(?scalar);
         core.destroy_point(?peer);
         ct.end();
         ret failed(contracts.INVALID_KEY);
     }
     var shared_point: core.Point;
-    var x: core.UInt;
-    var y: core.UInt;
+    var x:            core.UInt;
+    var y:            core.UInt;
     core.scalar_multiply(?shared_point, ?scalar, ?peer);
     val infinity: ^u8 = core.point_is_infinity(?shared_point);
     core.to_affine(?x, ?y, ?shared_point);
-    if (infinity:^ == 1) {
+    if (infinity:>u8 == 1) {
         core.destroy_uint(?scalar);
         core.destroy_point(?peer);
         core.destroy_point(?shared_point);
@@ -113,6 +113,6 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
 
 test "p256: scalar and shared secret dimensions match the field size" {
     if (SCALAR_SIZE != 32 || SHARED_SECRET_SIZE != 32) { ret 1; }
-    if (PUBLIC_UNCOMPRESSED_SIZE != 65) { ret 1; }
+    if (PUBLIC_UNCOMPRESSED_SIZE != 65)                { ret 1; }
     ret 0;
 }
