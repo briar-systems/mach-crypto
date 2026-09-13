@@ -79,7 +79,7 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
         if (take > 64) { take = 64; }
         var i: usize = 0;
         for (i < take) {
-            output.data[offset + i] = (plaintext.data[offset + i] ^ keystream[i]):^;
+            output.data[offset + i] = (plaintext.data[offset + i] ^ keystream[i]):>u8;
             i = i + 1;
         }
         offset = offset + take;
@@ -91,7 +91,7 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     mac.final(?poly, ?tag[0]);
     var i: usize = 0;
     for (i < TAG_SIZE) {
-        output.data[plaintext.len + i] = tag[i]:^;
+        output.data[plaintext.len + i] = tag[i]:>u8;
         i = i + 1;
     }
     wipe_contexts(?chacha, ?poly, ?key_block[0], ?tag[0]);
@@ -150,7 +150,7 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     }
     val authenticated: ^u8 = ct.eq_bytes(?expected[0], ?provided[0], TAG_SIZE);
     ct.zeroize(?provided[0], 16);
-    if (authenticated:^ != 1) {
+    if (authenticated:>u8 != 1) {
         ct.zeroize(output.data, ciphertext_len);
         wipe_contexts(?chacha, ?poly, ?key_block[0], ?expected[0]);
         ct.end();

@@ -388,11 +388,14 @@ test "ecdsa p-384: median verification stays below 250 ms" {
     var samples: [5]i64;
     var i: usize = 0;
     for (i < 5) {
-        val started: time.Time = time.monotonic();
-        if (started.sec == 0 && started.nsec == 0) { ret 3; }
+        val started_clock: time.Clock = time.monotonic();
+        if (sel started_clock.err) { ret 3; }
+        val started: time.Time = started_clock.ok;
         if (signature.verify_ecdsa_p384_sha384(key, message, value) !=
             contracts.OK) { ret 4; }
-        val finished: time.Time = time.monotonic();
+        val finished_clock: time.Clock = time.monotonic();
+        if (sel finished_clock.err) { ret 3; }
+        val finished: time.Time = finished_clock.ok;
         samples[i] = time.time_sub(finished, started);
         if (samples[i] <= 0) { ret 5; }
         i = i + 1;

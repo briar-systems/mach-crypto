@@ -389,12 +389,12 @@ test "rsa: montgomery exponentiation round trip" {
     var encrypted: [4]^u8;
     var recovered: [4]^u8;
     if (public_apply(?encrypted[0], (?message[0]):~*u8,
-        (?modulus[0]):~*u8, 4, (?public_exponent[0]):~*u8, 1):^ != 1) { ret 1; }
-    if (encrypted[0]:^ != 0 || encrypted[1]:^ != 0 ||
-        encrypted[2]:^ != 0x0a || encrypted[3]:^ != 0xe6) { ret 2; }
+        (?modulus[0]):~*u8, 4, (?public_exponent[0]):~*u8, 1):>u8 != 1) { ret 1; }
+    if (encrypted[0]:>u8 != 0 || encrypted[1]:>u8 != 0 ||
+        encrypted[2]:>u8 != 0x0a || encrypted[3]:>u8 != 0xe6) { ret 2; }
     if (private_apply(?recovered[0], ?encrypted[0], (?modulus[0]):~*u8, 4,
-        ?private_exponent[0], 4):^ != 1) { ret 3; }
-    if (recovered[0]:^ != 0 || recovered[1]:^ != 0 ||
-        recovered[2]:^ != 0 || recovered[3]:^ != 0x41) { ret 4; }
+        ?private_exponent[0], 4):>u8 != 1) { ret 3; }
+    if (recovered[0]:>u8 != 0 || recovered[1]:>u8 != 0 ||
+        recovered[2]:>u8 != 0 || recovered[3]:>u8 != 0x41) { ret 4; }
     ret 0;
 }

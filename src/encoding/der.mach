@@ -108,20 +108,20 @@ fun valid_public_content(tag: Tag, data: *u8, len: usize) bool {
 fun valid_secret_content(tag: Tag, data: *^u8, len: usize) bool {
     if (len > 0 && data == nil) { ret false; }
     if (tag == BOOLEAN) {
-        ret len == 1 && (data[0]:^ == 0 || data[0]:^ == 0xff);
+        ret len == 1 && (data[0]:>u8 == 0 || data[0]:>u8 == 0xff);
     }
     if (tag == INTEGER) {
         if (len == 0) { ret false; }
-        if (len > 1 && data[0]:^ == 0 && (data[1]:^ & 0x80) == 0) { ret false; }
-        if (len > 1 && data[0]:^ == 0xff && (data[1]:^ & 0x80) != 0) { ret false; }
+        if (len > 1 && data[0]:>u8 == 0 && (data[1]:>u8 & 0x80) == 0) { ret false; }
+        if (len > 1 && data[0]:>u8 == 0xff && (data[1]:>u8 & 0x80) != 0) { ret false; }
         ret true;
     }
     if (tag == BIT_STRING) {
-        if (len == 0 || data[0]:^ > 7) { ret false; }
-        if (len == 1) { ret data[0]:^ == 0; }
-        if (data[0]:^ > 0) {
-            val mask: u8 = ((1::u16 << data[0]:^) - 1)::u8;
-            if ((data[len - 1]:^ & mask) != 0) { ret false; }
+        if (len == 0 || data[0]:>u8 > 7) { ret false; }
+        if (len == 1) { ret data[0]:>u8 == 0; }
+        if (data[0]:>u8 > 0) {
+            val mask: u8 = ((1::u16 << data[0]:>u8) - 1)::u8;
+            if ((data[len - 1]:>u8 & mask) != 0) { ret false; }
         }
         ret true;
     }
@@ -131,8 +131,8 @@ fun valid_secret_content(tag: Tag, data: *^u8, len: usize) bool {
         var start: bool = true;
         var i: usize = 0;
         for (i < len) {
-            if (start && data[i]:^ == 0x80) { ret false; }
-            start = (data[i]:^ & 0x80) == 0;
+            if (start && data[i]:>u8 == 0x80) { ret false; }
+            start = (data[i]:>u8 & 0x80) == 0;
             i = i + 1;
         }
         ret start;
@@ -175,20 +175,20 @@ fun read_secret_length(data: *^u8, available: usize, length: *usize,
     if (available == 0 || data == nil || length == nil || width == nil) {
         ret contracts.INVALID_INPUT;
     }
-    val first: u8 = data[0]:^;
+    val first: u8 = data[0]:>u8;
     if ((first & 0x80) == 0) {
         @length = first::usize;
         @width = 1;
         ret contracts.OK;
     }
     val count: usize = (first & 0x7f)::usize;
-    if (count == 0 || count > 8 || count > available - 1 || data[1]:^ == 0) {
+    if (count == 0 || count > 8 || count > available - 1 || data[1]:>u8 == 0) {
         ret contracts.INVALID_INPUT;
     }
     var result: usize = 0;
     var i: usize = 0;
     for (i < count) {
-        val value: usize = (data[1 + i]:^)::usize;
+        val value: usize = (data[1 + i]:>u8)::usize;
         if (result > ((0 - 1) - value) >> 8) { ret contracts.INVALID_INPUT; }
         result = (result << 8) | value;
         i = i + 1;
@@ -242,7 +242,7 @@ pub fun next_secret(value: *SecretCursor, output: *SecretElement) contracts.Erro
     val start: usize = value.offset;
     val remaining: usize = value.input.len - start;
     if (remaining < 2) { ret contracts.INVALID_INPUT; }
-    val tag: Tag = value.input.data[start]:^;
+    val tag: Tag = value.input.data[start]:>u8;
     if (!valid_tag(tag)) { ret contracts.INVALID_INPUT; }
     var content_len: usize = 0;
     var length_width: usize = 0;
@@ -366,11 +366,11 @@ pub fun positive_secret_integer(element: *SecretElement,
     if (element == nil || output == nil || element.tag != INTEGER ||
         element.content.len == 0) { ret contracts.INVALID_INPUT; }
     var offset: usize = 0;
-    if (element.content.data[0]:^ == 0) {
+    if (element.content.data[0]:>u8 == 0) {
         offset = 1;
         if (offset == element.content.len) { ret contracts.INVALID_INPUT; }
     } or {
-        if ((element.content.data[0]:^ & 0x80) != 0) {
+        if ((element.content.data[0]:>u8 & 0x80) != 0) {
             ret contracts.INVALID_INPUT;
         }
     }

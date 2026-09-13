@@ -147,7 +147,7 @@ test "chacha20: rfc 8439 block vector" {
     };
     i = 0;
     for (i < 64) {
-        if (output[i]:^ != expected[i]) { destroy(?context); ret 2; }
+        if (output[i]:>u8 != expected[i]) { destroy(?context); ret 2; }
         i = i + 1;
     }
     destroy(?context);

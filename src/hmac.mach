@@ -46,7 +46,7 @@ pub fun sha256(key: contracts.SecretBytes, message: contracts.Bytes,
     }
     var i: usize = 0;
     for (i < SHA256_TAG_SIZE) {
-        output.data[i] = tag[i]:^;
+        output.data[i] = tag[i]:>u8;
         i = i + 1;
     }
     ct.zeroize(?tag[0], SHA256_TAG_SIZE);
@@ -82,7 +82,7 @@ pub fun sha384(key: contracts.SecretBytes, message: contracts.Bytes,
     }
     var i: usize = 0;
     for (i < SHA384_TAG_SIZE) {
-        output.data[i] = tag[i]:^;
+        output.data[i] = tag[i]:>u8;
         i = i + 1;
     }
     ct.zeroize(?tag[0], SHA384_TAG_SIZE);

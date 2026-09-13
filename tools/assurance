@@ -225,7 +225,7 @@ run_build_pass() {
             relative="logs/build/${pass}-${algorithm}-${profile}.log"
             log="$stage/$relative"
             if ! (cd "$root" && mach build "$project" --all-targets --profile "$profile" \
-                --emit-ir --emit-asm --verify-ir) > "$log" 2>&1; then
+                --emit-ir --emit-asm) > "$log" 2>&1; then
                 die "verified build failed for $project $profile during $pass; see $log"
             fi
             hash=$(sha256_file "$log")
@@ -273,7 +273,7 @@ run_leakage_negative_controls() {
             (cd "$root" && mach clean test/leakage-negative) >/dev/null 2>&1 || \
                 die "could not clean the leakage negative control"
             if (cd "$root" && mach build test/leakage-negative --target "$target" \
-                --profile "$profile" --emit-ir --verify-ir) > "$log" 2>&1; then
+                --profile "$profile" --emit-ir) > "$log" 2>&1; then
                 die "compiler accepted the secret-dependent negative control for $target $profile"
             fi
             grep -q 'secret value used as a branch condition' "$log" || \

@@ -115,7 +115,7 @@ fun secret_matches(data: *^u8, offset: usize, len: usize, text: *u8,
     if (offset > len || text_len > len - offset) { ret false; }
     var i: usize = 0;
     for (i < text_len) {
-        if (data[offset + i]:^ != text[i]) { ret false; }
+        if (data[offset + i]:>u8 != text[i]) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -134,9 +134,9 @@ fun newline(data: *u8, len: usize, offset: usize, next: *usize) bool {
 #[oblivious]
 fun secret_newline(data: *^u8, len: usize, offset: usize, next: *usize) bool {
     if (offset >= len) { ret false; }
-    if (data[offset]:^ == '\n') { @next = offset + 1; ret true; }
-    if (data[offset]:^ == '\r' && offset + 1 < len &&
-        data[offset + 1]:^ == '\n') {
+    if (data[offset]:>u8 == '\n') { @next = offset + 1; ret true; }
+    if (data[offset]:>u8 == '\r' && offset + 1 < len &&
+        data[offset + 1]:>u8 == '\n') {
         @next = offset + 2;
         ret true;
     }
@@ -171,7 +171,7 @@ fun validate_secret_tail(last: *^u8, pad: usize) bool {
             valid = valid & (ct.eq_u8(secret_decode_value(last[3]), 255) ^ 1);
         }
     }
-    ret valid:^ == 1;
+    ret valid:>u8 == 1;
 }
 
 fun parse(input: contracts.Bytes, layout: *Layout) contracts.Error {
@@ -280,8 +280,8 @@ fun parse_secret(input: contracts.SecretBytes,
         ret contracts.INVALID_INPUT;
     }
     var position: usize = 11;
-    for (position < input.len && input.data[position]:^ != '-') {
-        val byte: u8 = input.data[position]:^;
+    for (position < input.len && input.data[position]:>u8 != '-') {
+        val byte: u8 = input.data[position]:>u8;
         if (!valid_label_byte(byte) || position - 11 >= MAX_LABEL_SIZE) {
             ret contracts.INVALID_INPUT;
         }
@@ -315,15 +315,15 @@ fun parse_secret(input: contracts.SecretBytes,
     var last_line_len: usize = 0;
     for (position < input.len) {
         val line_start: usize = position;
-        for (position < input.len && input.data[position]:^ != '\r' &&
-            input.data[position]:^ != '\n') { position = position + 1; }
+        for (position < input.len && input.data[position]:>u8 != '\r' &&
+            input.data[position]:>u8 != '\n') { position = position + 1; }
         val line_len: usize = position - line_start;
         if (secret_matches(input.data, line_start, input.len, (?end[0]):~*u8, 9)) {
             if (!saw_line || characters == 0 || characters % 4 != 0 ||
                 line_len != 14 + label_len) { ret contracts.INVALID_INPUT; }
             i = 0;
             for (i < label_len) {
-                if (input.data[line_start + 9 + i]:^ != layout.label[i]) {
+                if (input.data[line_start + 9 + i]:>u8 != layout.label[i]) {
                     ret contracts.INVALID_INPUT;
                 }
                 i = i + 1;
@@ -351,13 +351,13 @@ fun parse_secret(input: contracts.SecretBytes,
         i = 0;
         for (i < line_len) {
             val byte: ^u8 = input.data[line_start + i];
-            if (ct.eq_u8(byte, '='):^ == 1) {
+            if (ct.eq_u8(byte, '='):>u8 == 1) {
                 padding = padding + 1;
                 if (padding > 2 || i < line_len - 2) {
                     ret contracts.INVALID_INPUT;
                 }
             } or {
-                if (padding != 0 || secret_decode_value(byte):^ == 255) {
+                if (padding != 0 || secret_decode_value(byte):>u8 == 255) {
                     ret contracts.INVALID_INPUT;
                 }
             }
@@ -445,7 +445,7 @@ fun decode_secret_body(input: contracts.SecretBytes, layout: *SecretLayout,
     var i: usize = layout.data_start;
     for (i < layout.footer_start) {
         val byte: ^u8 = input.data[i];
-        if (ct.eq_u8(byte, '\r'):^ != 1 && ct.eq_u8(byte, '\n'):^ != 1) {
+        if (ct.eq_u8(byte, '\r'):>u8 != 1 && ct.eq_u8(byte, '\n'):>u8 != 1) {
             quartet[count] = byte;
             count = count + 1;
             if (count == 4) {
@@ -453,11 +453,11 @@ fun decode_secret_body(input: contracts.SecretBytes, layout: *SecretLayout,
                 val b: ^u8 = secret_decode_value(quartet[1]);
                 output[written] = (a << 2) | (b >> 4);
                 written = written + 1;
-                if (ct.eq_u8(quartet[2], '='):^ != 1) {
+                if (ct.eq_u8(quartet[2], '='):>u8 != 1) {
                     val c: ^u8 = secret_decode_value(quartet[2]);
                     output[written] = (b << 4) | (c >> 2);
                     written = written + 1;
-                    if (ct.eq_u8(quartet[3], '='):^ != 1) {
+                    if (ct.eq_u8(quartet[3], '='):>u8 != 1) {
                         output[written] = (c << 6) | secret_decode_value(quartet[3]);
                         written = written + 1;
                     }

@@ -35,7 +35,7 @@ pub fun derive_public(private_key: contracts.SecretBytes,
     core.scalar_multiply(private_key, ?basepoint[0], ?encoded[0]);
     i = 0;
     for (i < PUBLIC_KEY_SIZE) {
-        output.data[i] = encoded[i]:^;
+        output.data[i] = encoded[i]:>u8;
         i = i + 1;
     }
     ct.zeroize(?encoded[0], 32);
@@ -65,7 +65,7 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     core.scalar_multiply(private_key, peer_public.data, ?shared[0]);
     val low_order: ^u8 = ct.eq_bytes(?shared[0], ?zero[0], SHARED_SECRET_SIZE);
     ct.zeroize(?zero[0], 32);
-    if (low_order:^ == 1) {
+    if (low_order:>u8 == 1) {
         ct.zeroize(?shared[0], 32);
         ct.end();
         ret failed(contracts.INVALID_KEY);

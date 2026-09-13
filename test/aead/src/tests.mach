@@ -29,7 +29,7 @@ fun public_equal(actual: *u8, expected: *u8, len: usize) bool {
 fun secret_equal(actual: *^u8, expected: *u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
-        if (actual[i]:^ != expected[i]) { ret false; }
+        if (actual[i]:>u8 != expected[i]) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -38,7 +38,7 @@ fun secret_equal(actual: *^u8, expected: *u8, len: usize) bool {
 fun secrets_equal(actual: *^u8, expected: *^u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
-        if (actual[i]:^ != expected[i]:^) { ret false; }
+        if (actual[i]:>u8 != expected[i]:>u8) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -56,7 +56,7 @@ fun public_filled(actual: *u8, value: u8, len: usize) bool {
 fun secret_filled(actual: *^u8, value: u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
-        if (actual[i]:^ != value) { ret false; }
+        if (actual[i]:>u8 != value) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -386,7 +386,7 @@ test "aes-gcm: independent counter-carry differential vector" {
     if (result.error != contracts.OK || result.written != 4097) { ret 3; }
     i = 0;
     for (i < 4097) {
-        if (long_opened[i]:^ != (i * 7 + 3)::u8) { ret 4; }
+        if (long_opened[i]:>u8 != (i * 7 + 3)::u8) { ret 4; }
         i = i + 1;
     }
     ret 0;
@@ -713,7 +713,7 @@ test "chacha20-poly1305: independent counter-carry differential vector" {
     if (result.error != contracts.OK || result.written != 16385) { ret 3; }
     i = 0;
     for (i < 16385) {
-        if (long_chacha_opened[i]:^ != (i * 7 + 3)::u8) { ret 4; }
+        if (long_chacha_opened[i]:>u8 != (i * 7 + 3)::u8) { ret 4; }
         i = i + 1;
     }
     ret 0;

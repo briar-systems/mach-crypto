@@ -35,7 +35,7 @@ pub fun derive_public(private_key: contracts.SecretBytes,
     var scalar: core.UInt;
     core.decode_secret(?scalar, private_key.data);
     val valid: ^u8 = core.valid_scalar(?scalar);
-    if (valid:^ != 1) {
+    if (valid:>u8 != 1) {
         core.destroy_uint(?scalar);
         ct.end();
         ret failed(contracts.INVALID_KEY);
@@ -80,7 +80,7 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     core.decode_secret(?scalar, private_key.data);
     val scalar_valid: ^u8 = core.valid_scalar(?scalar);
     val point_valid: ^u8 = core.parse_point(?peer, peer_public.data);
-    if ((scalar_valid & point_valid):^ != 1) {
+    if ((scalar_valid & point_valid):>u8 != 1) {
         core.destroy_uint(?scalar);
         core.destroy_point(?peer);
         ct.end();
@@ -92,7 +92,7 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     core.scalar_multiply(?shared_point, ?scalar, ?peer);
     val infinity: ^u8 = core.point_is_infinity(?shared_point);
     core.to_affine(?x, ?y, ?shared_point);
-    if (infinity:^ == 1) {
+    if (infinity:>u8 == 1) {
         core.destroy_uint(?scalar);
         core.destroy_point(?peer);
         core.destroy_point(?shared_point);

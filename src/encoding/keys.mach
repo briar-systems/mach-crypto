@@ -117,7 +117,7 @@ fun secret_equal(value: contracts.SecretBytes, expected: *u8, len: usize) bool {
         difference = difference | (value.data[i] ^ expected[i]);
         i = i + 1;
     }
-    ret ct.eq_u8(difference, 0):^ == 1;
+    ret ct.eq_u8(difference, 0):>u8 == 1;
 }
 
 fun version_public(element: *der.Element, expected: u8) bool {
@@ -128,7 +128,7 @@ fun version_public(element: *der.Element, expected: u8) bool {
 #[oblivious]
 fun version_secret(element: *der.SecretElement, expected: u8) bool {
     ret element.tag == der.INTEGER && element.content.len == 1 &&
-        element.content.data[0]:^ == expected;
+        element.content.data[0]:>u8 == expected;
 }
 
 fun valid_rsa_public_parts(modulus: contracts.Bytes,
@@ -157,18 +157,18 @@ fun valid_rsa_public_parts(modulus: contracts.Bytes,
 fun valid_rsa_secret_parts(modulus: contracts.SecretBytes,
     exponent: contracts.SecretBytes) bool {
     if (modulus.len < 256 || modulus.len > 512 || modulus.len % 4 != 0 ||
-        modulus.data == nil || (modulus.data[0]:^ & 0x80) == 0 ||
-        (modulus.data[modulus.len - 1]:^ & 1) == 0) { ret false; }
+        modulus.data == nil || (modulus.data[0]:>u8 & 0x80) == 0 ||
+        (modulus.data[modulus.len - 1]:>u8 & 1) == 0) { ret false; }
     if (exponent.len == 0 || exponent.len > modulus.len || exponent.data == nil ||
-        exponent.data[0]:^ == 0 || (exponent.data[exponent.len - 1]:^ & 1) == 0) {
+        exponent.data[0]:>u8 == 0 || (exponent.data[exponent.len - 1]:>u8 & 1) == 0) {
         ret false;
     }
-    if (exponent.len == 1 && exponent.data[0]:^ < 3) { ret false; }
+    if (exponent.len == 1 && exponent.data[0]:>u8 < 3) { ret false; }
     if (exponent.len == modulus.len) {
         var i: usize = 0;
         for (i < modulus.len) {
-            if (exponent.data[i]:^ < modulus.data[i]:^) { ret true; }
-            if (exponent.data[i]:^ > modulus.data[i]:^) { ret false; }
+            if (exponent.data[i]:>u8 < modulus.data[i]:>u8) { ret true; }
+            if (exponent.data[i]:>u8 > modulus.data[i]:>u8) { ret false; }
             i = i + 1;
         }
         ret false;
@@ -182,7 +182,7 @@ fun valid_p256_public(value: contracts.Bytes) bool {
     var point: p256.Point;
     val valid: ^u8 = p256.parse_point(?point, value.data);
     p256.destroy_point(?point);
-    ret valid:^ == 1;
+    ret valid:>u8 == 1;
 }
 
 #[oblivious]
@@ -378,8 +378,8 @@ fun parse_sec1(input: contracts.SecretBytes, base: usize, descriptor: *Descripto
             var public_element: der.SecretElement;
             if (der.exact_secret(optional.content, ?public_element) != contracts.OK ||
                 public_element.tag != der.BIT_STRING || public_element.content.len != 66 ||
-                public_element.content.data[0]:^ != 0 ||
-                public_element.content.data[1]:^ != 4) { ret contracts.INVALID_KEY; }
+                public_element.content.data[0]:>u8 != 0 ||
+                public_element.content.data[1]:>u8 != 4) { ret contracts.INVALID_KEY; }
             public_seen = true;
             embedded_public = ?public_element.content.data[1];
         } or { ret contracts.INVALID_KEY; }
@@ -399,7 +399,7 @@ fun parse_sec1(input: contracts.SecretBytes, base: usize, descriptor: *Descripto
             difference = difference | (embedded_public[i] ^ derived_public[i]);
             i = i + 1;
         }
-        if (difference:^ != 0) { ret contracts.INVALID_KEY; }
+        if (difference:>u8 != 0) { ret contracts.INVALID_KEY; }
     }
     descriptor.algorithm = P256;
     descriptor.container = SEC1;
@@ -655,12 +655,12 @@ pub fun copy_rsa(key: *PrivateKey, modulus: contracts.Buffer,
     }
     i = 0;
     for (i < key.modulus_len) {
-        modulus.data[i] = key.material.data[key.modulus_offset + i]:^;
+        modulus.data[i] = key.material.data[key.modulus_offset + i]:>u8;
         i = i + 1;
     }
     i = 0;
     for (i < key.exponent_len) {
-        exponent.data[i] = key.material.data[key.exponent_offset + i]:^;
+        exponent.data[i] = key.material.data[key.exponent_offset + i]:>u8;
         i = i + 1;
     }
     val padding: usize = key.modulus_len - key.private_len;

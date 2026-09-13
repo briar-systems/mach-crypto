@@ -114,7 +114,7 @@ pub fun snapshot_sha256(context: *Sha256,
     sha2.destroy256(?copy);
     var i: usize = 0;
     for (i < SHA256_DIGEST_SIZE) {
-        output.data[i] = digest[i]:^;
+        output.data[i] = digest[i]:>u8;
         i = i + 1;
     }
     ct.zeroize(?digest[0], SHA256_DIGEST_SIZE);
@@ -142,7 +142,7 @@ pub fun snapshot_sha384(context: *Sha384,
     sha2.destroy384(?copy);
     var i: usize = 0;
     for (i < SHA384_DIGEST_SIZE) {
-        output.data[i] = digest[i]:^;
+        output.data[i] = digest[i]:>u8;
         i = i + 1;
     }
     ct.zeroize(?digest[0], SHA384_DIGEST_SIZE);

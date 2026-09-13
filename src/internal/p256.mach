@@ -351,10 +351,10 @@ pub fun encode_public(output: *u8, base: usize, input: *UInt) {
     for (word < 8) {
         val offset: usize = 28 - (word << 2);
         val value: ^u64 = input.limb[word];
-        output[base + offset] = (value >> 24)::^u8:^;
-        output[base + offset + 1] = (value >> 16)::^u8:^;
-        output[base + offset + 2] = (value >> 8)::^u8:^;
-        output[base + offset + 3] = value::^u8:^;
+        output[base + offset] = (value >> 24)::^u8:>u8;
+        output[base + offset + 1] = (value >> 16)::^u8:>u8;
+        output[base + offset + 2] = (value >> 8)::^u8:>u8;
+        output[base + offset + 3] = value::^u8:>u8;
         word = word + 1;
     }
 }

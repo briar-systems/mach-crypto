@@ -492,7 +492,7 @@ pub fun point_encode_public(output: *u8, point: *Point) {
     point_encode_secret(?encoded[0], point);
     var i: usize = 0;
     for (i < 32) {
-        output[i] = encoded[i]:^;
+        output[i] = encoded[i]:>u8;
         i = i + 1;
     }
     ct.zeroize(?encoded[0], 32);

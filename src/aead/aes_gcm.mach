@@ -210,7 +210,7 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
         var i: usize = 0;
         for (i < take) {
             block[i] = plaintext.data[offset + i] ^ stream[i];
-            output.data[offset + i] = block[i]:^;
+            output.data[offset + i] = block[i]:>u8;
             i = i + 1;
         }
         hash_block(?accumulator[0], ?hash_key[0], ?block[0]);
@@ -225,7 +225,7 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     finish_tag(?context, ?counter[0], ?accumulator[0], ?tag[0]);
     var i: usize = 0;
     for (i < TAG_SIZE) {
-        output.data[plaintext.len + i] = tag[i]:^;
+        output.data[plaintext.len + i] = tag[i]:>u8;
         i = i + 1;
     }
     wipe_common(?context, ?hash_key[0], ?accumulator[0], ?counter[0], ?tag[0]);
@@ -285,7 +285,7 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     }
     val authenticated: ^u8 = ct.eq_bytes(?expected[0], ?provided[0], TAG_SIZE);
     ct.zeroize(?provided[0], 16);
-    if (authenticated:^ != 1) {
+    if (authenticated:>u8 != 1) {
         ct.zeroize(output.data, ciphertext_len);
         wipe_common(?context, ?hash_key[0], ?accumulator[0], ?counter[0], ?expected[0]);
         ct.end();

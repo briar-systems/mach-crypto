@@ -785,7 +785,7 @@ pub fun valid_public_point(value: contracts.Bytes) bool {
     var point: Point;
     val valid: ^u8 = parse_point(?point, value.data);
     destroy_point(?point);
-    ret valid:^ == 1;
+    ret valid:>u8 == 1;
 }
 
 #[oblivious]
@@ -800,7 +800,7 @@ pub fun verify_sha384(public_key: contracts.Bytes, message: contracts.Bytes,
     ct.begin();
     var peer: Point;
     val point_valid: ^u8 = parse_point(?peer, public_key.data);
-    if (point_valid:^ != 1) {
+    if (point_valid:>u8 != 1) {
         destroy_point(?peer);
         ct.end();
         ret contracts.INVALID_KEY;
@@ -816,7 +816,7 @@ pub fun verify_sha384(public_key: contracts.Bytes, message: contracts.Bytes,
     }
     val r_valid: ^u8 = valid_scalar(?r);
     val s_valid: ^u8 = valid_scalar(?s);
-    if ((r_valid & s_valid):^ != 1) {
+    if ((r_valid & s_valid):>u8 != 1) {
         destroy_point(?peer);
         destroy_uint(?r);
         destroy_uint(?s);
@@ -853,7 +853,7 @@ pub fun verify_sha384(public_key: contracts.Bytes, message: contracts.Bytes,
     reduce_scalar_once(?x);
     val matches: ^u8 = equal(?x, ?r) & (infinity ^ 1);
     var result: contracts.Error = contracts.AUTH_FAILED;
-    if (matches:^ == 1) { result = contracts.OK; }
+    if (matches:>u8 == 1) { result = contracts.OK; }
     destroy_point(?peer);
     destroy_uint(?r);
     destroy_uint(?s);
@@ -875,7 +875,7 @@ test "p384 internal: constants have canonical low words" {
 }
 
 test "p384 internal: montgomery arithmetic matches small values" {
-    if (multiply_words(0xFFFFFFFF, 0xFFFFFFFF):^ !=
+    if (multiply_words(0xFFFFFFFF, 0xFFFFFFFF):>u64 !=
         0xFFFFFFFE00000001) { ret 7; }
     var one: UInt;
     var two: UInt;
@@ -887,25 +887,25 @@ test "p384 internal: montgomery arithmetic matches small values" {
     set_small(?three, 3);
     field_to_montgomery(?value, ?one);
     field_from_montgomery(?normal, ?value);
-    if (equal(?normal, ?one):^ != 1) { ret 1; }
+    if (equal(?normal, ?one):>u8 != 1) { ret 1; }
     field_square(?value, ?value);
     field_from_montgomery(?normal, ?value);
-    if (equal(?normal, ?one):^ != 1) { ret 5; }
+    if (equal(?normal, ?one):>u8 != 1) { ret 5; }
     field_inverse(?value, ?value);
     field_from_montgomery(?normal, ?value);
-    if (equal(?normal, ?one):^ != 1) { ret 6; }
+    if (equal(?normal, ?one):>u8 != 1) { ret 6; }
     field_to_montgomery(?value, ?two);
     field_to_montgomery(?normal, ?three);
     field_multiply(?value, ?value, ?normal);
     field_from_montgomery(?normal, ?value);
     set_small(?one, 6);
-    if (equal(?normal, ?one):^ != 1) { ret 2; }
+    if (equal(?normal, ?one):>u8 != 1) { ret 2; }
     scalar_multiply_values(?value, ?two, ?three);
-    if (equal(?value, ?one):^ != 1) { ret 3; }
+    if (equal(?value, ?one):>u8 != 1) { ret 3; }
     scalar_inverse(?value, ?two);
     scalar_multiply_values(?normal, ?value, ?two);
     set_small(?one, 1);
-    if (equal(?normal, ?one):^ != 1) { ret 4; }
+    if (equal(?normal, ?one):>u8 != 1) { ret 4; }
     destroy_uint(?one);
     destroy_uint(?two);
     destroy_uint(?three);
@@ -956,12 +956,12 @@ test "p384 internal: modular products match independent big integers" {
     field_to_montgomery(?right, ?right);
     field_multiply(?result, ?left, ?right);
     field_from_montgomery(?result, ?result);
-    if (equal(?result, ?expected):^ != 1) { ret 1; }
+    if (equal(?result, ?expected):>u8 != 1) { ret 1; }
     copy_constant(?left, (?scalar_left[0]):~*u64);
     copy_constant(?right, (?scalar_right[0]):~*u64);
     copy_constant(?expected, (?scalar_product[0]):~*u64);
     scalar_multiply_values(?result, ?left, ?right);
-    if (equal(?result, ?expected):^ != 1) { ret 2; }
+    if (equal(?result, ?expected):>u8 != 1) { ret 2; }
     destroy_uint(?left);
     destroy_uint(?right);
     destroy_uint(?expected);
@@ -980,29 +980,29 @@ test "p384 internal: interleaved multiplication preserves each input" {
     set_small(?one, 1);
     generator(?point);
     field_from_montgomery(?x, ?point.x);
-    if (x.limb[0]:^ != 0x72760AB7 || x.limb[11]:^ != 0xAA87CA22) {
+    if (x.limb[0]:>u64 != 0x72760AB7 || x.limb[11]:>u64 != 0xAA87CA22) {
         ret 1;
     }
     field_multiply(?x, ?point.x, ?point.z);
     field_from_montgomery(?x, ?x);
-    if (x.limb[0]:^ != 0x72760AB7 || x.limb[11]:^ != 0xAA87CA22) {
+    if (x.limb[0]:>u64 != 0x72760AB7 || x.limb[11]:>u64 != 0xAA87CA22) {
         ret 2;
     }
     to_affine(?x, ?y, ?point);
     field_from_montgomery(?x, ?x);
-    if (x.limb[0]:^ != 0x72760AB7 || x.limb[11]:^ != 0xAA87CA22) {
+    if (x.limb[0]:>u64 != 0x72760AB7 || x.limb[11]:>u64 != 0xAA87CA22) {
         ret 3;
     }
     double_scalar_multiply(?result, ?one, ?zero, ?point);
     to_affine(?x, ?y, ?result);
     field_from_montgomery(?x, ?x);
-    if (x.limb[0]:^ != 0x72760AB7 || x.limb[11]:^ != 0xAA87CA22) {
+    if (x.limb[0]:>u64 != 0x72760AB7 || x.limb[11]:>u64 != 0xAA87CA22) {
         ret 4;
     }
     double_scalar_multiply(?result, ?zero, ?one, ?point);
     to_affine(?x, ?y, ?result);
     field_from_montgomery(?x, ?x);
-    if (x.limb[0]:^ != 0x72760AB7 || x.limb[11]:^ != 0xAA87CA22) {
+    if (x.limb[0]:>u64 != 0x72760AB7 || x.limb[11]:>u64 != 0xAA87CA22) {
         ret 5;
     }
     destroy_uint(?zero);
