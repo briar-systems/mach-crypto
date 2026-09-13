@@ -37,7 +37,7 @@ The layers run separately so one kind of evidence cannot stand in for another:
 6. A deliberately secret-dependent branch must be rejected for every target
    and profile. Rejection for any reason other than secret-flow leakage fails.
 7. Every project is built for all six targets and both profiles with emitted
-   IR, emitted assembly, and `--verify-ir`.
+   IR and emitted assembly (IR verification is mandatory in mach 5.0).
 8. A second clean matrix build must produce byte-identical artifacts.
 9. Every module named by `assurance/zeroization.tsv` must retain explicit
    zeroization calls in generated IR. Security-critical release assembly named

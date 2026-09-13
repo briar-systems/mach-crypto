@@ -321,7 +321,7 @@ inspect_zeroization() {
             for profile in "${profiles[@]}"; do
                 ir="$root/out/$target/$profile/ir/$module.ir"
                 require_file "$ir"
-                ir_calls=$(grep -c 'call void @std.crypto.ct.zeroize' "$ir" || true)
+                ir_calls=$(grep -cE 'call [^@]*@"?std\.crypto\.ct\.zeroize"?' "$ir" || true)
                 [[ "$ir_calls" -gt 0 ]] || die "zeroization call is absent from ${ir#"$root"/}"
                 relative_ir="generated/$target/$profile/$module.ir"
                 destination="$stage/$relative_ir"
