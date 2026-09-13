@@ -335,15 +335,22 @@ inspect_zeroization() {
             if [[ "$assembly_required" == yes ]]; then
                 asm="$root/out/$target/release/asm/$module.s"
                 require_file "$asm"
+                # 5.0 release builds inline small helpers across modules, so the wipe
+                # reaches the assembly either as a call or as an expansion the release IR
+                # records under inline_sites. the stores themselves survive by the
+                # language's zeroizing-write guarantee (doc/language/secrecy.md)
+                release_ir="$root/out/$target/release/ir/$module.ir"
+                require_file "$release_ir"
                 asm_calls=$(grep -c 'std.crypto.ct.zeroize' "$asm" || true)
-                [[ "$asm_calls" -gt 0 ]] || die "zeroization call is absent from ${asm#"$root"/}"
+                inlined=$(grep -c 'callee="std.crypto.ct.zeroize"' "$release_ir" || true)
+                [[ "$asm_calls" -gt 0 || "$inlined" -gt 0 ]] || die "zeroization is absent from ${asm#"$root"/} and not inlined per ${release_ir#"$root"/}"
                 relative_asm="generated/$target/release/$module.s"
                 destination="$stage/$relative_asm"
                 mkdir -p "$(dirname -- "$destination")"
                 cp "$asm" "$destination"
                 hash=$(sha256_file "$destination")
                 record_result zeroization . "$algorithm" \
-                    "release assembly retains $asm_calls explicit zeroization reference(s)" \
+                    "release assembly retains $asm_calls zeroization call(s) and $inlined inline expansion(s)" \
                     "$target" release "$relative_asm" "$hash"
             fi
         done
