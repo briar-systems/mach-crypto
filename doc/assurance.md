@@ -78,7 +78,7 @@ tools/assurance verify
 ```
 
 Verification fails closed when the working tree is dirty, `HEAD` differs, the
-compiler binary changes, `mach.lock` changes, policy changes, an evidence file
+compiler binary changes, the committed dependency pins under `dep/` change, policy changes, an evidence file
 changes, a required status is not `PASS`, review state is conflated with
 availability, or a live generated artifact is missing or has a different size
 or hash.
