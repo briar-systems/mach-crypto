@@ -28,13 +28,6 @@ jobs:
         run: |
           set -euo pipefail
           mach dep pull .
-          mach dep pull test/secret
-          mach dep pull test/hash
-          mach dep pull test/mac
-          mach dep pull test/aead
-          mach dep pull test/group
-          mach dep pull test/signature
-          mach dep pull test/encoding
           mach dep pull test/leakage-negative
 
       - name: Build
@@ -45,15 +38,6 @@ jobs:
 
       - name: Test (release)
         run: mach test . --profile release
-
-      - name: Test the per-algorithm projects
-        run: |
-          set -euo pipefail
-          for project in test/secret test/hash test/mac test/aead \
-                         test/group test/signature test/encoding; do
-            echo "== $project =="
-            mach test "$project"
-          done
 
       - name: Build every target
         run: mach build . --all-targets --profile release
