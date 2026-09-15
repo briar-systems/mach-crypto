@@ -22,7 +22,7 @@ official-vector	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	NIST CAVP	rsa-pkcs1: nist ca
 official-vector	.	key-containers	RFC 8410	keys: rfc 8410 Ed25519 and X25519 containers are exact and bounded
 differential	.	hkdf-sha-384	independent Python hashlib vector	hkdf: sha-384 extract and expand agree with independent vectors
 differential	.	aes-128-gcm,aes-256-gcm	independent AES-GCM implementation	aes-gcm: independent counter-carry differential vector
-differential	.	aes-128-gcm	independent Python cryptography AES-GCM	aes-gcm: independent record-length differential vectors
+differential	.	aes-128-gcm,aes-256-gcm	independent Python cryptography AES-GCM	aes-gcm: independent record-length differential vectors
 differential	.	chacha20-poly1305	independent RFC-compatible implementation	chacha20-poly1305: empty independent vector
 differential	.	chacha20-poly1305	independent RFC-compatible implementation	chacha20-poly1305: independent counter-carry differential vector
 differential	.	x25519	independent X25519 implementation	x25519: independent differential vector and private output overlap
@@ -32,6 +32,9 @@ differential	.	ecdsa-p384-sha384	independent OpenSSL vector	ecdsa p-384: indepen
 differential	.	p-256-ecdh,ecdsa-p256-sha256	independent Python integer arithmetic	p256 internal: field arithmetic matches independent vectors
 differential	.	ecdsa-p256-sha256	independent Python integer arithmetic	p256 internal: scalar arithmetic matches independent vectors
 differential	.	p-256-ecdh,ecdsa-p256-sha256	independent Python group law	p256 internal: windowed scalar multiplication matches independent vectors
+differential	.	ed25519	independent Python group law	ed25519 internal: windowed scalar multiplication matches independent vectors across the scalar range
+differential	.	x25519,ed25519	independent Python integer arithmetic	x25519 internal: field arithmetic matches independent vectors
+differential	.	x25519	independent Python cryptography X25519	x25519: agreement matches independent vectors across private keys and coordinates
 differential	.	ecdsa-p384-sha384	independent Python big-integer products	p384 internal: modular products match independent big integers
 differential	.	p-256-ecdh	independent OpenSSL vectors	keys: independent P-256 SEC1, PKCS8, and SPKI vectors agree
 differential	.	key-containers	independent OpenSSL vectors	keys: OpenSSL RSA containers preserve exact public and private parts
