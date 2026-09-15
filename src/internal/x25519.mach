@@ -12,11 +12,6 @@ pub rec Field {
     limb: [5]^u64;
 }
 
-rec Wide {
-    low:  ^u64;
-    high: ^u64;
-}
-
 pub fun destroy(value: *Field) {
     if (value == nil) { ret; }
     ct.zeroize((?value.limb[0]):~*^u8, 40);
@@ -26,30 +21,6 @@ pub fun destroy(value: *Field) {
 #[inline]
 fun times_19(value: ^u64) ^u64 {
     ret value + (value << 1) + (value << 4);
-}
-
-#[oblivious]
-#[inline]
-fun multiply51(left: ^u64, right: ^u64) Wide {
-    var result:       Wide  = Wide{low: 0, high: 0};
-    var shifted_low:  ^u64  = left;
-    var shifted_high: ^u64  = 0;
-    var multiplier:   ^u64  = right;
-    var i:            usize = 0;
-    for (i < LIMB_BITS) {
-        val mask: ^u64 = 0 - (multiplier & 1);
-        val sum:  ^u64 = result.low + (shifted_low & mask);
-        result.low   = sum & LIMB_MASK;
-        result.high  = result.high + (shifted_high & mask) + (sum >> LIMB_BITS);
-        shifted_high = (shifted_high << 1) | (shifted_low >> (LIMB_BITS - 1));
-        shifted_low  = (shifted_low << 1) & LIMB_MASK;
-        multiplier   = multiplier >> 1;
-        i            = i + 1;
-    }
-    shifted_low  = 0;
-    shifted_high = 0;
-    multiplier   = 0;
-    ret result;
 }
 
 #[oblivious]
@@ -144,38 +115,95 @@ pub fun subtract(output: *Field, left: *Field, right: *Field) {
     normalize(output);
 }
 
+# double a field element whose limbs are at most 2^51 + 38, keeping that bound
+#[oblivious]
+#[inline]
+fun double_in_place(value: *Field) {
+    val carry0: ^u64 = value.limb[0] >> 50;
+    val carry1: ^u64 = value.limb[1] >> 50;
+    val carry2: ^u64 = value.limb[2] >> 50;
+    val carry3: ^u64 = value.limb[3] >> 50;
+    val carry4: ^u64 = value.limb[4] >> 50;
+    value.limb[0] = ((value.limb[0] << 1) & LIMB_MASK) + times_19(carry4);
+    value.limb[1] = ((value.limb[1] << 1) & LIMB_MASK) + carry0;
+    value.limb[2] = ((value.limb[2] << 1) & LIMB_MASK) + carry1;
+    value.limb[3] = ((value.limb[3] << 1) & LIMB_MASK) + carry2;
+    value.limb[4] = ((value.limb[4] << 1) & LIMB_MASK) + carry3;
+}
+
+# multiply by walking the multiplier's bits once over a doubling multiplicand
+#
+# native multiplication is gated on secrets, so the product is a masked sum of
+# left * 2^k mod p for every set bit k. the multiplicand keeps limbs at most
+# 2^51 + 38 while it doubles, and both operands are read before the first write,
+# so output may alias either.
 #[oblivious]
 pub fun multiply(output: *Field, left: *Field, right: *Field) {
-    var product: [10]^u64;
-    ct.zeroize((?product[0]):~*^u8, 80);
-    var i: usize = 0;
-    for (i < 5) {
-        var j: usize = 0;
-        for (j < 5) {
-            var pair: Wide = multiply51(left.limb[i], right.limb[j]);
-            product[i + j]     = product[i + j] + pair.low;
-            product[i + j + 1] = product[i + j + 1] + pair.high;
-            pair.low           = 0;
-            pair.high          = 0;
-            j                  = j + 1;
+    var multiple: Field;
+    var bits:     Field;
+    copy(?multiple, left);
+    normalize(?multiple);
+    normalize(?multiple);
+    copy(?bits, right);
+    canonicalize(?bits);
+    var m0: ^u64 = multiple.limb[0];
+    var m1: ^u64 = multiple.limb[1];
+    var m2: ^u64 = multiple.limb[2];
+    var m3: ^u64 = multiple.limb[3];
+    var m4: ^u64 = multiple.limb[4];
+    var p0: ^u64 = 0;
+    var p1: ^u64 = 0;
+    var p2: ^u64 = 0;
+    var p3: ^u64 = 0;
+    var p4: ^u64 = 0;
+    var limb_index: usize = 0;
+    for (limb_index < 5) {
+        var word: ^u64 = bits.limb[limb_index];
+        var bit:  u64  = 0;
+        for (bit < 51) {
+            val mask: ^u64 = 0 - (word & 1);
+            p0 = p0 + (m0 & mask);
+            p1 = p1 + (m1 & mask);
+            p2 = p2 + (m2 & mask);
+            p3 = p3 + (m3 & mask);
+            p4 = p4 + (m4 & mask);
+            val c0: ^u64 = m0 >> 50;
+            val c1: ^u64 = m1 >> 50;
+            val c2: ^u64 = m2 >> 50;
+            val c3: ^u64 = m3 >> 50;
+            val c4: ^u64 = m4 >> 50;
+            m0   = ((m0 << 1) & LIMB_MASK) + times_19(c4);
+            m1   = ((m1 << 1) & LIMB_MASK) + c0;
+            m2   = ((m2 << 1) & LIMB_MASK) + c1;
+            m3   = ((m3 << 1) & LIMB_MASK) + c2;
+            m4   = ((m4 << 1) & LIMB_MASK) + c3;
+            word = word >> 1;
+            bit  = bit + 1;
         }
-        i = i + 1;
+        word       = 0;
+        limb_index = limb_index + 1;
     }
-    i = 10;
-    for (i > 5) {
-        i              = i - 1;
-        product[i - 5] = product[i - 5] + times_19(product[i]);
-    }
-    var result: Field;
-    i = 0;
-    for (i < 5) {
-        result.limb[i] = product[i];
-        i              = i + 1;
-    }
-    canonicalize(?result);
-    copy(output, ?result);
-    destroy(?result);
-    ct.zeroize((?product[0]):~*^u8, 80);
+    var product: Field;
+    product.limb[0] = p0;
+    product.limb[1] = p1;
+    product.limb[2] = p2;
+    product.limb[3] = p3;
+    product.limb[4] = p4;
+    canonicalize(?product);
+    copy(output, ?product);
+    m0 = 0;
+    m1 = 0;
+    m2 = 0;
+    m3 = 0;
+    m4 = 0;
+    p0 = 0;
+    p1 = 0;
+    p2 = 0;
+    p3 = 0;
+    p4 = 0;
+    destroy(?multiple);
+    destroy(?bits);
+    destroy(?product);
 }
 
 #[oblivious]
@@ -184,30 +212,32 @@ pub fun square(output: *Field, input: *Field) {
     multiply(output, input, input);
 }
 
+# multiply by the public ladder constant (486662 - 2) / 4 = 121665
 #[oblivious]
 fun multiply_a24(output: *Field, input: *Field) {
-    var product: [6]^u64;
-    ct.zeroize((?product[0]):~*^u8, 48);
-    var i: usize = 0;
-    for (i < 5) {
-        var pair: Wide = multiply51(input.limb[i], 121665);
-        product[i]     = product[i] + pair.low;
-        product[i + 1] = product[i + 1] + pair.high;
-        pair.low       = 0;
-        pair.high      = 0;
-        i              = i + 1;
+    var multiple: Field;
+    var product:  Field;
+    copy(?multiple, input);
+    normalize(?multiple);
+    normalize(?multiple);
+    set_small(?product, 0);
+    val constant: u64 = 121665;
+    var bit:      u64 = 0;
+    for (bit < 17) {
+        if (((constant >> bit) & 1) == 1) {
+            var i: usize = 0;
+            for (i < 5) {
+                product.limb[i] = product.limb[i] + multiple.limb[i];
+                i               = i + 1;
+            }
+        }
+        double_in_place(?multiple);
+        bit = bit + 1;
     }
-    product[0] = product[0] + times_19(product[5]);
-    var result: Field;
-    i = 0;
-    for (i < 5) {
-        result.limb[i] = product[i];
-        i              = i + 1;
-    }
-    canonicalize(?result);
-    copy(output, ?result);
-    destroy(?result);
-    ct.zeroize((?product[0]):~*^u8, 48);
+    canonicalize(?product);
+    copy(output, ?product);
+    destroy(?multiple);
+    destroy(?product);
 }
 
 #[oblivious]
