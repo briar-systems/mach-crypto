@@ -284,13 +284,7 @@ fun field_negate(output: *field.Field, input: *field.Field) {
 #[oblivious]
 fun field_sqrt(output: *field.Field, input: *field.Field) ^u8 {
     var result: field.Field;
-    field.set_small(?result, 1);
-    var position: usize = 252;
-    for (position > 0) {
-        position = position - 1;
-        field.square(?result, ?result);
-        if (position > 0) { field.multiply(?result, ?result, input); }
-    }
+    field.raise_square_root(?result, input);
     var squared: field.Field;
     field.square(?squared, ?result);
     val direct:         ^u8 = field_equal(?squared, input);

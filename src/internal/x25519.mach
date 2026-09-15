@@ -250,8 +250,9 @@ fun square_times(output: *Field, input: *Field, count: usize) {
     }
 }
 
+# raise to 2^250 - 1 and also return input^11, the shared head of both exponents
 #[oblivious]
-pub fun invert(output: *Field, input: *Field) {
+fun raise_chain(output: *Field, eleven: *Field, input: *Field) {
     var t0: Field;
     var t1: Field;
     var t2: Field;
@@ -276,13 +277,36 @@ pub fun invert(output: *Field, input: *Field) {
     square_times(?t3, ?t2, 100);
     multiply(?t2, ?t3, ?t2);
     square_times(?t2, ?t2, 50);
-    multiply(?t1, ?t2, ?t1);
-    square_times(?t1, ?t1, 5);
-    multiply(output, ?t1, ?t0);
+    multiply(output, ?t2, ?t1);
+    copy(eleven, ?t0);
     destroy(?t0);
     destroy(?t1);
     destroy(?t2);
     destroy(?t3);
+}
+
+#[oblivious]
+pub fun invert(output: *Field, input: *Field) {
+    var chain:  Field;
+    var eleven: Field;
+    raise_chain(?chain, ?eleven, input);
+    square_times(?chain, ?chain, 5);
+    multiply(output, ?chain, ?eleven);
+    destroy(?chain);
+    destroy(?eleven);
+}
+
+# raise to (p + 3) / 8 = 2^252 - 2, the ed25519 square-root candidate exponent
+#[oblivious]
+pub fun raise_square_root(output: *Field, input: *Field) {
+    var chain:  Field;
+    var eleven: Field;
+    raise_chain(?chain, ?eleven, input);
+    square(?chain, ?chain);
+    multiply(?chain, ?chain, input);
+    square(output, ?chain);
+    destroy(?chain);
+    destroy(?eleven);
 }
 
 fun read_public_u64(input: *u8, offset: usize) u64 {
