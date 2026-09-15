@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.1] - 2026-09-15
+
+### Performance
+
+- AES-GCM runs bitsliced over four blocks per pass and hashes GHASH in 64-bit words (#56, measured in #59).
+- P-256 reduces field products once with the Solinas identity, keeps scalars in Montgomery form, and multiplies points with a fixed 4-bit window (#57, measured in #61).
+- curve25519 multiplies field elements in one pass over the multiplier bits, shares the 2^250 - 1 chain between inversion and the Ed25519 square root, and multiplies Ed25519 points with a fixed 4-bit window (#58, measured in #60).
+
+Every table selection is a masked scan over all entries and no new branch, index or multiply depends on secret data.
+
+### Added
+
+- Differential tests against independent implementations: AES-GCM at every record-length boundary for both key sizes, and P-256, Ed25519 and X25519 arithmetic across the full scalar range, including 0, n - 1, n, n + 1 and 2^256 - 1 (#62).
+
 ## [0.9.0] - 2026-09-13
 
 ### Changed
