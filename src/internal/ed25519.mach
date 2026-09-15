@@ -430,27 +430,51 @@ fun point_double(output: *Point, input: *Point) {
     destroy_point(?result);
 }
 
+# multiply a point by a scalar with a fixed 4-bit window
+#
+# the extended twisted edwards addition is complete, so table entries and the
+# accumulator need no equal-point or identity handling.
 #[oblivious]
 pub fun scalar_multiply(output: *Point, scalar: *Scalar, point: *Point) {
+    var table:    [16]Point;
     var result:   Point;
-    var addend:   Point;
     var selected: Point;
+    identity(?table[0]);
+    point_copy(?table[1], point);
+    var index: usize = 2;
+    for (index < 16) {
+        point_add(?table[index], ?table[index - 1], point);
+        index = index + 1;
+    }
+
     identity(?result);
-    point_copy(?addend, point);
-    var bit: usize = 0;
-    for (bit < 256) {
-        val limb_index: usize = bit >> 5;
-        val shift:      usize = bit & 31;
-        val take:       ^u8   = ((scalar.limb[limb_index] >> shift) & 1)::^u8;
-        identity(?selected);
-        point_select(?selected, ?selected, ?addend, take);
+    var window: usize = 64;
+    for (window > 0) {
+        window = window - 1;
+        point_double(?result, ?result);
+        point_double(?result, ?result);
+        point_double(?result, ?result);
+        point_double(?result, ?result);
+        val limb_index: usize = window >> 3;
+        val shift:      u64   = ((window & 7) * 4)::u64;
+        val digit:      ^u64  = (scalar.limb[limb_index] >> shift) & 15;
+        point_copy(?selected, ?table[0]);
+        index = 1;
+        for (index < 16) {
+            point_select(?selected, ?selected, ?table[index],
+                ct.eq_u64(digit, index::u64));
+            index = index + 1;
+        }
         point_add(?result, ?result, ?selected);
-        point_double(?addend, ?addend);
-        bit = bit + 1;
     }
     point_copy(output, ?result);
+
+    index = 0;
+    for (index < 16) {
+        destroy_point(?table[index]);
+        index = index + 1;
+    }
     destroy_point(?result);
-    destroy_point(?addend);
     destroy_point(?selected);
 }
 
