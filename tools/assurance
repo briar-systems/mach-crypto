@@ -21,6 +21,13 @@ die() {
     exit 1
 }
 
+# the logs are removed on exit, so a failure prints its non-passing tests and log tail first
+report_failed_tests() {
+    local log=$1
+    grep '"event":"test"' "$log" | grep -v '"kind":"pass"' >&2 || true
+    tail -n 20 -- "$log" >&2
+}
+
 require_command() {
     command -v "$1" >/dev/null 2>&1 || die "required command is unavailable: $1"
 }
@@ -148,7 +155,8 @@ run_functional_tests() {
             log="$stage/$relative"
             mkdir -p "$(dirname -- "$log")"
             if ! (cd "$root" && mach test "$project" --profile "$profile" --format json) > "$log" 2>&1; then
-                die "functional test failed for $project $profile; see $log"
+                report_failed_tests "$log"
+                die "functional test failed for $project $profile"
             fi
             validate_test_log "$log" many
             hash=$(sha256_file "$log")
@@ -173,7 +181,8 @@ run_independent_tests() {
             mkdir -p "$(dirname -- "$log")"
             if ! (cd "$root" && mach test "$project" --profile "$profile" \
                 --filter "$filter" --format json) > "$log" 2>&1; then
-                die "$category test failed for $project $profile: $filter; see $log"
+                report_failed_tests "$log"
+                die "$category test failed for $project $profile: $filter"
             fi
             validate_test_log "$log" one
             hash=$(sha256_file "$log")
