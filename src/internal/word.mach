@@ -11,13 +11,18 @@ use std.types.size.usize;
 #[oblivious]
 #[inline]
 pub fun multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
-    var product:  ^u64 = 0;
-    var position: u64  = 0;
-    for (position < bits) {
-        val bit: ^u64 = (right >> position) & 1;
-        product  = product + ((left & (0 - bit)) << position);
-        position = position + 1;
+    var product:    ^u64  = 0;
+    var shifted:    ^u64  = left;
+    var multiplier: ^u64  = right;
+    var i:          usize = 0;
+    for (i < bits) {
+        product    = product + (shifted & (0 - (multiplier & 1)));
+        shifted    = shifted << 1;
+        multiplier = multiplier >> 1;
+        i          = i + 1;
     }
+    shifted    = 0;
+    multiplier = 0;
     ret product;
 }
 
