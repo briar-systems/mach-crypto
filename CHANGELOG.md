@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-16
+
+### Changed
+
+- Dependencies: mach-std v3.1.0 (#72). Consumers now resolve std 3.1.0 or later.
+
 ## [0.9.2] - 2026-09-15
 
 ### Fixed
