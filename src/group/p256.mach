@@ -40,18 +40,15 @@ pub fun derive_public(private_key: contracts.SecretBytes,
         ct.end();
         ret failed(contracts.INVALID_KEY);
     }
-    var basepoint:    core.Point;
     var public_point: core.Point;
     var x:            core.UInt;
     var y:            core.UInt;
-    core.generator(?basepoint);
-    core.scalar_multiply(?public_point, ?scalar, ?basepoint);
+    core.scalar_multiply_base(?public_point, ?scalar);
     core.to_affine(?x, ?y, ?public_point);
     output.data[0] = 0x04;
     core.encode_public(output.data, 1, ?x);
     core.encode_public(output.data, 33, ?y);
     core.destroy_uint(?scalar);
-    core.destroy_point(?basepoint);
     core.destroy_point(?public_point);
     core.destroy_uint(?x);
     core.destroy_uint(?y);

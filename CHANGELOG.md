@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-09-16
+
+### Performance
+
+- P-256 inverts along fixed addition chains: 255 squarings and 12 multiplications in the field, 253 and 39 in the scalar ring, where square-and-multiply took 256 and 128, and 256 and 169. ECDSA signing retires 9% fewer instructions, verification 5%, and keygen and ECDH 4% (#81).
+- P-256 multiplies the generator with a fixed-base comb table: 64 windows of 15 precomputed affine multiples, selected in constant time and added with mixed additions, so there are no doublings. `tools/p256-base-table` generates the table, and a test recomputes every entry. Keygen retires 3.4x fewer instructions, ECDSA signing 2.2x and verification 1.5x (#82).
+
 ## [0.10.1] - 2026-09-16
 
 ### Changed
