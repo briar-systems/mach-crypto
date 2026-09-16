@@ -1,6 +1,7 @@
 # secret-state poly1305 for aead message layouts
 
 use crypto.contracts;
+use crypto.internal.word;
 use std.crypto.ct;
 use std.types.bool.bool;
 use std.types.bool.false;
@@ -34,25 +35,6 @@ fun write_u32(output: *^u8, offset: usize, value: ^u32) {
     output[offset + 1] = (value >> 8)::^u8;
     output[offset + 2] = (value >> 16)::^u8;
     output[offset + 3] = (value >> 24)::^u8;
-}
-
-#[oblivious]
-#[inline]
-fun multiply29(left: ^u64, right: ^u64) ^u64 {
-    var result:     ^u64  = 0;
-    var shifted:    ^u64  = left;
-    var multiplier: ^u64  = right;
-    var i:          usize = 0;
-    for (i < 29) {
-        val mask: ^u64 = 0 - (multiplier & 1);
-        result     = result + (shifted & mask);
-        shifted    = shifted << 1;
-        multiplier = multiplier >> 1;
-        i          = i + 1;
-    }
-    shifted    = 0;
-    multiplier = 0;
-    ret result;
 }
 
 pub fun destroy(context: *Context) {
@@ -101,21 +83,21 @@ fun process_block(context: *Context, block: *^u8) {
     val r3x5:    ^u64 = context.r[3] + (context.r[3] << 2);
     val r4x5:    ^u64 = context.r[4] + (context.r[4] << 2);
     var product: [5]^u64;
-    product[0] = multiply29(context.h[0], context.r[0]) + multiply29(context.h[1], r4x5) +
-        multiply29(context.h[2], r3x5) + multiply29(context.h[3], r2x5) +
-        multiply29(context.h[4], r1x5);
-    product[1] = multiply29(context.h[0], context.r[1]) + multiply29(context.h[1], context.r[0]) +
-        multiply29(context.h[2], r4x5) + multiply29(context.h[3], r3x5) +
-        multiply29(context.h[4], r2x5);
-    product[2] = multiply29(context.h[0], context.r[2]) + multiply29(context.h[1], context.r[1]) +
-        multiply29(context.h[2], context.r[0]) + multiply29(context.h[3], r4x5) +
-        multiply29(context.h[4], r3x5);
-    product[3] = multiply29(context.h[0], context.r[3]) + multiply29(context.h[1], context.r[2]) +
-        multiply29(context.h[2], context.r[1]) + multiply29(context.h[3], context.r[0]) +
-        multiply29(context.h[4], r4x5);
-    product[4] = multiply29(context.h[0], context.r[4]) + multiply29(context.h[1], context.r[3]) +
-        multiply29(context.h[2], context.r[2]) + multiply29(context.h[3], context.r[1]) +
-        multiply29(context.h[4], context.r[0]);
+    product[0] = word.multiply(context.h[0], context.r[0], 29) + word.multiply(context.h[1], r4x5, 29) +
+        word.multiply(context.h[2], r3x5, 29) + word.multiply(context.h[3], r2x5, 29) +
+        word.multiply(context.h[4], r1x5, 29);
+    product[1] = word.multiply(context.h[0], context.r[1], 29) + word.multiply(context.h[1], context.r[0], 29) +
+        word.multiply(context.h[2], r4x5, 29) + word.multiply(context.h[3], r3x5, 29) +
+        word.multiply(context.h[4], r2x5, 29);
+    product[2] = word.multiply(context.h[0], context.r[2], 29) + word.multiply(context.h[1], context.r[1], 29) +
+        word.multiply(context.h[2], context.r[0], 29) + word.multiply(context.h[3], r4x5, 29) +
+        word.multiply(context.h[4], r3x5, 29);
+    product[3] = word.multiply(context.h[0], context.r[3], 29) + word.multiply(context.h[1], context.r[2], 29) +
+        word.multiply(context.h[2], context.r[1], 29) + word.multiply(context.h[3], context.r[0], 29) +
+        word.multiply(context.h[4], r4x5, 29);
+    product[4] = word.multiply(context.h[0], context.r[4], 29) + word.multiply(context.h[1], context.r[3], 29) +
+        word.multiply(context.h[2], context.r[2], 29) + word.multiply(context.h[3], context.r[1], 29) +
+        word.multiply(context.h[4], context.r[0], 29);
 
     var carry: ^u64 = product[0] >> 26;
     context.h[0] = product[0] & LIMB_MASK;
