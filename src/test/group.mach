@@ -2,10 +2,10 @@
 
 use crypto.contracts;
 use crypto.group.p256;
-use core: crypto.internal.p256;
-use ed: crypto.internal.ed25519;
-use field: crypto.internal.x25519;
 use crypto.group.x25519;
+use ed:    crypto.internal.ed25519;
+use core:  crypto.internal.p256;
+use field: crypto.internal.x25519;
 use std.runtime;
 use std.types.bool.bool;
 use std.types.bool.false;
@@ -59,8 +59,11 @@ fun secret_filled(actual: *^u8, value: u8, len: usize) bool {
 
 test "p256: scalar one derives the sec1 generator" {
     var private_key: [32]^u8;
-    var i: usize = 0;
-    for (i < 32) { private_key[i] = 0; i = i + 1; }
+    var i:           usize = 0;
+    for (i < 32) {
+        private_key[i] = 0;
+        i              = i + 1;
+    }
     private_key[31] = 1;
     val expected: [65]u8 = [65]u8{
         0x04,
@@ -78,7 +81,7 @@ test "p256: scalar one derives the sec1 generator" {
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Buffer{data: ?output[0], capacity: 65});
     if (result.error != contracts.OK || result.written != 65) { ret 1; }
-    if (!public_equal(?output[0], (?expected[0]):~*u8, 65)) { ret 2; }
+    if (!public_equal(?output[0], (?expected[0]):~*u8, 65))   { ret 2; }
     ret 0;
 }
 
@@ -118,7 +121,7 @@ test "p256: nist cavp p-256 cdh count zero" {
         0x04, 0x0d, 0xd7, 0x77, 0x89, 0x97, 0xbd, 0x7b
     };
     var public_key: [65]u8;
-    var result: contracts.Operation = p256.derive_public(
+    var result:     contracts.Operation = p256.derive_public(
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Buffer{data: ?public_key[0], capacity: 65});
     if (result.error != contracts.OK || result.written != 65 ||
@@ -133,14 +136,22 @@ test "p256: nist cavp p-256 cdh count zero" {
 }
 
 test "p256: invalid scalars and sec1 points preserve output" {
-    var scalar: [32]^u8;
+    var scalar:        [32]^u8;
     var public_output: [65]u8;
     var secret_output: [32]^u8;
-    var peer: [65]u8;
-    var i: usize = 0;
-    for (i < 32) { scalar[i] = 0; secret_output[i] = 0xa5; i = i + 1; }
+    var peer:          [65]u8;
+    var i:             usize = 0;
+    for (i < 32) {
+        scalar[i]        = 0;
+        secret_output[i] = 0xa5;
+        i                = i + 1;
+    }
     i = 0;
-    for (i < 65) { public_output[i] = 0x5a; peer[i] = 0; i = i + 1; }
+    for (i < 65) {
+        public_output[i] = 0x5a;
+        peer[i]          = 0;
+        i                = i + 1;
+    }
     peer[0] = 0x04;
     var result: contracts.Operation = p256.derive_public(
         contracts.SecretBytes{data: ?scalar[0], len: 32},
@@ -155,29 +166,35 @@ test "p256: invalid scalars and sec1 points preserve output" {
         0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51
     };
     i = 0;
-    for (i < 32) { scalar[i] = order[i]; i = i + 1; }
+    for (i < 32) {
+        scalar[i] = order[i];
+        i         = i + 1;
+    }
     result = p256.derive_public(contracts.SecretBytes{data: ?scalar[0], len: 32},
         contracts.Buffer{data: ?public_output[0], capacity: 65});
     if (result.error != contracts.INVALID_KEY ||
         !public_filled(?public_output[0], 0x5a, 65)) { ret 2; }
 
     scalar[0] = 0;
-    i = 1;
-    for (i < 31) { scalar[i] = 0; i = i + 1; }
+    i         = 1;
+    for (i < 31) {
+        scalar[i] = 0;
+        i         = i + 1;
+    }
     scalar[31] = 1;
-    result = p256.agree(contracts.SecretBytes{data: ?scalar[0], len: 32},
+    result     = p256.agree(contracts.SecretBytes{data: ?scalar[0], len: 32},
         contracts.Bytes{data: ?peer[0], len: 65},
         contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
     if (result.error != contracts.INVALID_KEY || result.written != 0 ||
         !secret_filled(?secret_output[0], 0xa5, 32)) { ret 3; }
     peer[0] = 0x02;
-    result = p256.agree(contracts.SecretBytes{data: ?scalar[0], len: 32},
+    result  = p256.agree(contracts.SecretBytes{data: ?scalar[0], len: 32},
         contracts.Bytes{data: ?peer[0], len: 65},
         contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
     if (result.error != contracts.INVALID_KEY ||
         !secret_filled(?secret_output[0], 0xa5, 32)) { ret 4; }
     peer[0] = 0x04;
-    result = p256.agree(contracts.SecretBytes{data: ?scalar[0], len: 32},
+    result  = p256.agree(contracts.SecretBytes{data: ?scalar[0], len: 32},
         contracts.Bytes{data: ?peer[0], len: 64},
         contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
     if (result.error != contracts.INVALID_KEY ||
@@ -189,8 +206,11 @@ test "p256: invalid scalars and sec1 points preserve output" {
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
     };
     peer[0] = 0x04;
-    i = 0;
-    for (i < 32) { peer[1 + i] = prime[i]; i = i + 1; }
+    i       = 0;
+    for (i < 32) {
+        peer[1 + i] = prime[i];
+        i           = i + 1;
+    }
     result = p256.agree(contracts.SecretBytes{data: ?scalar[0], len: 32},
         contracts.Bytes{data: ?peer[0], len: 65},
         contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
@@ -238,7 +258,7 @@ test "p256: successful agreement snapshots an overlapping private scalar" {
 }
 
 # python integer arithmetic over p, n and the affine group law
-val FIELD_CASES: usize = 16;
+val FIELD_CASES:   usize    = 16;
 val FIELD_VECTORS: [640]u64 = [640]u64{
     0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
     0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0xFFFFFFFF,
@@ -321,7 +341,7 @@ val FIELD_VECTORS: [640]u64 = [640]u64{
     0xBCF693CD, 0x0CBB3411, 0x2B3C0FB9, 0x585EBC7B, 0xAD67307E, 0x1F001DB6, 0xF303972D, 0xCB7BD124,
     0x9F1FF21C, 0x1BB76BD1, 0x6D541164, 0xCF09657F, 0x86A57EC8, 0x726B00B6, 0x7BEA0BE4, 0xA2BC1D67
 };
-val SCALAR_CASES: usize = 12;
+val SCALAR_CASES:   usize    = 12;
 val SCALAR_VECTORS: [384]u64 = [384]u64{
     0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
     0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
@@ -372,7 +392,7 @@ val SCALAR_VECTORS: [384]u64 = [384]u64{
     0x9610ADF0, 0x920D2E73, 0x2E88C9C1, 0x732EBFF8, 0x30A4EB99, 0x1AAD0413, 0x7DD6064D, 0xC4515381,
     0xC4B0359F, 0x0751E9A0, 0x460D3A3D, 0xFE1A92D6, 0xBDDEB716, 0xE935D0D9, 0xB9C76EBD, 0x71F9D65C
 };
-val POINT_CASES: usize = 15;
+val POINT_CASES:   usize    = 15;
 val POINT_VECTORS: [600]u64 = [600]u64{
     0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
     0xD898C296, 0xF4A13945, 0x2DEB33A0, 0x77037D81, 0x63A440F2, 0xF8BCE6E5, 0xE12C4247, 0x6B17D1F2,
@@ -469,10 +489,10 @@ fun limbs_equal(value: *core.UInt, vectors: *u64, offset: usize) bool {
 }
 
 test "p256 internal: field arithmetic matches independent vectors" {
-    val vectors: *u64 = (?FIELD_VECTORS[0]):~*u64;
-    var index: usize = 0;
+    val vectors: *u64  = (?FIELD_VECTORS[0]):~*u64;
+    var index:   usize = 0;
     for (index < FIELD_CASES) {
-        val base: usize = index * 40;
+        val base:   usize = index * 40;
         var left:   core.UInt;
         var right:  core.UInt;
         var result: core.UInt;
@@ -492,10 +512,10 @@ test "p256 internal: field arithmetic matches independent vectors" {
 }
 
 test "p256 internal: scalar arithmetic matches independent vectors" {
-    val vectors: *u64 = (?SCALAR_VECTORS[0]):~*u64;
-    var index: usize = 0;
+    val vectors: *u64  = (?SCALAR_VECTORS[0]):~*u64;
+    var index:   usize = 0;
     for (index < SCALAR_CASES) {
-        val base: usize = index * 32;
+        val base:   usize = index * 32;
         var left:   core.UInt;
         var right:  core.UInt;
         var result: core.UInt;
@@ -511,10 +531,10 @@ test "p256 internal: scalar arithmetic matches independent vectors" {
 }
 
 test "p256 internal: windowed scalar multiplication matches independent vectors" {
-    val vectors: *u64 = (?POINT_VECTORS[0]):~*u64;
-    var index: usize = 0;
+    val vectors: *u64  = (?POINT_VECTORS[0]):~*u64;
+    var index:   usize = 0;
     for (index < POINT_CASES) {
-        val base: usize = index * 40;
+        val base:    usize = index * 40;
         var scalar:  core.UInt;
         var point:   core.Point;
         var product: core.Point;
@@ -534,7 +554,7 @@ test "p256 internal: windowed scalar multiplication matches independent vectors"
 }
 
 # rfc 8032 encodings from python integer arithmetic, and x25519 cross-checked with cryptography
-val ED_CASES: usize = 18;
+val ED_CASES:   usize    = 18;
 val ED_VECTORS: [1728]u8 = [1728]u8{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -681,7 +701,7 @@ val ED_VECTORS: [1728]u8 = [1728]u8{
     0xaa, 0xe8, 0xe2, 0x2c, 0x68, 0x8a, 0xfb, 0x3d, 0x6e, 0xa9, 0x04, 0xb8,
     0x2c, 0x34, 0xc3, 0xb3, 0xda, 0x58, 0xb5, 0x21, 0x7a, 0xbd, 0x8d, 0x53
 };
-val FIELD25519_CASES: usize = 12;
+val FIELD25519_CASES:   usize    = 12;
 val FIELD25519_VECTORS: [2304]u8 = [2304]u8{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -876,7 +896,7 @@ val FIELD25519_VECTORS: [2304]u8 = [2304]u8{
     0xf7, 0xfb, 0x08, 0x2b, 0xd9, 0xd6, 0x86, 0x3a, 0xfe, 0x8f, 0x50, 0x3c,
     0x25, 0x40, 0xd8, 0xae, 0xc5, 0x88, 0xa9, 0xa7, 0x74, 0xe4, 0xd9, 0x1b
 };
-val AGREE_CASES: usize = 15;
+val AGREE_CASES:   usize    = 15;
 val AGREE_VECTORS: [1455]u8 = [1455]u8{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1014,10 +1034,10 @@ fun load_scalar_words(output: *ed.Scalar, bytes: *u8) {
 }
 
 test "ed25519 internal: windowed scalar multiplication matches independent vectors across the scalar range" {
-    val vectors: *u8 = (?ED_VECTORS[0]):~*u8;
-    var index: usize = 0;
+    val vectors: *u8   = (?ED_VECTORS[0]):~*u8;
+    var index:   usize = 0;
     for (index < ED_CASES) {
-        val base: usize = index * 96;
+        val base:    usize = index * 96;
         var scalar:  ed.Scalar;
         var point:   ed.Point;
         var product: ed.Point;
@@ -1039,10 +1059,10 @@ fun field_matches(value: *field.Field, expected: *u8) bool {
 }
 
 test "x25519 internal: field arithmetic matches independent vectors" {
-    val vectors: *u8 = (?FIELD25519_VECTORS[0]):~*u8;
-    var index: usize = 0;
+    val vectors: *u8   = (?FIELD25519_VECTORS[0]):~*u8;
+    var index:   usize = 0;
     for (index < FIELD25519_CASES) {
-        val base: usize = index * 192;
+        val base:       usize = index * 192;
         var left:       field.Field;
         var right:      field.Field;
         var result:     field.Field;
@@ -1068,10 +1088,10 @@ test "x25519 internal: field arithmetic matches independent vectors" {
 }
 
 test "x25519: agreement matches independent vectors across private keys and coordinates" {
-    val vectors: *u8 = (?AGREE_VECTORS[0]):~*u8;
-    var index: usize = 0;
+    val vectors: *u8   = (?AGREE_VECTORS[0]):~*u8;
+    var index:   usize = 0;
     for (index < AGREE_CASES) {
-        val base: usize = index * 97;
+        val base:        usize = index * 97;
         var private_key: [32]^u8;
         var shared:      [32]^u8;
         var i:           usize = 0;
@@ -1085,7 +1105,7 @@ test "x25519: agreement matches independent vectors across private keys and coor
             contracts.SecretBuffer{data: ?shared[0], capacity: 32});
         if (vectors[base + 96] == 1) {
             if (result.error != contracts.OK || result.written != 32) { ret 1; }
-            if (!secret_equal(?shared[0], ?vectors[base + 64], 32)) { ret 2; }
+            if (!secret_equal(?shared[0], ?vectors[base + 64], 32))   { ret 2; }
         }
         or {
             if (result.error != contracts.INVALID_KEY) { ret 3; }
@@ -1197,9 +1217,9 @@ test "x25519: rfc 7748 direct function vectors" {
     };
     var i: usize = 0;
     for (i < 32) {
-        scalar[i] = scalar_two[i];
+        scalar[i]     = scalar_two[i];
         coordinate[i] = coordinate_two[i];
-        i = i + 1;
+        i             = i + 1;
     }
     result = x25519.agree(contracts.SecretBytes{data: ?scalar[0], len: 32},
         contracts.Bytes{data: ?coordinate[0], len: 32},
@@ -1210,12 +1230,16 @@ test "x25519: rfc 7748 direct function vectors" {
 }
 
 test "x25519: rfc 7748 one-thousand iteration vector" {
-    var scalar: [32]^u8;
+    var scalar:     [32]^u8;
     var coordinate: [32]u8;
-    var next: [32]^u8;
-    var i: usize = 0;
-    for (i < 32) { scalar[i] = 0; coordinate[i] = 0; i = i + 1; }
-    scalar[0] = 9;
+    var next:       [32]^u8;
+    var i:          usize = 0;
+    for (i < 32) {
+        scalar[i]     = 0;
+        coordinate[i] = 0;
+        i             = i + 1;
+    }
+    scalar[0]     = 9;
     coordinate[0] = 9;
     val expected_one: [32]u8 = [32]u8{
         0x42, 0x2c, 0x8e, 0x7a, 0x62, 0x27, 0xd7, 0xbc,
@@ -1229,13 +1253,13 @@ test "x25519: rfc 7748 one-thousand iteration vector" {
             contracts.SecretBytes{data: ?scalar[0], len: 32},
             contracts.Bytes{data: ?coordinate[0], len: 32},
             contracts.SecretBuffer{data: ?next[0], capacity: 32});
-        if (result.error != contracts.OK || result.written != 32) { ret 1; }
+        if (result.error != contracts.OK || result.written != 32)                   { ret 1; }
         if (iteration == 0 && !secret_equal(?next[0], (?expected_one[0]):~*u8, 32)) { ret 2; }
         i = 0;
         for (i < 32) {
             coordinate[i] = scalar[i]:>u8;
-            scalar[i] = next[i];
-            i = i + 1;
+            scalar[i]     = next[i];
+            i             = i + 1;
         }
         iteration = iteration + 1;
     }
@@ -1250,29 +1274,29 @@ test "x25519: rfc 7748 one-thousand iteration vector" {
 }
 
 test "x25519: clamping, high-bit masking, and non-canonical inputs follow rfc 7748" {
-    var private_key: [32]^u8;
-    var variant: [32]^u8;
-    var basepoint: [32]u8;
-    var high_bit: [32]u8;
+    var private_key:       [32]^u8;
+    var variant:           [32]^u8;
+    var basepoint:         [32]u8;
+    var high_bit:          [32]u8;
     var noncanonical_nine: [32]u8;
-    var i: usize = 0;
+    var i:                 usize = 0;
     for (i < 32) {
-        private_key[i] = i::u8;
-        variant[i] = i::u8;
-        basepoint[i] = 0;
-        high_bit[i] = 0;
+        private_key[i]       = i::u8;
+        variant[i]           = i::u8;
+        basepoint[i]         = 0;
+        high_bit[i]          = 0;
         noncanonical_nine[i] = 0xff;
-        i = i + 1;
+        i                    = i + 1;
     }
-    variant[0] = 7;
-    variant[31] = 0x9f;
-    basepoint[0] = 9;
-    high_bit[0] = 9;
-    high_bit[31] = 0x80;
-    noncanonical_nine[0] = 0xf6;
+    variant[0]            = 7;
+    variant[31]           = 0x9f;
+    basepoint[0]          = 9;
+    high_bit[0]           = 9;
+    high_bit[31]          = 0x80;
+    noncanonical_nine[0]  = 0xf6;
     noncanonical_nine[31] = 0x7f;
     var expected: [32]u8;
-    var result: contracts.Operation = x25519.derive_public(
+    var result:   contracts.Operation = x25519.derive_public(
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Buffer{data: ?expected[0], capacity: 32});
     if (result.error != contracts.OK) { ret 1; }
@@ -1298,32 +1322,47 @@ test "x25519: clamping, high-bit masking, and non-canonical inputs follow rfc 77
 
 test "x25519: low-order inputs reject without changing output" {
     var private_key: [32]^u8;
-    var peer: [32]u8;
-    var output: [64]^u8;
-    var i: usize = 0;
-    for (i < 32) { private_key[i] = i::u8; peer[i] = 0; i = i + 1; }
+    var peer:        [32]u8;
+    var output:      [64]^u8;
+    var i:           usize = 0;
+    for (i < 32) {
+        private_key[i] = i::u8;
+        peer[i]        = 0;
+        i              = i + 1;
+    }
     var case: usize = 0;
     for (case < 4) {
         i = 0;
-        for (i < 32) { peer[i] = 0; output[i] = 0xA5; output[32 + i] = 0x5A; i = i + 1; }
+        for (i < 32) {
+            peer[i]        = 0;
+            output[i]      = 0xA5;
+            output[32 + i] = 0x5A;
+            i              = i + 1;
+        }
         if (case == 1) { peer[0] = 1; }
         or (case == 2) {
             peer[0] = 0xed;
-            i = 1;
-            for (i < 31) { peer[i] = 0xff; i = i + 1; }
+            i       = 1;
+            for (i < 31) {
+                peer[i] = 0xff;
+                i       = i + 1;
+            }
             peer[31] = 0x7f;
         }
         or {
             peer[0] = 0xee;
-            i = 1;
-            for (i < 31) { peer[i] = 0xff; i = i + 1; }
+            i       = 1;
+            for (i < 31) {
+                peer[i] = 0xff;
+                i       = i + 1;
+            }
             peer[31] = 0x7f;
         }
         val result: contracts.Operation = x25519.agree(
             contracts.SecretBytes{data: ?private_key[0], len: 32},
             contracts.Bytes{data: ?peer[0], len: 32},
             contracts.SecretBuffer{data: ?output[0], capacity: 64});
-        if (result.error != contracts.INVALID_KEY || result.written != 0) { ret 1; }
+        if (result.error != contracts.INVALID_KEY || result.written != 0)                  { ret 1; }
         if (!secret_filled(?output[0], 0xA5, 32) || !secret_filled(?output[32], 0x5A, 32)) { ret 2; }
         case = case + 1;
     }
@@ -1331,17 +1370,17 @@ test "x25519: low-order inputs reject without changing output" {
 }
 
 test "x25519: validation and capacity failures leave output unchanged" {
-    var private_key: [32]^u8;
-    var peer: [32]u8;
+    var private_key:   [32]^u8;
+    var peer:          [32]u8;
     var public_output: [32]u8;
     var secret_output: [32]^u8;
-    var i: usize = 0;
+    var i:             usize = 0;
     for (i < 32) {
-        private_key[i] = i::u8;
-        peer[i] = 0;
+        private_key[i]   = i::u8;
+        peer[i]          = 0;
         public_output[i] = 0xA5;
         secret_output[i] = 0xA5;
-        i = i + 1;
+        i                = i + 1;
     }
     peer[0] = 9;
     var result: contracts.Operation = x25519.derive_public(
@@ -1386,13 +1425,13 @@ test "x25519: validation and capacity failures leave output unchanged" {
 }
 
 test "x25519: independent differential vector and private output overlap" {
-    var key_output: [32]^u8;
+    var key_output:   [32]^u8;
     var peer_private: [32]^u8;
-    var i: usize = 0;
+    var i:            usize = 0;
     for (i < 32) {
-        key_output[i] = i::u8;
+        key_output[i]   = i::u8;
         peer_private[i] = (32 + i)::u8;
-        i = i + 1;
+        i               = i + 1;
     }
     val public_key: [32]u8 = [32]u8{
         0x8f, 0x40, 0xc5, 0xad, 0xb6, 0x8f, 0x25, 0x62,
@@ -1413,7 +1452,7 @@ test "x25519: independent differential vector and private output overlap" {
         0x7e, 0xd3, 0x85, 0x42, 0x03, 0x38, 0x28, 0x54
     };
     var derived: [32]u8;
-    var result: contracts.Operation = x25519.derive_public(
+    var result:  contracts.Operation = x25519.derive_public(
         contracts.SecretBytes{data: ?key_output[0], len: 32},
         contracts.Buffer{data: ?derived[0], capacity: 32});
     if (result.error != contracts.OK || !public_equal(?derived[0], (?public_key[0]):~*u8, 32)) { ret 1; }

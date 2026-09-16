@@ -1,75 +1,51 @@
 name: CI
 
+# the family pipeline from briar-systems/.github. a pull request into dev runs
+# the light tier on x86_64-linux, a pull request into main runs every tier, and
+# a dispatch pulls named heavy work onto any ref. nothing runs on push.
+
 on:
   pull_request:
-    branches: [dev, main]
-  # release branches also build on push. a pull_request trigger is selected from
-  # the base branch, so adding `main` above cannot take effect for the very PR
-  # that adds it -- the first release PR would still land untested.
-  push:
-    branches:
-      - 'chore/release-*'
-      - 'hotfix/*'
+  workflow_dispatch:
+    inputs:
+      heavy:
+        description: heavy work to run on this ref
+        type: choice
+        default: none
+        options: [none, all, aarch64-linux, x86_64-windows, aarch64-darwin, x86_64-darwin, assurance]
+
+permissions:
+  contents: read
 
 jobs:
-  linux-x86_64:
-    name: linux x86_64
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+  lib:
+    uses: briar-systems/.github/.github/workflows/mach-lib.yml@main
+    with:
+      heavy: ${{ inputs.heavy }}
+      # the negative control must fail to compile, so it is only resolved here.
+      # tools/assurance builds it and judges the rejection
+      subprojects: '[{"path": "test/leakage-negative", "test": false}]'
 
-      - name: Seed mach
-        uses: ./.github/actions/seed-mach
-
-      - name: Report the seed
-        run: mach info
-
-      - name: Resolve dependencies
-        run: |
-          set -euo pipefail
-          mach dep pull .
-          mach dep pull test/leakage-negative
-
-      - name: Build
-        run: mach build .
-
-      - name: Test
-        run: mach test .
-
-      - name: Test (release)
-        run: mach test . --profile release
-
-      - name: Build every target
-        run: mach build . --all-targets --profile release
-
-  # `tools/assurance run` is the release gate the README documents. it resolves
-  # every project, runs the suite over six targets and both profiles, rebuilds
-  # with --all-targets, and re-derives the leakage-negative evidence. that takes
-  # several minutes, so it is a job of its own rather than another step above.
+  # the release evidence gate the README documents. it resolves every project,
+  # runs the suite and the release-only performance budget, builds six targets
+  # twice for reproducibility, re-derives the leakage-negative evidence and
+  # inspects zeroization in the generated code
   assurance:
-    name: assurance
+    if: github.base_ref == 'main' || inputs.heavy == 'all' || inputs.heavy == 'assurance'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
-
-      - name: Seed mach
-        uses: ./.github/actions/seed-mach
-
-      - name: Report the seed
-        run: mach info
-
-      - name: Install ripgrep
+      - uses: briar-systems/.github/.github/actions/seed-mach@main
+      - name: ripgrep
         run: |
           sudo apt-get update
           sudo apt-get install -y ripgrep
-
-      - name: Produce release evidence
+      - name: produce release evidence
         run: tools/assurance run
-
-      - name: Verify release evidence
+      - name: verify release evidence
         run: tools/assurance verify
-
-      - name: Retain the assurance evidence
+      - name: evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -77,3 +53,13 @@ jobs:
           path: out/assurance/current
           if-no-files-found: warn
           retention-days: 14
+
+  gate:
+    if: always()
+    needs: [lib, assurance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: briar-systems/.github/.github/actions/gate@main
+        with:
+          needs: ${{ toJSON(needs) }}
