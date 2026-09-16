@@ -422,3 +422,7 @@ test "hash: validation and overflow failures preserve state and output" {
         contracts.INVALID_INPUT) { ret 8; }
     ret 0;
 }
+
+test "counterfactual: gate must turn red" {
+    ret 1;
+}
