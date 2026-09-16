@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-16
+
+### Changed
+
+- Dependencies: mach-std v3.2.0 (#76), which carries std's Windows owner-only file mode security fix.
+
 ## [0.10.0] - 2026-09-16
 
 ### Changed
