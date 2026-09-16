@@ -1,5 +1,6 @@
 # constant-shape secp256r1 arithmetic
 
+use crypto.internal.p256_base;
 use std.crypto.ct;
 use std.types.size.usize;
 
@@ -788,6 +789,121 @@ pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
     destroy_uint(?reduced);
 }
 
+# or the affine table entry for digit * 16^window * G into x and y under mask
+#[oblivious]
+fun accumulate_entry(x: *UInt, y: *UInt, window: u64, digit: u64, mask: ^u64) {
+    val base: usize = ((window * p256_base.DIGITS + digit - 1) * 16)::usize;
+    var i:    usize = 0;
+    for (i < 8) {
+        x.limb[i] = x.limb[i] | (p256_base.TABLE[base + i]::u64 & mask);
+        y.limb[i] = y.limb[i] | (p256_base.TABLE[base + 8 + i]::u64 & mask);
+        i         = i + 1;
+    }
+}
+
+# add an affine point to a finite jacobian point that is not its equal or negation
+#
+# madd-2007-bl. an infinite left side or equal x coordinates produce garbage,
+# so callers select around both.
+#[oblivious]
+fun point_add_mixed(output: *Point, left: *Point, x: *UInt, y: *UInt) {
+    var z1z1:      UInt;
+    var u2:        UInt;
+    var s2:        UInt;
+    var h:         UInt;
+    var hh:        UInt;
+    var i_value:   UInt;
+    var j:         UInt;
+    var r:         UInt;
+    var v:         UInt;
+    var temporary: UInt;
+    var result:    Point;
+
+    field_square(?z1z1, ?left.z);
+    field_multiply(?u2, x, ?z1z1);
+    field_multiply(?temporary, ?left.z, ?z1z1);
+    field_multiply(?s2, y, ?temporary);
+    field_subtract(?h, ?u2, ?left.x);
+    field_square(?hh, ?h);
+    field_add(?i_value, ?hh, ?hh);
+    field_add(?i_value, ?i_value, ?i_value);
+    field_multiply(?j, ?h, ?i_value);
+    field_subtract(?temporary, ?s2, ?left.y);
+    field_add(?r, ?temporary, ?temporary);
+    field_multiply(?v, ?left.x, ?i_value);
+
+    field_square(?result.x, ?r);
+    field_subtract(?result.x, ?result.x, ?j);
+    field_add(?temporary, ?v, ?v);
+    field_subtract(?result.x, ?result.x, ?temporary);
+    field_subtract(?temporary, ?v, ?result.x);
+    field_multiply(?result.y, ?r, ?temporary);
+    field_multiply(?temporary, ?left.y, ?j);
+    field_add(?temporary, ?temporary, ?temporary);
+    field_subtract(?result.y, ?result.y, ?temporary);
+    field_add(?temporary, ?left.z, ?h);
+    field_square(?result.z, ?temporary);
+    field_subtract(?result.z, ?result.z, ?z1z1);
+    field_subtract(?result.z, ?result.z, ?hh);
+
+    point_copy(output, ?result);
+    destroy_uint(?z1z1);
+    destroy_uint(?u2);
+    destroy_uint(?s2);
+    destroy_uint(?h);
+    destroy_uint(?hh);
+    destroy_uint(?i_value);
+    destroy_uint(?j);
+    destroy_uint(?r);
+    destroy_uint(?v);
+    destroy_uint(?temporary);
+    destroy_point(?result);
+}
+
+# multiply the generator by a scalar with the fixed-base comb table
+#
+# the scalar is reduced below n. after window i the accumulator is k' * G with
+# k' < 16^i, and the added entry is d * 16^i * G with d * 16^i <= 15 * 2^252 < n,
+# so the two are never equal. they are negations only when k' + d * 16^i = n,
+# which would make the reduced scalar n. an infinite accumulator takes the lifted
+# entry, and a zero digit keeps the accumulator, both by select.
+#[oblivious]
+pub fun scalar_multiply_base(output: *Point, scalar: *UInt) {
+    var reduced: UInt;
+    var result:  Point;
+    var sum:     Point;
+    var lifted:  Point;
+    copy(?reduced, scalar);
+    reduce_scalar_once(?reduced);
+    point_infinity(?result);
+    var window: u64 = 0;
+    for (window < p256_base.WINDOWS) {
+        val limb_index: usize = (window >> 3)::usize;
+        val shift:      u64   = (window & 7) * 4;
+        val digit:      ^u64  = (reduced.limb[limb_index] >> shift) & 15;
+        set_small(?lifted.x, 0);
+        set_small(?lifted.y, 0);
+        set_small(?lifted.z, 1);
+        var candidate: u64 = 1;
+        for (candidate <= p256_base.DIGITS) {
+            val mask: ^u64 = 0 - ct.eq_u64(digit, candidate)::^u64;
+            accumulate_entry(?lifted.x, ?lifted.y, window, candidate, mask);
+            candidate = candidate + 1;
+        }
+        val infinity: ^u8 = point_is_infinity(?result);
+        val zero:     ^u8 = ct.eq_u64(digit, 0);
+        point_add_mixed(?sum, ?result, ?lifted.x, ?lifted.y);
+        point_select(?sum, ?sum, ?lifted, infinity);
+        point_select(?result, ?sum, ?result, zero);
+        window = window + 1;
+    }
+    point_copy(output, ?result);
+    destroy_uint(?reduced);
+    destroy_point(?result);
+    destroy_point(?sum);
+    destroy_point(?lifted);
+}
+
 #[oblivious]
 pub fun to_affine(x: *UInt, y: *UInt, point: *Point) {
     var inverse:         UInt;
@@ -831,5 +947,38 @@ pub fun parse_point(output: *Point, input: *u8) ^u8 {
 test "p256 internal: constants have canonical low words" {
     if (PRIME[0] != 0xFFFFFFFF || ORDER[0] != 0xFC632551)             { ret 1; }
     if (GENERATOR_X[7] != 0x6B17D1F2 || GENERATOR_Y[0] != 0x37BF51F5) { ret 2; }
+    ret 0;
+}
+
+test "p256 internal: every comb table entry is digit * 16^window * G" {
+    var base: Point;
+    generator(?base);
+    var window: u64 = 0;
+    for (window < p256_base.WINDOWS) {
+        var multiple: Point;
+        point_infinity(?multiple);
+        var digit: u64 = 1;
+        for (digit <= p256_base.DIGITS) {
+            point_add(?multiple, ?multiple, ?base);
+            var x:      UInt;
+            var y:      UInt;
+            var z2:     UInt;
+            var z3:     UInt;
+            var scaled: UInt;
+            accumulate_entry(?x, ?y, window, digit, 0 - 1);
+            field_square(?z2, ?multiple.z);
+            field_multiply(?z3, ?z2, ?multiple.z);
+            field_multiply(?scaled, ?x, ?z2);
+            if (equal(?scaled, ?multiple.x):>u8 != 1) { ret 1; }
+            field_multiply(?scaled, ?y, ?z3);
+            if (equal(?scaled, ?multiple.y):>u8 != 1) { ret 2; }
+            digit = digit + 1;
+        }
+        point_double(?base, ?base);
+        point_double(?base, ?base);
+        point_double(?base, ?base);
+        point_double(?base, ?base);
+        window = window + 1;
+    }
     ret 0;
 }

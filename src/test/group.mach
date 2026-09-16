@@ -553,6 +553,80 @@ test "p256 internal: windowed scalar multiplication matches independent vectors"
     ret 0;
 }
 
+# scalars around window, word and order boundaries, as 8 little-endian words each
+val BASE_CASES:   usize    = 25;
+val BASE_SCALARS: [200]u64 = [200]u64{
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000002, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x0000000F, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000010, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000011, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x000000FF, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000100, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0xFFFFFFFF, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x0000000F, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x10000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0xF0000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x80000000,
+    0xFC632550, 0xF3B9CAC2, 0xA7179E84, 0xBCE6FAAD, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF,
+    0xFC63254F, 0xF3B9CAC2, 0xA7179E84, 0xBCE6FAAD, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF,
+    0xFC632551, 0xF3B9CAC2, 0xA7179E84, 0xBCE6FAAD, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF,
+    0xFC632552, 0xF3B9CAC2, 0xA7179E84, 0xBCE6FAAD, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF,
+    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+    0xA5A5A5A5, 0xA5A5A5A5, 0xA5A5A5A5, 0xA5A5A5A5, 0xA5A5A5A5, 0xA5A5A5A5, 0xA5A5A5A5, 0xA5A5A5A5,
+    0x5A5A5A5A, 0x5A5A5A5A, 0x5A5A5A5A, 0x5A5A5A5A, 0x5A5A5A5A, 0x5A5A5A5A, 0x5A5A5A5A, 0x5A5A5A5A,
+    0x0F0F0F0F, 0x0F0F0F0F, 0x0F0F0F0F, 0x0F0F0F0F, 0x0F0F0F0F, 0x0F0F0F0F, 0x0F0F0F0F, 0x0F0F0F0F,
+    0xF0F0F0F0, 0xF0F0F0F0, 0xF0F0F0F0, 0xF0F0F0F0, 0xF0F0F0F0, 0xF0F0F0F0, 0xF0F0F0F0, 0xF0F0F0F0
+};
+
+fun same_multiple(left: *core.Point, right: *core.Point) bool {
+    val left_infinity:  u8 = core.point_is_infinity(left):>u8;
+    val right_infinity: u8 = core.point_is_infinity(right):>u8;
+    if (left_infinity != right_infinity) { ret false; }
+    if (left_infinity == 1)              { ret true; }
+    var left_x:  core.UInt;
+    var left_y:  core.UInt;
+    var right_x: core.UInt;
+    var right_y: core.UInt;
+    core.to_affine(?left_x, ?left_y, left);
+    core.to_affine(?right_x, ?right_y, right);
+    ret core.equal(?left_x, ?right_x):>u8 == 1 && core.equal(?left_y, ?right_y):>u8 == 1;
+}
+
+test "p256 internal: comb base multiplication matches the generic window" {
+    var generator: core.Point;
+    core.generator(?generator);
+    var scalar: core.UInt;
+    var comb:   core.Point;
+    var window: core.Point;
+    var index:  usize = 0;
+    for (index < BASE_CASES) {
+        load_limbs(?scalar, (?BASE_SCALARS[0]):~*u64, index * 8);
+        core.scalar_multiply_base(?comb, ?scalar);
+        core.scalar_multiply(?window, ?scalar, ?generator);
+        if (!same_multiple(?comb, ?window)) { ret 1; }
+        index = index + 1;
+    }
+    # a deterministic sweep: each scalar is the previous one times a fixed multiplier mod n
+    var multiplier: core.UInt;
+    load_limbs(?scalar, (?BASE_SCALARS[0]):~*u64, 21 * 8);
+    load_limbs(?multiplier, (?BASE_SCALARS[0]):~*u64, 23 * 8);
+    core.reduce_scalar_once(?scalar);
+    var round: usize = 0;
+    for (round < 16) {
+        core.scalar_multiply_values(?scalar, ?scalar, ?multiplier);
+        core.scalar_multiply_base(?comb, ?scalar);
+        core.scalar_multiply(?window, ?scalar, ?generator);
+        if (!same_multiple(?comb, ?window)) { ret 2; }
+        round = round + 1;
+    }
+    ret 0;
+}
+
 # rfc 8032 encodings from python integer arithmetic, and x25519 cross-checked with cryptography
 val ED_CASES:   usize    = 18;
 val ED_VECTORS: [1728]u8 = [1728]u8{

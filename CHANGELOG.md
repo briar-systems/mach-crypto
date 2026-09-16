@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Performance
+
+- P-256 multiplies the generator with a fixed-base comb table: 64 windows of 15 precomputed affine multiples, selected in constant time and added with mixed additions, so there are no doublings. `tools/p256-base-table` generates the table, and a test recomputes every entry. Keygen retires 3.4x fewer instructions, ECDSA signing 2.2x and verification 1.5x (#82).
+
 ## [0.10.1] - 2026-09-16
 
 ### Changed
