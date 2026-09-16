@@ -1070,14 +1070,12 @@ pub fun sign_ecdsa_p256_sha256(private_key: contracts.SecretBytes,
     var nonce:           core.UInt;
     var nonce_one:       core.UInt;
     var candidate_nonce: core.UInt;
-    var basepoint:       core.Point;
     var nonce_point:     core.Point;
     var x:               core.UInt;
     var y:               core.UInt;
     var product:         core.UInt;
     var sum:             core.UInt;
     var inverse:         core.UInt;
-    core.generator(?basepoint);
     core.set_small(?nonce_one, 1);
     core.copy(?nonce, ?nonce_one);
     # fixed candidates hide rfc rejection count at a 2^-256 failure bound
@@ -1095,7 +1093,7 @@ pub fun sign_ecdsa_p256_sha256(private_key: contracts.SecretBytes,
         attempt = attempt + 1;
     }
     if (status == contracts.OK) {
-        core.scalar_multiply(?nonce_point, ?nonce, ?basepoint);
+        core.scalar_multiply_base(?nonce_point, ?nonce);
         core.to_affine(?x, ?y, ?nonce_point);
         core.copy(?r, ?x);
         core.reduce_scalar_once(?r);
@@ -1133,7 +1131,6 @@ pub fun sign_ecdsa_p256_sha256(private_key: contracts.SecretBytes,
     core.destroy_uint(?nonce);
     core.destroy_uint(?nonce_one);
     core.destroy_uint(?candidate_nonce);
-    core.destroy_point(?basepoint);
     core.destroy_point(?nonce_point);
     core.destroy_uint(?x);
     core.destroy_uint(?y);
@@ -1194,7 +1191,6 @@ pub fun verify_ecdsa_p256_sha256(public_key: contracts.Bytes,
     var inverse:     core.UInt;
     var u1:          core.UInt;
     var u2:          core.UInt;
-    var basepoint:   core.Point;
     var first:       core.Point;
     var second:      core.Point;
     var sum:         core.Point;
@@ -1206,8 +1202,7 @@ pub fun verify_ecdsa_p256_sha256(public_key: contracts.Bytes,
     core.scalar_inverse(?inverse, ?s);
     core.scalar_multiply_values(?u1, ?hash_scalar, ?inverse);
     core.scalar_multiply_values(?u2, ?r, ?inverse);
-    core.generator(?basepoint);
-    core.scalar_multiply(?first, ?u1, ?basepoint);
+    core.scalar_multiply_base(?first, ?u1);
     core.scalar_multiply(?second, ?u2, ?peer);
     core.point_add(?sum, ?first, ?second);
     val infinity: ^u8 = core.point_is_infinity(?sum);
@@ -1223,7 +1218,6 @@ pub fun verify_ecdsa_p256_sha256(public_key: contracts.Bytes,
     core.destroy_uint(?inverse);
     core.destroy_uint(?u1);
     core.destroy_uint(?u2);
-    core.destroy_point(?basepoint);
     core.destroy_point(?first);
     core.destroy_point(?second);
     core.destroy_point(?sum);
