@@ -39,10 +39,10 @@ fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
     var i: usize = 0;
     for (i < text_len / 2) {
         val high: u8 = nibble(text[i * 2]);
-        val low: u8 = nibble(text[i * 2 + 1]);
+        val low:  u8 = nibble(text[i * 2 + 1]);
         if (high == 255 || low == 255) { ret false; }
         output[i] = (high << 4) | low;
-        i = i + 1;
+        i         = i + 1;
     }
     ret true;
 }
@@ -51,14 +51,14 @@ fun copy_public(output: *u8, input: *u8, len: usize) {
     var i: usize = 0;
     for (i < len) {
         output[i] = input[i];
-        i = i + 1;
+        i         = i + 1;
     }
 }
 
 fun pkcs1_hostile_rejected(public_key: signature.RsaPublicKey,
     message: contracts.Bytes, encoded: *u8) bool {
     var signature_bytes: [256]u8;
-    var snapshot: [256]u8;
+    var snapshot:        [256]u8;
     if (!decode_hex(encoded, 512, ?signature_bytes[0])) { ret false; }
     copy_public(?snapshot[0], ?signature_bytes[0], 256);
     val status: contracts.Error = signature.verify_rsa_pkcs1_sha256(public_key,
@@ -70,7 +70,7 @@ fun pkcs1_hostile_rejected(public_key: signature.RsaPublicKey,
 fun pkcs1_sha384_hostile_rejected(public_key: signature.RsaPublicKey,
     message: contracts.Bytes, encoded: *u8) bool {
     var signature_bytes: [256]u8;
-    var snapshot: [256]u8;
+    var snapshot:        [256]u8;
     if (!decode_hex(encoded, 512, ?signature_bytes[0])) { ret false; }
     copy_public(?snapshot[0], ?signature_bytes[0], 256);
     val status: contracts.Error = signature.verify_rsa_pkcs1_sha384(public_key,
@@ -89,7 +89,7 @@ fun set_rfc_private(output: *^u8) {
     var i: usize = 0;
     for (i < 32) {
         output[i] = value[i];
-        i = i + 1;
+        i         = i + 1;
     }
 }
 
@@ -123,8 +123,8 @@ test "ecdsa p-256: rfc 6979 sha-256 sample" {
         0xf3, 0xe9, 0x00, 0xdb, 0xb9, 0xaf, 0xf4, 0x06,
         0x4d, 0xc4, 0xab, 0x2f, 0x84, 0x3a, 0xcd, 0xa8
     };
-    val message: [6]u8 = [6]u8{'s', 'a', 'm', 'p', 'l', 'e'};
-    var derived: [65]u8;
+    val message:   [6]u8               = [6]u8{'s', 'a', 'm', 'p', 'l', 'e'};
+    var derived:   [65]u8;
     var operation: contracts.Operation = p256.derive_public(
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Buffer{data: ?derived[0], capacity: 65});
@@ -149,10 +149,14 @@ test "ecdsa p-256: deterministic signing and failures preserve output" {
     var private_key: [32]^u8;
     set_rfc_private(?private_key[0]);
     val sample: [6]u8 = [6]u8{'s', 'a', 'm', 'p', 'l', 'e'};
-    var first: [72]u8;
+    var first:  [72]u8;
     var second: [72]u8;
-    var i: usize = 0;
-    for (i < 72) { first[i] = 0xa5; second[i] = 0x5a; i = i + 1; }
+    var i:      usize = 0;
+    for (i < 72) {
+        first[i]  = 0xa5;
+        second[i] = 0x5a;
+        i         = i + 1;
+    }
     var result: contracts.Operation = signature.sign_ecdsa_p256_sha256(
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Bytes{data: (?sample[0]):~*u8, len: 6},
@@ -166,7 +170,10 @@ test "ecdsa p-256: deterministic signing and failures preserve output" {
         !public_equal(?first[0], ?second[0], result.written)) { ret 2; }
 
     i = 0;
-    for (i < 72) { second[i] = 0x5a; i = i + 1; }
+    for (i < 72) {
+        second[i] = 0x5a;
+        i         = i + 1;
+    }
     result = signature.sign_ecdsa_p256_sha256(
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Bytes{data: (?sample[0]):~*u8, len: 6},
@@ -175,7 +182,10 @@ test "ecdsa p-256: deterministic signing and failures preserve output" {
         !public_filled(?second[0], 0x5a, 72)) { ret 3; }
 
     i = 0;
-    for (i < 32) { private_key[i] = 0; i = i + 1; }
+    for (i < 32) {
+        private_key[i] = 0;
+        i              = i + 1;
+    }
     result = signature.sign_ecdsa_p256_sha256(
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Bytes{data: (?sample[0]):~*u8, len: 6},
@@ -196,9 +206,9 @@ test "ecdsa p-256: deterministic signing and failures preserve output" {
 test "ecdsa p-256: empty messages and high-s signatures verify" {
     var private_key: [32]^u8;
     set_rfc_private(?private_key[0]);
-    var public_key: [65]u8;
+    var public_key:      [65]u8;
     var signature_bytes: [72]u8;
-    var operation: contracts.Operation = p256.derive_public(
+    var operation:       contracts.Operation = p256.derive_public(
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Buffer{data: ?public_key[0], capacity: 65});
     if (operation.error != contracts.OK) { ret 1; }
@@ -218,13 +228,16 @@ test "ecdsa p-256: empty messages and high-s signatures verify" {
 
 test "ecdsa p-256: wycheproof-style tampering and strict der rejection" {
     var private_key: [32]^u8;
-    var i: usize = 0;
-    for (i < 32) { private_key[i] = 0; i = i + 1; }
+    var i:           usize = 0;
+    for (i < 32) {
+        private_key[i] = 0;
+        i              = i + 1;
+    }
     private_key[31] = 1;
     var public_key: [65]u8;
-    val message: [4]u8 = [4]u8{'t', 'e', 's', 't'};
-    var encoded: [73]u8;
-    var operation: contracts.Operation = p256.derive_public(
+    val message:    [4]u8               = [4]u8{'t', 'e', 's', 't'};
+    var encoded:    [73]u8;
+    var operation:  contracts.Operation = p256.derive_public(
         contracts.SecretBytes{data: ?private_key[0], len: 32},
         contracts.Buffer{data: ?public_key[0], capacity: 65});
     if (operation.error != contracts.OK) { ret 1; }
@@ -248,7 +261,7 @@ test "ecdsa p-256: wycheproof-style tampering and strict der rejection" {
         ret 4;
     }
     encoded[encoded_len - 1] = encoded[encoded_len - 1] ^ 1;
-    encoded[encoded_len] = 0;
+    encoded[encoded_len]     = 0;
     if (signature.verify_ecdsa_p256_sha256(
         contracts.Bytes{data: ?public_key[0], len: 65},
         contracts.Bytes{data: (?message[0]):~*u8, len: 4},
@@ -262,7 +275,7 @@ test "ecdsa p-256: wycheproof-style tampering and strict der rejection" {
         contracts.Bytes{data: ?encoded[0], len: encoded_len}) != contracts.AUTH_FAILED) {
         ret 6;
     }
-    encoded[1] = encoded[1] + 1;
+    encoded[1]     = encoded[1] + 1;
     public_key[64] = public_key[64] ^ 1;
     if (signature.verify_ecdsa_p256_sha256(
         contracts.Bytes{data: ?public_key[0], len: 65},
@@ -274,7 +287,10 @@ test "ecdsa p-256: wycheproof-style tampering and strict der rejection" {
 
     var malformed: [40]u8;
     i = 0;
-    for (i < 40) { malformed[i] = 0; i = i + 1; }
+    for (i < 40) {
+        malformed[i] = 0;
+        i            = i + 1;
+    }
     malformed[0] = 0x30;
     malformed[1] = 0x06;
     malformed[2] = 0x02;
@@ -325,8 +341,11 @@ test "ecdsa p-256: wycheproof-style tampering and strict der rejection" {
     malformed[2] = 0x02;
     malformed[3] = 0x21;
     malformed[4] = 0;
-    i = 0;
-    for (i < 32) { malformed[5 + i] = order[i]; i = i + 1; }
+    i            = 0;
+    for (i < 32) {
+        malformed[5 + i] = order[i];
+        i                = i + 1;
+    }
     malformed[37] = 0x02;
     malformed[38] = 0x01;
     malformed[39] = 0x01;
@@ -363,7 +382,7 @@ test "ecdsa p-384: nist sha-384 verification vector" {
         signature.ECDSA_P384_SIGNATURE_MIN_SIZE != 8 ||
         signature.ECDSA_P384_SIGNATURE_MAX_SIZE != 104) { ret 1; }
     var public_key: [97]u8;
-    var encoded: [103]u8;
+    var encoded:    [103]u8;
     if (!set_nist_p384_public(?public_key[0]) ||
         !set_nist_p384_signature(?encoded[0])) { ret 2; }
     if (signature.verify_ecdsa_p384_sha384(
@@ -387,8 +406,8 @@ fun set_openssl_p384_signature(output: *u8) bool {
 
 test "ecdsa p-384: independent OpenSSL vector rejects tampering" {
     var public_key: [97]u8;
-    var encoded: [103]u8;
-    var message: [32]u8;
+    var encoded:    [103]u8;
+    var message:    [32]u8;
     copy_public(?message[0], "mach-crypto P-384 OpenSSL vector"::*u8, 32);
     if (!set_openssl_p384_public(?public_key[0]) ||
         !set_openssl_p384_signature(?encoded[0])) { ret 1; }
@@ -404,7 +423,7 @@ test "ecdsa p-384: independent OpenSSL vector rejects tampering" {
         contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.AUTH_FAILED) {
         ret 3;
     }
-    message[31] = message[31] ^ 1;
+    message[31]  = message[31] ^ 1;
     encoded[102] = encoded[102] ^ 1;
     if (signature.verify_ecdsa_p384_sha384(
         contracts.Bytes{data: ?public_key[0], len: 97},
@@ -412,7 +431,7 @@ test "ecdsa p-384: independent OpenSSL vector rejects tampering" {
         contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.AUTH_FAILED) {
         ret 4;
     }
-    encoded[102] = encoded[102] ^ 1;
+    encoded[102]   = encoded[102] ^ 1;
     public_key[96] = public_key[96] ^ 1;
     if (signature.verify_ecdsa_p384_sha384(
         contracts.Bytes{data: ?public_key[0], len: 97},
@@ -425,11 +444,12 @@ test "ecdsa p-384: independent OpenSSL vector rejects tampering" {
 
 test "ecdsa p-384: scalars, strict DER, points, and nil inputs are bounded" {
     var public_key: [97]u8;
-    var encoded: [104]u8;
+    var encoded:    [104]u8;
     if (!set_nist_p384_public(?public_key[0]) ||
         !set_nist_p384_signature(?encoded[0])) { ret 1; }
     val message: contracts.Bytes = contracts.Bytes{
-        data: "Example of ECDSA with P-384"::*u8, len: 27};
+        data: "Example of ECDSA with P-384"::*u8, len: 27
+    };
 
     var i: usize = 0;
     for (i < 103) {
@@ -470,7 +490,7 @@ test "ecdsa p-384: scalars, strict DER, points, and nil inputs are bounded" {
     i = 4;
     for (i < 103) {
         noncanonical[i + 1] = encoded[i];
-        i = i + 1;
+        i                   = i + 1;
     }
     if (signature.verify_ecdsa_p384_sha384(
         contracts.Bytes{data: ?public_key[0], len: 97}, message,
@@ -479,13 +499,16 @@ test "ecdsa p-384: scalars, strict DER, points, and nil inputs are bounded" {
 
     var missing_prefix: [102]u8;
     i = 0;
-    for (i < 54) { missing_prefix[i] = encoded[i]; i = i + 1; }
-    missing_prefix[1] = 0x64;
+    for (i < 54) {
+        missing_prefix[i] = encoded[i];
+        i                 = i + 1;
+    }
+    missing_prefix[1]  = 0x64;
     missing_prefix[53] = 0x30;
-    i = 55;
+    i                  = 55;
     for (i < 103) {
         missing_prefix[i - 1] = encoded[i];
-        i = i + 1;
+        i                     = i + 1;
     }
     if (signature.verify_ecdsa_p384_sha384(
         contracts.Bytes{data: ?public_key[0], len: 97}, message,
@@ -497,20 +520,21 @@ test "ecdsa p-384: scalars, strict DER, points, and nil inputs are bounded" {
         "3036023100ffffffffffffffffffffffffffffffffffffffffffffffffc7634d81f4372ddf581a0db248b0a77aecec196accc52973020101"::*u8,
         112, ?scalar[0]) ||
         signature.verify_ecdsa_p384_sha384(
-            contracts.Bytes{data: ?public_key[0], len: 97}, message,
-            contracts.Bytes{data: ?scalar[0], len: 56}) != contracts.AUTH_FAILED) {
+        contracts.Bytes{data: ?public_key[0], len: 97}, message,
+        contracts.Bytes{data: ?scalar[0], len: 56}) != contracts.AUTH_FAILED) {
         ret 9;
     }
     if (!decode_hex(
         "3036020101023100ffffffffffffffffffffffffffffffffffffffffffffffffc7634d81f4372ddf581a0db248b0a77aecec196accc52973"::*u8,
         112, ?scalar[0]) ||
         signature.verify_ecdsa_p384_sha384(
-            contracts.Bytes{data: ?public_key[0], len: 97}, message,
-            contracts.Bytes{data: ?scalar[0], len: 56}) != contracts.AUTH_FAILED) {
+        contracts.Bytes{data: ?public_key[0], len: 97}, message,
+        contracts.Bytes{data: ?scalar[0], len: 56}) != contracts.AUTH_FAILED) {
         ret 10;
     }
     val zero_scalar: [8]u8 = [8]u8{
-        0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x01};
+        0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x01
+    };
     if (signature.verify_ecdsa_p384_sha384(
         contracts.Bytes{data: ?public_key[0], len: 97}, message,
         contracts.Bytes{data: (?zero_scalar[0]):~*u8, len: 8}) !=
@@ -522,7 +546,7 @@ test "ecdsa p-384: scalars, strict DER, points, and nil inputs are bounded" {
         contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.INVALID_KEY) {
         ret 12;
     }
-    public_key[0] = 0x04;
+    public_key[0]  = 0x04;
     public_key[96] = public_key[96] ^ 1;
     if (signature.verify_ecdsa_p384_sha384(
         contracts.Bytes{data: ?public_key[0], len: 97}, message,
@@ -586,8 +610,8 @@ test "ed25519: rfc 8032 vectors" {
         0xd2, 0x5b, 0xf5, 0xf0, 0x59, 0x5b, 0xbe, 0x24,
         0x65, 0x51, 0x41, 0x43, 0x8e, 0x7a, 0x10, 0x0b
     };
-    var derived: [32]u8;
-    var encoded: [64]u8;
+    var derived:   [32]u8;
+    var encoded:   [64]u8;
     var operation: contracts.Operation = signature.derive_ed25519_public(
         contracts.SecretBytes{data: ?first_seed[0], len: 32},
         contracts.Buffer{data: ?derived[0], capacity: 32});
@@ -656,12 +680,16 @@ test "ed25519: rfc 8032 vectors" {
         contracts.Bytes{data: (?second_public[0]):~*u8, len: 31},
         contracts.Bytes{data: (?message[0]):~*u8, len: 1},
         contracts.Bytes{data: ?encoded[0], len: 64}) != contracts.INVALID_KEY) { ret 9; }
-    var identity: [32]u8;
+    var identity:     [32]u8;
     var noncanonical: [32]u8;
-    var i: usize = 0;
-    for (i < 32) { identity[i] = 0; noncanonical[i] = 0xff; i = i + 1; }
-    identity[0] = 1;
-    noncanonical[0] = 0xed;
+    var i:            usize = 0;
+    for (i < 32) {
+        identity[i]     = 0;
+        noncanonical[i] = 0xff;
+        i               = i + 1;
+    }
+    identity[0]      = 1;
+    noncanonical[0]  = 0xed;
     noncanonical[31] = 0x7f;
     if (signature.verify_ed25519(
         contracts.Bytes{data: ?identity[0], len: 32},
@@ -678,13 +706,19 @@ test "ed25519: rfc 8032 vectors" {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10
     };
     i = 0;
-    for (i < 32) { encoded[32 + i] = order[i]; i = i + 1; }
+    for (i < 32) {
+        encoded[32 + i] = order[i];
+        i               = i + 1;
+    }
     if (signature.verify_ed25519(
         contracts.Bytes{data: (?second_public[0]):~*u8, len: 32},
         contracts.Bytes{data: (?message[0]):~*u8, len: 1},
         contracts.Bytes{data: ?encoded[0], len: 64}) != contracts.AUTH_FAILED) { ret 12; }
     i = 0;
-    for (i < 64) { encoded[i] = 0xa5; i = i + 1; }
+    for (i < 64) {
+        encoded[i] = 0xa5;
+        i          = i + 1;
+    }
     operation = signature.sign_ed25519(
         contracts.SecretBytes{data: ?second_seed[0], len: 32},
         contracts.Bytes{data: (?message[0]):~*u8, len: 1},
@@ -693,14 +727,17 @@ test "ed25519: rfc 8032 vectors" {
         !public_filled(?encoded[0], 0xa5, 64)) { ret 13; }
     var overlap: [64]u8;
     overlap[0] = 0x72;
-    operation = signature.sign_ed25519(
+    operation  = signature.sign_ed25519(
         contracts.SecretBytes{data: ?second_seed[0], len: 32},
         contracts.Bytes{data: ?overlap[0], len: 1},
         contracts.Buffer{data: ?overlap[0], capacity: 64});
     if (operation.error != contracts.OK ||
         !public_equal(?overlap[0], (?second_signature[0]):~*u8, 64)) { ret 14; }
     i = 0;
-    for (i < 32) { derived[i] = 0x5a; i = i + 1; }
+    for (i < 32) {
+        derived[i] = 0x5a;
+        i          = i + 1;
+    }
     operation = signature.derive_ed25519_public(
         contracts.SecretBytes{data: ?second_seed[0], len: 32},
         contracts.Buffer{data: ?derived[0], capacity: 31});
@@ -713,7 +750,6 @@ test "ed25519: rfc 8032 vectors" {
     if (operation.error != contracts.INVALID_KEY || operation.written != 0) { ret 17; }
     ret 0;
 }
-
 
 test "rsa-pss: independent sha-256 and sha-384 vectors" {
     val rsa_modulus: [256]u8 = [256]u8{
@@ -852,25 +888,31 @@ test "rsa-pss: independent sha-256 and sha-384 vectors" {
         0x00, 0x3e, 0x76, 0xca, 0xa6, 0xc8, 0x1a, 0x96,
         0x2c, 0x87, 0xe6, 0x13, 0xd8, 0xfa, 0xc9, 0x76
     };
-    val exponent: [3]u8 = [3]u8{0x01, 0x00, 0x01};
-    val message: [31]u8 = [31]u8{
+    val exponent: [3]u8  = [3]u8{0x01, 0x00, 0x01};
+    val message:  [31]u8 = [31]u8{
         'm', 'a', 'c', 'h', ' ', 'r', 's', 'a', ' ', 'p', 's', 's', ' ', 'i', 'n',
         'd', 'e', 'p', 'e', 'n', 'd', 'e', 'n', 't', ' ', 'v', 'e', 'c', 't', 'o', 'r'
     };
     var salt256: [32]^u8;
     var salt384: [48]^u8;
     var encoded: [256]u8;
-    var i: usize = 0;
-    for (i < 32) { salt256[i] = i::u8; i = i + 1; }
+    var i:       usize = 0;
+    for (i < 32) {
+        salt256[i] = i::u8;
+        i          = i + 1;
+    }
     i = 0;
-    for (i < 48) { salt384[i] = i::u8; i = i + 1; }
+    for (i < 48) {
+        salt384[i] = i::u8;
+        i          = i + 1;
+    }
     val private_key: signature.RsaPrivateKey = signature.RsaPrivateKey{
-        modulus: contracts.Bytes{data: (?rsa_modulus[0]):~*u8, len: 256},
-        public_exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3},
+        modulus:          contracts.Bytes{data: (?rsa_modulus[0]):~*u8, len: 256},
+        public_exponent:  contracts.Bytes{data: (?exponent[0]):~*u8, len: 3},
         private_exponent: contracts.SecretBytes{data: ?rsa_private[0], len: 256}
     };
     val public_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: (?rsa_modulus[0]):~*u8, len: 256},
+        modulus:  contracts.Bytes{data: (?rsa_modulus[0]):~*u8, len: 256},
         exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
     };
     var operation: contracts.Operation = signature.sign_rsa_pss_sha256(private_key,
@@ -903,22 +945,25 @@ test "rsa-pss: independent sha-256 and sha-384 vectors" {
         contracts.Bytes{data: (?message[0]):~*u8, len: 31},
         contracts.Bytes{data: ?encoded[0], len: 255}) != contracts.AUTH_FAILED) { ret 7; }
     val short_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: (?rsa_modulus[0]):~*u8, len: 255},
+        modulus:  contracts.Bytes{data: (?rsa_modulus[0]):~*u8, len: 255},
         exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
     };
     if (signature.verify_rsa_pss_sha384(short_key,
         contracts.Bytes{data: (?message[0]):~*u8, len: 31},
         contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 8; }
-    val even_exponent: [1]u8 = [1]u8{2};
-    val even_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: (?rsa_modulus[0]):~*u8, len: 256},
+    val even_exponent: [1]u8                  = [1]u8{2};
+    val even_key:      signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus:  contracts.Bytes{data: (?rsa_modulus[0]):~*u8, len: 256},
         exponent: contracts.Bytes{data: (?even_exponent[0]):~*u8, len: 1}
     };
     if (signature.verify_rsa_pss_sha384(even_key,
         contracts.Bytes{data: (?message[0]):~*u8, len: 31},
         contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 9; }
     i = 0;
-    for (i < 256) { encoded[i] = 0xa5; i = i + 1; }
+    for (i < 256) {
+        encoded[i] = 0xa5;
+        i          = i + 1;
+    }
     operation = signature.sign_rsa_pss_sha256(private_key,
         contracts.Bytes{data: (?message[0]):~*u8, len: 31},
         contracts.SecretBytes{data: ?salt256[0], len: 32},
@@ -932,7 +977,7 @@ test "rsa-pss: independent sha-256 and sha-384 vectors" {
     if (operation.error != contracts.INVALID_INPUT || operation.written != 0 ||
         !public_filled(?encoded[0], 0xa5, 256)) { ret 11; }
     rsa_private[255] = 0x70;
-    operation = signature.sign_rsa_pss_sha256(private_key,
+    operation        = signature.sign_rsa_pss_sha256(private_key,
         contracts.Bytes{data: (?message[0]):~*u8, len: 31},
         contracts.SecretBytes{data: ?salt256[0], len: 32},
         contracts.Buffer{data: ?encoded[0], capacity: 256});
@@ -941,7 +986,10 @@ test "rsa-pss: independent sha-256 and sha-384 vectors" {
         !public_filled(?encoded[0], 0xa5, 256)) { ret 12; }
     var overlap: [256]u8;
     i = 0;
-    for (i < 31) { overlap[i] = message[i]; i = i + 1; }
+    for (i < 31) {
+        overlap[i] = message[i];
+        i          = i + 1;
+    }
     operation = signature.sign_rsa_pss_sha256(private_key,
         contracts.Bytes{data: ?overlap[0], len: 31},
         contracts.SecretBytes{data: ?salt256[0], len: 32},
@@ -950,7 +998,6 @@ test "rsa-pss: independent sha-256 and sha-384 vectors" {
         !public_equal(?overlap[0], (?expected_sha256[0]):~*u8, 256)) { ret 13; }
     ret 0;
 }
-
 
 test "rsa-pss: nist cavp sha256 verification" {
     val modulus: [256]u8 = [256]u8{
@@ -1043,7 +1090,7 @@ test "rsa-pss: nist cavp sha256 verification" {
         0x51, 0xd9, 0xc3, 0xa6, 0x29, 0xef, 0x22, 0x2d
     };
     val public_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: (?modulus[0]):~*u8, len: 256},
+        modulus:  contracts.Bytes{data: (?modulus[0]):~*u8, len: 256},
         exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
     };
     if (signature.verify_rsa_pss_sha256(public_key,
@@ -1143,7 +1190,7 @@ test "rsa-pss: nist cavp sha384 verification" {
         0x46, 0xee, 0x3b, 0x29, 0x2b, 0xb1, 0x17, 0xb1
     };
     val public_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: (?modulus[0]):~*u8, len: 256},
+        modulus:  contracts.Bytes{data: (?modulus[0]):~*u8, len: 256},
         exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
     };
     if (signature.verify_rsa_pss_sha384(public_key,
@@ -1163,9 +1210,9 @@ test "rsa-pkcs1: nist cavp sha-256 and sha-384 verification" {
         256, ?message256[0]) || !decode_hex(
         "51265d96f11ab338762891cb29bf3f1d2b3305107063f5f3245af376dfcc7027d39365de70a31db05e9e10eb6148cb7f6425f0c93c4fb0e2291adbd22c77656afc196858a11e1c670d9eeb592613e69eb4f3aa501730743ac4464486c7ae68fd509e896f63884e9424f69c1c5397959f1e52a368667a598a1fc90125273d9341295d2f8e1cc4969bf228c860e07a3546be2eeda1cde48ee94d062801fe666e4a7ae8cb9cd79262c017b081af874ff00453ca43e34efdb43fffb0bb42a4e2d32a5e5cc9e8546a221fe930250e5f5333e0efe58ffebf19369a3b8ae5a67f6a048bc9ef915bda25160729b508667ada84a0c27e7e26cf2abca413e5e4693f4a9405"::*u8,
         512, ?encoded256[0])) { ret 1; }
-    val exponent256: [3]u8 = [3]u8{0x49, 0xd2, 0xa1};
-    val key256: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: ?modulus256[0], len: 256},
+    val exponent256: [3]u8                  = [3]u8{0x49, 0xd2, 0xa1};
+    val key256:      signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus:  contracts.Bytes{data: ?modulus256[0], len: 256},
         exponent: contracts.Bytes{data: (?exponent256[0]):~*u8, len: 3}
     };
     if (signature.verify_rsa_pkcs1_sha256(key256,
@@ -1182,9 +1229,9 @@ test "rsa-pkcs1: nist cavp sha-256 and sha-384 verification" {
         256, ?message384[0]) || !decode_hex(
         "b9794f252e6907dc4c41de42ea5a0e6361114ac3814c4a92583ca70fd78e98190a0d9215bd5282e8520422093eff2e1cfa335cffcdcc27fe9bafe4516e74445d4aa17a08db754fc69b156d86ff26eb9e814f605142a3051d2fa64305d3e5c5c5f67c7d9e38c5054d069c14b23e4278fa5a73381f61f90a9ec428c883f1366e27ec0219db8c942582a284c161eead307285d0e4df6b0d7dea0e8216d7ef2e4b2ede2296e0b780e5a3f8d15f123f737b9d6170074f758de32b6f1e958b27e422b053df8f5fbbbafbc14119260f7022cd2934e8faeffbd7085aabc44497bfe07387bc0e5aa02399eab99318adb98f99a677aa0683e0c11d638cb13907fc5c3147e5"::*u8,
         512, ?encoded384[0])) { ret 3; }
-    val exponent384: [3]u8 = [3]u8{0x2a, 0x26, 0xdb};
-    val key384: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: ?modulus384[0], len: 256},
+    val exponent384: [3]u8                  = [3]u8{0x2a, 0x26, 0xdb};
+    val key384:      signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus:  contracts.Bytes{data: ?modulus384[0], len: 256},
         exponent: contracts.Bytes{data: (?exponent384[0]):~*u8, len: 3}
     };
     if (signature.verify_rsa_pkcs1_sha384(key384,
@@ -1194,8 +1241,8 @@ test "rsa-pkcs1: nist cavp sha-256 and sha-384 verification" {
 }
 
 test "rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs" {
-    var modulus: [256]u8;
-    var message: [33]u8;
+    var modulus:    [256]u8;
+    var message:    [33]u8;
     var encoded256: [256]u8;
     var encoded384: [256]u8;
     if (!decode_hex(
@@ -1207,14 +1254,14 @@ test "rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs" {
         512, ?encoded256[0]) || !decode_hex(
         "b8e7e3d3a50ef5feaac07b1319316b01b9e0ad28f985db9332b2bd309940363188b3d2d9029903e5909dbdf5f1315383fdb9c8a2c76b50148fe70c0b7a30298a5866758794ff21480d09fc24bac5bae365d0cc48edb469d209f584e5565eaa4d261da8389d596673e19d79ccfab6003cf4f0b3e93e25cebfa7ba65d80fff15c8da3a0a7f76fc2e41b74d0b86181c9685cd5be61050cbe95bc5a3eee6b154a74c660f10965a3a2a980aaab6c43fc0b86f77ada49980f7ed9c308f60140605ee225e1f23f41bf1e028f3374c4377ef05a0428c6f523b56b766c3ed9d02411663cb60f6b48550adfa5774898b80f020e86795a55df59d1e44dd0f7de4e92ab2ca7d"::*u8,
         512, ?encoded384[0])) { ret 1; }
-    val exponent: [3]u8 = [3]u8{1, 0, 1};
+    val exponent:   [3]u8                  = [3]u8{1, 0, 1};
     val public_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: ?modulus[0], len: 256},
+        modulus:  contracts.Bytes{data: ?modulus[0], len: 256},
         exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
     };
-    var modulus_snapshot: [256]u8;
-    var exponent_snapshot: [3]u8;
-    var message_snapshot: [33]u8;
+    var modulus_snapshot:    [256]u8;
+    var exponent_snapshot:   [3]u8;
+    var message_snapshot:    [33]u8;
     var encoded256_snapshot: [256]u8;
     var encoded384_snapshot: [256]u8;
     copy_public(?modulus_snapshot[0], ?modulus[0], 256);
@@ -1244,9 +1291,9 @@ test "rsa-pkcs1: hostile padding and digestinfo encodings are rejected" {
         512, ?modulus[0]) || !decode_hex(
         "6d6163682072736120706b63733120636572746966696361746520766563746f72"::*u8,
         66, ?message[0])) { ret 1; }
-    val exponent: [3]u8 = [3]u8{1, 0, 1};
+    val exponent:   [3]u8                  = [3]u8{1, 0, 1};
     val public_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: ?modulus[0], len: 256},
+        modulus:  contracts.Bytes{data: ?modulus[0], len: 256},
         exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
     };
     val input: contracts.Bytes = contracts.Bytes{data: ?message[0], len: 33};
@@ -1282,9 +1329,9 @@ test "rsa-pkcs1: validation and authentication errors are distinct" {
         66, ?message[0]) || !decode_hex(
         "c447f3b9ffa9cf464eb8e63d48949081f198902121d0fc310079b981aa80d9bf3f781f9052f9f32ac55d5639d57f53b479702619ffdd57a565726e315c933ffc1a3be331568072efcf990f43e96663d13992ce942a79880b968ae45bb148354d42f6aaeb522249bd30c28efd983321f166f9d13c81d65ff9a92f23e98a4e44e8edce9e134f84059f28e0892ab6f9d91a0eed72c32142d6c34f6d8c58f4a231c3be8bf12373f7fb3b80a70004818cf779962a3174bbdcbf2ab7e770142193fabf20d394a66f928881519bb48eaed01603d517acb155fe4be54d34ee5836eef5cf11fe53a9f9af061585d95013fab3a0afe4f10f84d9f761bd4524cb859933c8ca"::*u8,
         512, ?encoded[0])) { ret 1; }
-    val exponent: [3]u8 = [3]u8{1, 0, 1};
+    val exponent:   [3]u8                  = [3]u8{1, 0, 1};
     var public_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus: contracts.Bytes{data: ?modulus[0], len: 256},
+        modulus:  contracts.Bytes{data: ?modulus[0], len: 256},
         exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
     };
     val input: contracts.Bytes = contracts.Bytes{data: ?message[0], len: 33};
@@ -1301,20 +1348,20 @@ test "rsa-pkcs1: validation and authentication errors are distinct" {
     public_key.modulus.len = 255;
     if (signature.verify_rsa_pkcs1_sha256(public_key, input,
         contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 6; }
-    public_key.modulus.len = 256;
+    public_key.modulus.len  = 256;
     public_key.modulus.data = nil;
     if (signature.verify_rsa_pkcs1_sha256(public_key, input,
         contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 7; }
     public_key.modulus.data = ?modulus[0];
-    modulus[255] = modulus[255] ^ 1;
+    modulus[255]            = modulus[255] ^ 1;
     if (signature.verify_rsa_pkcs1_sha256(public_key, input,
         contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 8; }
     modulus[255] = modulus[255] ^ 1;
-    modulus[0] = modulus[0] & 0x7f;
+    modulus[0]   = modulus[0] & 0x7f;
     if (signature.verify_rsa_pkcs1_sha256(public_key, input,
         contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 9; }
-    modulus[0] = modulus[0] | 0x80;
-    modulus[257] = 1;
+    modulus[0]             = modulus[0] | 0x80;
+    modulus[257]           = 1;
     public_key.modulus.len = 258;
     if (signature.verify_rsa_pkcs1_sha256(public_key, input,
         contracts.Bytes{data: ?encoded[0], len: 256}) != contracts.INVALID_KEY) { ret 10; }

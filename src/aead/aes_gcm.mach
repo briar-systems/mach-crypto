@@ -59,13 +59,13 @@ fun write_secret_u64_be(output: *^u8, offset: usize, value: ^u64) {
 # multiply the accumulator by the hash key in gf(2^128) one bit at a time
 #[oblivious]
 fun multiply_hash(state: *Hash) {
-    var product_high: ^u64  = 0;
-    var product_low:  ^u64  = 0;
+    var product_high:  ^u64 = 0;
+    var product_low:   ^u64 = 0;
     var multiple_high: ^u64 = state.key[0];
     var multiple_low:  ^u64 = state.key[1];
-    val value_high:   ^u64  = state.accumulator[0];
-    val value_low:    ^u64  = state.accumulator[1];
-    var bit:          u64   = 0;
+    val value_high:    ^u64 = state.accumulator[0];
+    val value_low:     ^u64 = state.accumulator[1];
+    var bit:           u64  = 0;
     for (bit < 128) {
         var selected: ^u64 = 0;
         if (bit < 64) { selected = (value_high >> (63 - bit)) & 1; }
@@ -80,10 +80,10 @@ fun multiply_hash(state: *Hash) {
     }
     state.accumulator[0] = product_high;
     state.accumulator[1] = product_low;
-    product_high  = 0;
-    product_low   = 0;
-    multiple_high = 0;
-    multiple_low  = 0;
+    product_high         = 0;
+    product_low          = 0;
+    multiple_high        = 0;
+    multiple_low         = 0;
 }
 
 #[oblivious]

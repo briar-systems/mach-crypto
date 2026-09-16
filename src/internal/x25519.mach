@@ -146,16 +146,16 @@ pub fun multiply(output: *Field, left: *Field, right: *Field) {
     normalize(?multiple);
     copy(?bits, right);
     canonicalize(?bits);
-    var m0: ^u64 = multiple.limb[0];
-    var m1: ^u64 = multiple.limb[1];
-    var m2: ^u64 = multiple.limb[2];
-    var m3: ^u64 = multiple.limb[3];
-    var m4: ^u64 = multiple.limb[4];
-    var p0: ^u64 = 0;
-    var p1: ^u64 = 0;
-    var p2: ^u64 = 0;
-    var p3: ^u64 = 0;
-    var p4: ^u64 = 0;
+    var m0:         ^u64  = multiple.limb[0];
+    var m1:         ^u64  = multiple.limb[1];
+    var m2:         ^u64  = multiple.limb[2];
+    var m3:         ^u64  = multiple.limb[3];
+    var m4:         ^u64  = multiple.limb[4];
+    var p0:         ^u64  = 0;
+    var p1:         ^u64  = 0;
+    var p2:         ^u64  = 0;
+    var p3:         ^u64  = 0;
+    var p4:         ^u64  = 0;
     var limb_index: usize = 0;
     for (limb_index < 5) {
         var word: ^u64 = bits.limb[limb_index];

@@ -272,10 +272,10 @@ fun reduce_field(output: *UInt, product: *^u64) {
             signed_carry = word >> 32;
             i            = i + 1;
         }
-        w[0] = w[0] + signed_carry;
-        w[3] = w[3] - signed_carry;
-        w[6] = w[6] - signed_carry;
-        w[7] = w[7] + signed_carry;
+        w[0]         = w[0] + signed_carry;
+        w[3]         = w[3] - signed_carry;
+        w[6]         = w[6] - signed_carry;
+        w[7]         = w[7] + signed_carry;
         signed_carry = 0;
         fold         = fold + 1;
     }
