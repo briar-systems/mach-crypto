@@ -65,6 +65,8 @@ manifest_hash() {
             assurance/zeroization.tsv \
             test/leakage-negative/mach.toml \
             test/leakage-negative/src/leakage.mach \
+            test/performance/mach.toml \
+            test/performance/src/performance.mach \
             tools/assurance
     ) | sha256sum | awk '{print $1}'
 }
@@ -90,6 +92,8 @@ check_prerequisites() {
     require_file "$root/assurance/zeroization.tsv"
     require_file "$root/test/leakage-negative/mach.toml"
     require_file "$root/test/leakage-negative/src/leakage.mach"
+    require_file "$root/test/performance/mach.toml"
+    require_file "$root/test/performance/src/performance.mach"
 }
 
 assert_clean_source() {
@@ -105,6 +109,8 @@ resolve_dependencies() {
     done < "$root/assurance/projects.tsv"
     (cd "$root" && mach dep pull test/leakage-negative --quiet) >/dev/null 2>&1 || \
         die "dependency resolution failed for test/leakage-negative; run 'mach dep pull test/leakage-negative' for details"
+    (cd "$root" && mach dep pull test/performance --quiet) >/dev/null 2>&1 || \
+        die "dependency resolution failed for test/performance; run 'mach dep pull test/performance' for details"
     tree_is_clean || die "dependency resolution changed the source tree; commit the refreshed pins before producing release evidence"
 }
 

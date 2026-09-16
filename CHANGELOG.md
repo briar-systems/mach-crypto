@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The P-384 verification budget no longer runs in the package suite, where it was judged in a debug build with every other test in parallel and failed the gate intermittently on a loaded runner (#65). It lives in `test/performance/`, which the assurance gate reaches alone and in release only.
+
 ## [0.9.1] - 2026-09-15
 
 ### Performance
