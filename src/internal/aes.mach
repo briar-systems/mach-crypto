@@ -211,7 +211,7 @@ pub fun destroy(context: *Context) {
 # spread one 16-byte round key over the bit planes of every parallel block
 #[oblivious]
 fun spread_round_key(context: *Context, round: usize, key: *^u8) {
-    val base: usize = round * 8;
+    val base:  usize = round * 8;
     var plane: usize = 0;
     for (plane < 8) {
         context.round_planes[base + plane] = 0;
@@ -388,8 +388,8 @@ fun unload_blocks(q: *^u64, output: *^u8, count: usize) {
     for (block < count) {
         var i: usize = 0;
         for (i < BLOCK_SIZE) {
-            val position: u64 = ((i & 3) * 16 + (i >> 2) * 4 + block)::u64;
-            var byte:     ^u8 = 0;
+            val position: u64   = ((i & 3) * 16 + (i >> 2) * 4 + block)::u64;
+            var byte:     ^u8   = 0;
             var plane:    usize = 0;
             for (plane < 8) {
                 byte  = byte | (((q[plane] >> position) & 1)::^u8 << plane);
@@ -474,10 +474,10 @@ test "aes: bitsliced s-box matches the fips 197 definition for every byte" {
         word[2] = (255 - value)::u8;
         word[3] = (value * 7)::u8;
         substitute_word(?word[0]);
-        if (word[0]:>u8 != reference_substitute(value::u8)) { ret 2; }
+        if (word[0]:>u8 != reference_substitute(value::u8))          { ret 2; }
         if (word[1]:>u8 != reference_substitute((value ^ 0xA5)::u8)) { ret 3; }
-        if (word[2]:>u8 != reference_substitute((255 - value)::u8)) { ret 4; }
-        if (word[3]:>u8 != reference_substitute((value * 7)::u8)) { ret 5; }
+        if (word[2]:>u8 != reference_substitute((255 - value)::u8))  { ret 4; }
+        if (word[3]:>u8 != reference_substitute((value * 7)::u8))    { ret 5; }
         value = value + 1;
     }
     ret 0;
