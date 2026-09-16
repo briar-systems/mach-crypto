@@ -1,6 +1,6 @@
 [project]
-id = "crypto"
-version = "0.9.2"
+id = "crypto-performance-test"
+version = "0.0.0"
 src = "src"
 out = "out/{target.name}/{profile.name}"
 
@@ -50,14 +50,13 @@ simd = "scalarize"
 vectorize = true
 float_reassoc = false
 
-[artifact.crypto]
+[artifact.performance]
 kind = "static"
-entry = "lib.mach"
-out = "lib/crypto"
+entry = "performance.mach"
+out = "lib/performance"
 targets = ["*"]
 link = []
 need = []
 
-[dep.std]
-git = "https://github.com/briar-systems/mach-std"
-ref = "tag/v2.1.0"
+[dep.crypto]
+path = "../.."

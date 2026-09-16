@@ -55,7 +55,7 @@ invalid-input	.	pem	RFC 7468 and mach-crypto parser contract	pem: canonical base
 invalid-input	.	key-containers	mach-crypto ownership contract	keys: allocation and cleanup failures retain exact ownership
 invalid-input	.	key-containers	RFC 5480 and SEC 1 named-curve contract	keys: P-384 SPKI validates the named curve and every boundary
 invalid-input	.	key-containers	RFC 7468 and mach-crypto parser contract	keys: private PEM truncation fails before allocation at every boundary
-performance	.	ecdsa-p384-sha384	250 ms median verification budget	ecdsa p-384: median verification stays below 250 ms
+performance	test/performance	ecdsa-p384-sha384	250 ms median verification budget	ecdsa p-384: median verification stays below 250 ms
 zeroization	.	secret-storage	mach-crypto destruction contract	secret: partial allocation failure is wiped and cleanup ownership is retained
 zeroization	.	secret-storage	mach-crypto entropy contract	secret: entropy failure is distinct and wipes partial output
 zeroization	.	secret-storage	mach-crypto destruction contract	secret: failed cleanup rewipes retained ownership before retry

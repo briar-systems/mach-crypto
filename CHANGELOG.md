@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.9.2] - 2026-09-15
+
+### Fixed
+
+- The P-384 verification budget no longer runs in the package suite, where it was judged in a debug build with every other test in parallel and failed the gate intermittently on a loaded runner (#65). It lives in `test/performance/`, which the assurance gate reaches alone and in release only.
+
+### Changed
+
+- Dependencies: mach-std v2.1.0.
+
 ## [0.9.1] - 2026-09-15
 
 ### Performance
