@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-09-16
+
 ### Performance
 
 - P-256 inverts along fixed addition chains: 255 squarings and 12 multiplications in the field, 253 and 39 in the scalar ring, where square-and-multiply took 256 and 128, and 256 and 169. ECDSA signing retires 9% fewer instructions, verification 5%, and keygen and ECDH 4% (#81).
