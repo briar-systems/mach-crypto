@@ -1,0 +1,90 @@
+# wall-clock budgets, which are judged only in release and only alone
+#
+# a budget is a claim about an optimized build on a machine that is not doing
+# anything else. the package suite runs in both profiles with every test in
+# parallel, so a budget living there is judged under contention in a debug
+# build and reports a machine's load as a defect. these live in their own
+# project instead, which assurance/tests.tsv reaches with a filter and
+# assurance/projects.tsv does not list.
+
+use crypto.contracts;
+use crypto.signature;
+use std.chrono.time;
+use std.runtime;
+use std.types.bool.bool;
+use std.types.bool.false;
+use std.types.bool.true;
+use std.types.size.usize;
+
+fun nibble(byte: u8) u8 {
+    if (byte >= '0' && byte <= '9') { ret byte - '0'; }
+    if (byte >= 'a' && byte <= 'f') { ret byte - 'a' + 10; }
+    if (byte >= 'A' && byte <= 'F') { ret byte - 'A' + 10; }
+    ret 255;
+}
+
+fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
+    if (text == nil || output == nil || text_len % 2 != 0) { ret false; }
+    var i: usize = 0;
+    for (i < text_len / 2) {
+        val high: u8 = nibble(text[i * 2]);
+        val low:  u8 = nibble(text[i * 2 + 1]);
+        if (high == 255 || low == 255) { ret false; }
+        output[i] = (high << 4) | low;
+        i = i + 1;
+    }
+    ret true;
+}
+
+fun set_nist_p384_public(output: *u8) bool {
+    ret decode_hex(
+        "043bf701bc9e9d36b4d5f1455343f09126f2564390f2b487365071243c61e6471fb9d2ab74657b82f9086489d9ef0f5cb5d1a358eafbf952e68d533855ccbdaa6ff75b137a5101443199325583552a6295ffe5382d00cfcda30344a9b5b68db855"::*u8,
+        194, output);
+}
+
+fun set_nist_p384_signature(output: *u8) bool {
+    ret decode_hex(
+        "3065023030ea514fc0d38d8208756f068113c7cada9f66a3b40ea3b313d040d9b57dd41a332795d02cc7d507fcef9faf01a27088023100cc808e504be414f46c9027bcbf78adf067a43922d6fcaa66c4476875fbb7b94efd1f7d5dbe620bfb821c46d549683ad8"::*u8,
+        206, output);
+}
+
+test "ecdsa p-384: median verification stays below 250 ms" {
+    var public_key: [97]u8;
+    var encoded: [103]u8;
+    if (!set_nist_p384_public(?public_key[0]) ||
+        !set_nist_p384_signature(?encoded[0])) { ret 1; }
+    val key: contracts.Bytes = contracts.Bytes{data: ?public_key[0], len: 97};
+    val message: contracts.Bytes = contracts.Bytes{
+        data: "Example of ECDSA with P-384"::*u8, len: 27};
+    val value: contracts.Bytes = contracts.Bytes{data: ?encoded[0], len: 103};
+    if (signature.verify_ecdsa_p384_sha384(key, message, value) !=
+        contracts.OK) { ret 2; }
+    var samples: [5]i64;
+    var i: usize = 0;
+    for (i < 5) {
+        val started_clock: time.Clock = time.monotonic();
+        if (sel started_clock.err) { ret 3; }
+        val started: time.Time = started_clock.ok;
+        if (signature.verify_ecdsa_p384_sha384(key, message, value) !=
+            contracts.OK) { ret 4; }
+        val finished_clock: time.Clock = time.monotonic();
+        if (sel finished_clock.err) { ret 3; }
+        val finished: time.Time = finished_clock.ok;
+        samples[i] = time.time_sub(finished, started);
+        if (samples[i] <= 0) { ret 5; }
+        i = i + 1;
+    }
+    i = 1;
+    for (i < 5) {
+        val current: i64 = samples[i];
+        var position: usize = i;
+        for (position > 0 && samples[position - 1] > current) {
+            samples[position] = samples[position - 1];
+            position = position - 1;
+        }
+        samples[position] = current;
+        i = i + 1;
+    }
+    if (samples[2] > 250000000) { ret 6; }
+    ret 0;
+}

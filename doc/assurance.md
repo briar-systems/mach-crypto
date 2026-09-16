@@ -34,12 +34,16 @@ The layers run separately so one kind of evidence cannot stand in for another:
 3. Each independent or differential test runs alone in both profiles.
 4. Each hostile or invalid-input test runs alone in both profiles.
 5. Each behavioral zeroization test runs alone in both profiles.
-6. A deliberately secret-dependent branch must be rejected for every target
+6. Each performance test runs alone in release only. A wall-clock budget is a
+   claim about an optimized build on an idle machine, so it lives in
+   `test/performance/`, which `assurance/projects.tsv` does not list, and the
+   package run never judges it.
+7. A deliberately secret-dependent branch must be rejected for every target
    and profile. Rejection for any reason other than secret-flow leakage fails.
-7. Every project is built for all six targets and both profiles with emitted
+8. Every project is built for all six targets and both profiles with emitted
    IR and emitted assembly (IR verification is mandatory in mach 5.0).
-8. A second clean matrix build must produce byte-identical artifacts.
-9. Every module named by `assurance/zeroization.tsv` must retain explicit
+9. A second clean matrix build must produce byte-identical artifacts.
+10. Every module named by `assurance/zeroization.tsv` must retain explicit
    zeroization calls in generated IR. Security-critical release assembly named
    by that policy must also retain the zeroization, either as a call or as the
    inline expansion the release IR records, since mach 5.0 release builds
@@ -106,7 +110,10 @@ successful automated run does not change `independent_review` from
 ## Performance gate
 
 The release evidence gate runs a warmed five-sample P-384 verification test and
-requires its monotonic-clock median to stay at or below 250 milliseconds. The
+requires its monotonic-clock median to stay at or below 250 milliseconds. It
+lives in `test/performance/`, alone, and is judged only in release: a budget
+measured against an optimized build on an idle machine reports load rather than
+a defect if it is judged in debug beside every other test. The
 budget is intentionally more than twice the current measurement while rejecting
 the former multi-second arithmetic and its CPU-exhaustion exposure.
 
