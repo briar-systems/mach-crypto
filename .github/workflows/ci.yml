@@ -28,13 +28,15 @@ jobs:
     uses: briar-systems/.github/.github/workflows/mach-lib.yml@main
     with:
       heavy: ${{ inputs.heavy }}
-      # the negative control must fail to compile, so it is only resolved here.
-      # tools/assurance builds it and judges the rejection
-      subprojects: '[{"path": "test/leakage-negative", "test": false}]'
+      # the leakage controls must fail to compile, so they are only resolved here.
+      # tools/assurance builds each one from assurance/leakage.tsv and judges the rejection
+      subprojects: >-
+        [{"path": "test/leakage-negative", "test": false},
+         {"path": "test/leakage-index", "test": false}]
 
   # the release evidence gate the README documents. it resolves every project,
   # runs the suite and the release-only performance budget, builds six targets
-  # twice for reproducibility, re-derives the leakage-negative evidence and
+  # twice for reproducibility, re-derives the leakage control evidence and
   # inspects zeroization in the generated code
   assurance:
     if: github.base_ref == 'main' || inputs.heavy == 'all' || inputs.heavy == 'assurance'

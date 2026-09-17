@@ -1,0 +1,3 @@
+project	artifact	expected	source
+test/leakage-negative	leakage-negative	secret value used as a branch condition	Mach secret-flow negative control: secret branch
+test/leakage-index	leakage-index	secret value used as a memory index	Mach secret-flow negative control: secret table index
