@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies: requires mach-std 5.3.0 (#112). This is a pin bump, not an API change. It names the std tag mach-tls uses, so a graph with both resolves without a root std override.
+- `mach.toml` declares `mach = "^5.3"`, so mach-crypto requires mach 5.3 or later (#112).
+- The std bump brings std's cancelled-completion contract change: a cancelled or timed-out io completion now carries the bytes that landed before the cancel. Anyone who links mach-crypto with std gets that behavior. mach-crypto itself consumes no io completion, so nothing in its own surface changes.
+
 ## [0.13.1] - 2026-09-17
 
 ### Changed
