@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies: mach-std v4.0.0 (#92), which requires mach 5.2.0 or later. The native secret allocator and entropy source call `std.memory.secret`, which replaced `std.system.os.secret_*`. Their callbacks still report any failure as a nonzero status. Consumers now resolve std 4.0.0 or later.
+
 ## [0.10.3] - 2026-09-16
 
 ### Performance
