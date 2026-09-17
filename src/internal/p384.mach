@@ -2,6 +2,7 @@
 
 use crypto.contracts;
 use crypto.internal.sha2;
+use crypto.internal.word;
 use std.crypto.ct;
 use std.types.bool.bool;
 use std.types.bool.false;
@@ -245,19 +246,6 @@ fun subtract_mod(output: *UInt, left: *UInt, right: *UInt, modulus: *u64) {
 }
 
 #[oblivious]
-fun multiply_words(left: ^u64, right: ^u64) ^u64 {
-    var product:  ^u64  = 0;
-    var position: usize = 0;
-    for (position < 32) {
-        val bit:      ^u64 = (right >> position) & 1;
-        val selected: ^u64 = left & (0 - bit);
-        product  = product + (selected << position);
-        position = position + 1;
-    }
-    ret product;
-}
-
-#[oblivious]
 fun montgomery_multiply(output: *UInt, left: *UInt, right: *UInt,
     modulus: *u64, factor: u64) {
     var temporary: [13]^u64;
@@ -272,7 +260,7 @@ fun montgomery_multiply(output: *UInt, left: *UInt, right: *UInt,
         var j:     usize = 0;
         for (j < 12) {
             val product: ^u64 = temporary[j] +
-                multiply_words(left.limb[j], right.limb[i]) + carry;
+                word.multiply(left.limb[j], right.limb[i], 32) + carry;
             temporary[j] = product & WORD_MASK;
             carry        = product >> 32;
             j            = j + 1;
@@ -280,12 +268,12 @@ fun montgomery_multiply(output: *UInt, left: *UInt, right: *UInt,
         temporary[12] = temporary[12] + carry;
 
         val multiplier: ^u64 =
-            multiply_words(temporary[0], factor) & WORD_MASK;
+            word.multiply(temporary[0], factor, 32) & WORD_MASK;
         carry = 0;
         j     = 0;
         for (j < 12) {
             val product: ^u64 = temporary[j] +
-                multiply_words(multiplier, modulus[j]) + carry;
+                word.multiply(multiplier, modulus[j], 32) + carry;
             if (j > 0) { temporary[j - 1] = product & WORD_MASK; }
             carry = product >> 32;
             j     = j + 1;
@@ -876,7 +864,7 @@ test "p384 internal: constants have canonical low words" {
 }
 
 test "p384 internal: montgomery arithmetic matches small values" {
-    if (multiply_words(0xFFFFFFFF, 0xFFFFFFFF):>u64 !=
+    if (word.multiply(0xFFFFFFFF, 0xFFFFFFFF, 32):>u64 !=
         0xFFFFFFFE00000001) { ret 7; }
     var one:    UInt;
     var two:    UInt;
