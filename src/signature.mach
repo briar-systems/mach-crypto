@@ -159,18 +159,15 @@ pub fun derive_ed25519_public(private_key: contracts.SecretBytes,
     ct.begin();
     var expanded:     [64]^u8;
     var scalar:       ed.Scalar;
-    var basepoint:    ed.Point;
     var public_point: ed.Point;
     ct.zeroize(?expanded[0], 64);
     val status: contracts.Error = ed25519_expand(private_key, ?expanded[0], ?scalar);
     if (status == contracts.OK) {
-        ed.generator(?basepoint);
-        ed.scalar_multiply(?public_point, ?scalar, ?basepoint);
+        ed.scalar_multiply_base(?public_point, ?scalar);
         ed.point_encode_public(output.data, ?public_point);
     }
     ct.zeroize(?expanded[0], 64);
     ed.destroy_scalar(?scalar);
-    ed.destroy_point(?basepoint);
     ed.destroy_point(?public_point);
     ct.end();
     if (status != contracts.OK) { ret failed(status); }
@@ -207,7 +204,6 @@ pub fun sign_ed25519(private_key: contracts.SecretBytes, message: contracts.Byte
     var challenge:      ed.Scalar;
     var product:        ed.Scalar;
     var response:       ed.Scalar;
-    var basepoint:      ed.Point;
     var public_point:   ed.Point;
     var nonce_point:    ed.Point;
     var status:         contracts.Error = ed25519_expand(private_key, ?expanded[0],
@@ -218,14 +214,13 @@ pub fun sign_ed25519(private_key: contracts.SecretBytes, message: contracts.Byte
             prefix[i] = expanded[32 + i];
             i         = i + 1;
         }
-        ed.generator(?basepoint);
-        ed.scalar_multiply(?public_point, ?private_scalar, ?basepoint);
+        ed.scalar_multiply_base(?public_point, ?private_scalar);
         ed.point_encode_signature(?public_encoded[0], ?public_point);
         status = hash512_secret_public(?prefix[0], 32, message, ?digest[0]);
     }
     if (status == contracts.OK) {
         ed.scalar_reduce_secret(?nonce, ?digest[0], 64);
-        ed.scalar_multiply(?nonce_point, ?nonce, ?basepoint);
+        ed.scalar_multiply_base(?nonce_point, ?nonce);
         ed.point_encode_signature(?r_encoded[0], ?nonce_point);
         status = hash512_two_secret_public(?r_encoded[0], ?public_encoded[0],
             message, ?digest[0]);
@@ -259,7 +254,6 @@ pub fun sign_ed25519(private_key: contracts.SecretBytes, message: contracts.Byte
     ed.destroy_scalar(?challenge);
     ed.destroy_scalar(?product);
     ed.destroy_scalar(?response);
-    ed.destroy_point(?basepoint);
     ed.destroy_point(?public_point);
     ed.destroy_point(?nonce_point);
     ct.end();
@@ -338,15 +332,13 @@ pub fun verify_ed25519(public_key: contracts.Bytes, message: contracts.Bytes,
         ret hash_status;
     }
     var challenge:     ed.Scalar;
-    var basepoint:     ed.Point;
     var left:          ed.Point;
     var product_point: ed.Point;
     var right:         ed.Point;
     var left_encoded:  [32]^u8;
     var right_encoded: [32]^u8;
     ed.scalar_reduce_secret(?challenge, ?digest[0], 64);
-    ed.generator(?basepoint);
-    ed.scalar_multiply(?left, ?response, ?basepoint);
+    ed.scalar_multiply_base(?left, ?response);
     ed.scalar_multiply(?product_point, ?challenge, ?public_point);
     ed.point_add(?right, ?nonce_point, ?product_point);
     ed.point_encode_signature(?left_encoded[0], ?left);
@@ -365,7 +357,6 @@ pub fun verify_ed25519(public_key: contracts.Bytes, message: contracts.Bytes,
     ed.destroy_point(?subgroup);
     ed.destroy_scalar(?response);
     ed.destroy_scalar(?challenge);
-    ed.destroy_point(?basepoint);
     ed.destroy_point(?left);
     ed.destroy_point(?product_point);
     ed.destroy_point(?right);
