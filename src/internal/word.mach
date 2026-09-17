@@ -1,0 +1,40 @@
+# the secret word multiply every field and ring shares
+#
+# native multiplication on secrets is refused on every target until mach
+# declares a data-independent multiply for it (briar-systems/mach#3497), so the
+# product is a masked sum over the multiplier's low bits. this is the one place
+# that changes when a target declares the multiply (#83).
+
+use std.types.size.usize;
+
+# low 64 bits of left * right, for right below 2^bits
+#[oblivious]
+#[inline]
+pub fun multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
+    var product:    ^u64  = 0;
+    var shifted:    ^u64  = left;
+    var multiplier: ^u64  = right;
+    var i:          usize = 0;
+    for (i < bits) {
+        product    = product + (shifted & (0 - (multiplier & 1)));
+        shifted    = shifted << 1;
+        multiplier = multiplier >> 1;
+        i          = i + 1;
+    }
+    shifted    = 0;
+    multiplier = 0;
+    ret product;
+}
+
+test "word: products match exact values at 32 and 29 bits" {
+    if (multiply(0, 0xFFFFFFFF, 32):>u64 != 0)                            { ret 1; }
+    if (multiply(1, 0xFFFFFFFF, 32):>u64 != 0xFFFFFFFF)                   { ret 2; }
+    if (multiply(0xFFFFFFFF, 0xFFFFFFFF, 32):>u64 != 0xFFFFFFFE00000001)  { ret 3; }
+    if (multiply(0x80000000, 0x80000000, 32):>u64 != 0x4000000000000000)  { ret 4; }
+    if (multiply(0xAAAAAAAA, 0x55555555, 32):>u64 != 0x38E38E3871C71C72)  { ret 5; }
+    if (multiply(0x100000001, 0x100000001, 32):>u64 != 0x100000001)       { ret 6; }
+    if (multiply(0x7FFFFFFFF, 0x1FFFFFFF, 29):>u64 != 0xFFFFFFF7E0000001) { ret 7; }
+    if (multiply(0x3FFFFFF, 0x1FFFFFFB, 29):>u64 != 0x7FFFFFCC000005)     { ret 8; }
+    if (multiply(0x12345678, 0x9ABCDEF, 29):>u64 != 0xB00EA4E242D208)     { ret 9; }
+    ret 0;
+}

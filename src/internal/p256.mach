@@ -1,6 +1,7 @@
 # constant-shape secp256r1 arithmetic
 
 use crypto.internal.p256_base;
+use crypto.internal.word;
 use std.crypto.ct;
 use std.types.size.usize;
 
@@ -282,20 +283,6 @@ fun subtract_mod(output: *UInt, left: *UInt, right: *UInt, modulus: *u64) {
     destroy_uint(?difference);
 }
 
-# multiply two 32-bit words without a native multiply, which is gated on secrets
-#[oblivious]
-#[inline]
-fun multiply_words(left: ^u64, right: ^u64) ^u64 {
-    var product:  ^u64 = 0;
-    var position: u64  = 0;
-    for (position < 32) {
-        val bit: ^u64 = (right >> position) & 1;
-        product  = product + ((left & (0 - bit)) << position);
-        position = position + 1;
-    }
-    ret product;
-}
-
 #[oblivious]
 #[inline]
 fun accumulate(product: *^u64, index: usize, word: ^u64) {
@@ -388,7 +375,7 @@ fun montgomery_multiply(output: *UInt, left: *UInt, right: *UInt,
         var j:     usize = 0;
         for (j < 8) {
             val product: ^u64 = temporary[j] +
-                multiply_words(left.limb[j], right.limb[i]) + carry;
+                word.multiply(left.limb[j], right.limb[i], 32) + carry;
             temporary[j] = product & WORD_MASK;
             carry        = product >> 32;
             j            = j + 1;
@@ -396,12 +383,12 @@ fun montgomery_multiply(output: *UInt, left: *UInt, right: *UInt,
         temporary[8] = temporary[8] + carry;
 
         val multiplier: ^u64 =
-            multiply_words(temporary[0], factor) & WORD_MASK;
+            word.multiply(temporary[0], factor, 32) & WORD_MASK;
         carry = 0;
         j     = 0;
         for (j < 8) {
             val product: ^u64 = temporary[j] +
-                multiply_words(multiplier, modulus[j]) + carry;
+                word.multiply(multiplier, modulus[j], 32) + carry;
             if (j > 0) { temporary[j - 1] = product & WORD_MASK; }
             carry = product >> 32;
             j     = j + 1;
@@ -454,7 +441,7 @@ pub fun field_multiply(output: *UInt, left: *UInt, right: *UInt) {
         var j: usize = 0;
         for (j < 8) {
             accumulate(?product[0], i + j,
-                multiply_words(left.limb[i], right.limb[j]));
+                word.multiply(left.limb[i], right.limb[j], 32));
             j = j + 1;
         }
         i = i + 1;
@@ -469,10 +456,10 @@ pub fun field_square(output: *UInt, input: *UInt) {
     var i:       usize = 0;
     for (i < 8) {
         accumulate(?product[0], i + i,
-            multiply_words(input.limb[i], input.limb[i]));
+            word.multiply(input.limb[i], input.limb[i], 32));
         var j: usize = i + 1;
         for (j < 8) {
-            val cross: ^u64 = multiply_words(input.limb[i], input.limb[j]);
+            val cross: ^u64 = word.multiply(input.limb[i], input.limb[j], 32);
             accumulate(?product[0], i + j, cross);
             accumulate(?product[0], i + j, cross);
             j = j + 1;
