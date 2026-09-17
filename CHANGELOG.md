@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-17
+
 ### Changed
 
 - Dependencies: requires mach-std 5.0.0 (#104), and with it mach 5.2.0 or later (tested with 5.2.1). This is a pin bump, not an API change. The mach-crypto API is unchanged, but the std pin crosses a major version, and mach refuses conflicting std pins in one graph, so consumers must move to std 5.0.0 with it. The performance budget test reads the monotonic clock with `time.instant()` and `time.elapsed`, which replaced `time.monotonic()`.
