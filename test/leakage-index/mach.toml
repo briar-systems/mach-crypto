@@ -1,6 +1,6 @@
 [project]
-id = "crypto"
-version = "0.12.0"
+id = "crypto-leakage-index-test"
+version = "0.0.0"
 src = "src"
 out = "out/{target.name}/{profile.name}"
 
@@ -50,14 +50,10 @@ simd = "scalarize"
 vectorize = true
 float_reassoc = false
 
-[artifact.crypto]
+[artifact.leakage-index]
 kind = "static"
-entry = "lib.mach"
-out = "lib/crypto"
+entry = "leakage.mach"
+out = "lib/leakage-index"
 targets = ["*"]
 link = []
 need = []
-
-[dep.std]
-git = "https://github.com/briar-systems/mach-std"
-ref = "tag/v4.0.1"

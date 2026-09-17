@@ -38,8 +38,12 @@ The layers run separately so one kind of evidence cannot stand in for another:
    claim about an optimized build on an idle machine, so it lives in
    `test/performance/`, which `assurance/projects.tsv` does not list, and the
    package run never judges it.
-7. A deliberately secret-dependent branch must be rejected for every target
-   and profile. Rejection for any reason other than secret-flow leakage fails.
+7. Every leakage control in `assurance/leakage.tsv` must be rejected for every
+   target and profile, with the diagnostic that row names. Rejection for any
+   other reason fails. The controls are a secret-dependent branch
+   (`test/leakage-negative`) and a table read at a secret index
+   (`test/leakage-index`), which is the shape the fixed-base comb tables must
+   never take: they read every entry under a mask.
 8. Every project is built for all six targets and both profiles with emitted
    IR and emitted assembly (IR verification is mandatory in mach 5.0).
 9. A second clean matrix build must produce byte-identical artifacts.
@@ -50,7 +54,8 @@ The layers run separately so one kind of evidence cannot stand in for another:
    inline small helpers across modules and the wipe survives by the language's
    zeroizing-write guarantee.
 
-`assurance/tests.tsv` binds each focused test to its category, algorithm, and
+`assurance/leakage.tsv` lists the leakage controls and the rejection each must
+produce. `assurance/tests.tsv` binds each focused test to its category, algorithm, and
 vector or contract source. `assurance/algorithms.tsv` is the algorithm and
 constant-time coverage inventory. `assurance/projects.tsv` is the complete
 build matrix. These files are release policy, not advisory documentation.
