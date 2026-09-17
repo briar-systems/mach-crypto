@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-17
+
 ### Performance
 
 - X25519 key derivation computes `[k]B` on edwards25519 with a fixed-base comb and maps it to the Montgomery u-coordinate, where it ran the 255-step ladder. The comb has 64 windows of 15 precomputed multiples in Niels form, selected by a masked scan and added with the complete mixed addition. Ed25519 key derivation, signing and verification multiply the base point the same way. `tools/ed25519-base-table` generates the table, and a test recomputes every entry. Instructions: X25519 key derivation 3.6x fewer, Ed25519 key derivation 4.2x, signing 4.0x, verification 1.24x (#98).
