@@ -136,7 +136,9 @@ fun double_in_place(value: *Field) {
 # native multiplication is gated on secrets, so the product is a masked sum of
 # left * 2^k mod p for every set bit k. the multiplicand keeps limbs at most
 # 2^51 + 38 while it doubles, and both operands are read before the first write,
-# so output may alias either.
+# so output may alias either. the product is left lazy: two carry passes bound
+# its limbs by 2^51 + 18, which every field operation accepts, and encode
+# canonicalizes before any byte leaves the field.
 #[oblivious]
 pub fun multiply(output: *Field, left: *Field, right: *Field) {
     var multiple: Field;
@@ -189,7 +191,8 @@ pub fun multiply(output: *Field, left: *Field, right: *Field) {
     product.limb[2] = p2;
     product.limb[3] = p3;
     product.limb[4] = p4;
-    canonicalize(?product);
+    normalize(?product);
+    normalize(?product);
     copy(output, ?product);
     m0 = 0;
     m1 = 0;
@@ -234,7 +237,8 @@ fun multiply_a24(output: *Field, input: *Field) {
         double_in_place(?multiple);
         bit = bit + 1;
     }
-    canonicalize(?product);
+    normalize(?product);
+    normalize(?product);
     copy(output, ?product);
     destroy(?multiple);
     destroy(?product);
