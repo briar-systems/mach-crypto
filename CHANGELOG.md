@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-09-16
+
 ### Performance
 
 - Every secret word multiply goes through one function, `crypto.internal.word.multiply`, which is the single place a target's constant-time hardware multiply will be selected (#88, #83). It shifts its operands by one bit per step. Measured in instructions: RSA verification is 2.1x cheaper, P-384 verification 13.5%, P-256 keygen, ECDH, sign and verify about 11%, and ChaCha20-Poly1305 is unchanged.
