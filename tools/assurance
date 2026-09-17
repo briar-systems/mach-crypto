@@ -55,6 +55,10 @@ tree_is_clean() {
     [[ -z "$(git -C "$root" status --short --untracked-files=all)" ]]
 }
 
+leakage_projects() {
+    awk -F '\t' 'NR > 1 { print $1 }' "$root/assurance/leakage.tsv"
+}
+
 manifest_hash() {
     (
         cd "$root"
@@ -63,11 +67,14 @@ manifest_hash() {
             assurance/projects.tsv \
             assurance/tests.tsv \
             assurance/zeroization.tsv \
-            test/leakage-negative/mach.toml \
-            test/leakage-negative/src/leakage.mach \
+            assurance/leakage.tsv \
             test/performance/mach.toml \
             test/performance/src/performance.mach \
             tools/assurance
+        leakage_projects | while IFS= read -r project; do
+            sha256sum "$project/mach.toml"
+            find "$project/src" -type f -name '*.mach' -print0 | sort -z | xargs -0 sha256sum
+        done
     ) | sha256sum | awk '{print $1}'
 }
 
@@ -90,8 +97,11 @@ check_prerequisites() {
     require_file "$root/assurance/projects.tsv"
     require_file "$root/assurance/tests.tsv"
     require_file "$root/assurance/zeroization.tsv"
-    require_file "$root/test/leakage-negative/mach.toml"
-    require_file "$root/test/leakage-negative/src/leakage.mach"
+    require_file "$root/assurance/leakage.tsv"
+    local project
+    while IFS= read -r project; do
+        require_file "$root/$project/mach.toml"
+    done < <(leakage_projects)
     require_file "$root/test/performance/mach.toml"
     require_file "$root/test/performance/src/performance.mach"
 }
@@ -107,8 +117,10 @@ resolve_dependencies() {
         (cd "$root" && mach dep pull "$project" --quiet) >/dev/null 2>&1 </dev/null || \
             die "dependency resolution failed for $project; run 'mach dep pull $project' for details"
     done < "$root/assurance/projects.tsv"
-    (cd "$root" && mach dep pull test/leakage-negative --quiet) >/dev/null 2>&1 || \
-        die "dependency resolution failed for test/leakage-negative; run 'mach dep pull test/leakage-negative' for details"
+    while IFS= read -r project; do
+        (cd "$root" && mach dep pull "$project" --quiet) >/dev/null 2>&1 </dev/null || \
+            die "dependency resolution failed for $project; run 'mach dep pull $project' for details"
+    done < <(leakage_projects)
     (cd "$root" && mach dep pull test/performance --quiet) >/dev/null 2>&1 || \
         die "dependency resolution failed for test/performance; run 'mach dep pull test/performance' for details"
     tree_is_clean || die "dependency resolution changed the source tree; commit the refreshed pins before producing release evidence"
@@ -282,31 +294,37 @@ write_artifact_manifest() {
     done < "$root/assurance/projects.tsv"
 }
 
+# every control in assurance/leakage.tsv must be refused for its stated reason on
+# every target and profile, and must leave no generated code behind
 run_leakage_negative_controls() {
-    local target profile log relative hash
-    for target in "${targets[@]}"; do
-        for profile in "${profiles[@]}"; do
-            relative="logs/leakage/negative-${target}-${profile}.log"
-            log="$stage/$relative"
-            mkdir -p "$(dirname -- "$log")"
-            (cd "$root" && mach clean test/leakage-negative) >/dev/null 2>&1 || \
-                die "could not clean the leakage negative control"
-            if (cd "$root" && mach build test/leakage-negative --target "$target" \
-                --profile "$profile" --emit-ir) > "$log" 2>&1; then
-                die "compiler accepted the secret-dependent negative control for $target $profile"
-            fi
-            grep -q 'secret value used as a branch condition' "$log" || \
-                die "negative control failed for an unexpected reason: $log"
-            if find "$root/test/leakage-negative/out" -type f \
-                \( -name '*.ir' -o -name '*.o' -o -name 'leakage-negative' \) \
-                -print -quit 2>/dev/null | grep -q .; then
-                die "rejected leakage control left generated code behind for $target $profile"
-            fi
-            hash=$(sha256_file "$log")
-            record_result leakage test/leakage-negative all-secret-algorithms \
-                "Mach secret-flow negative control" "$target" "$profile" "$relative" "$hash"
+    local project artifact expected source target profile log relative hash name
+    while IFS=$'\t' read -r project artifact expected source; do
+        [[ "$project" == project ]] && continue
+        name=${project##*/}
+        for target in "${targets[@]}"; do
+            for profile in "${profiles[@]}"; do
+                relative="logs/leakage/${name}-${target}-${profile}.log"
+                log="$stage/$relative"
+                mkdir -p "$(dirname -- "$log")"
+                (cd "$root" && mach clean "$project") >/dev/null 2>&1 </dev/null || \
+                    die "could not clean the leakage control $project"
+                if (cd "$root" && mach build "$project" --target "$target" \
+                    --profile "$profile" --emit-ir) > "$log" 2>&1 </dev/null; then
+                    die "compiler accepted the leakage control $project for $target $profile"
+                fi
+                grep -qF -- "$expected" "$log" || \
+                    die "leakage control $project failed for an unexpected reason: $log"
+                if find "$root/$project/out" -type f \
+                    \( -name '*.ir' -o -name '*.o' -o -name "$artifact" \) \
+                    -print -quit 2>/dev/null | grep -q .; then
+                    die "rejected leakage control $project left generated code behind for $target $profile"
+                fi
+                hash=$(sha256_file "$log")
+                record_result leakage "$project" all-secret-algorithms \
+                    "$source" "$target" "$profile" "$relative" "$hash"
+            done
         done
-    done
+    done < "$root/assurance/leakage.tsv"
 }
 
 record_positive_leakage_evidence() {

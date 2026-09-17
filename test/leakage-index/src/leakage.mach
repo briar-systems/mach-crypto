@@ -1,0 +1,13 @@
+# a table read at a secret index, which the secret-flow checker must refuse
+#
+# the comb tables in crypto.internal.p256 and crypto.internal.ed25519 read every
+# entry under a mask instead. this is the shape they must never take.
+
+val TABLE: [16]u8 = [16]u8{
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+};
+
+#[oblivious]
+pub fun forbidden_secret_index(digit: ^u64) ^u8 {
+    ret TABLE[digit & 15];
+}
