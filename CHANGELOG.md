@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-09-17
+
 ### Changed
 
 - Dependencies: requires mach-std 5.3.0 (#112). This is a pin bump, not an API change. It names the std tag mach-tls uses, so a graph with both resolves without a root std override.
