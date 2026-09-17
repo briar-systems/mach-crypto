@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-09-17
+
+### Changed
+
+- Dependencies: requires mach-std 5.0.1 (#108), and with it mach 5.2.0 or later (tested with 5.2.1). This is a pin bump, not an API change, and it exists to pick up std's `memory.buffers` crash fix (mach-std#775). mach-crypto does not use `memory.buffers`, so nothing in crypto behaves differently. Naming the current std tag lets a project that takes both mach-crypto and mach-tls resolve without declaring std at its own root.
+
 ## [0.13.0] - 2026-09-17
 
 ### Changed
