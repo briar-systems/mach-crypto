@@ -7,7 +7,6 @@ use crypto.internal.lift;
 use core: crypto.internal.p256;
 use crypto.internal.p384;
 use crypto.internal.rsa;
-use crypto.internal.sha2;
 use std.crypto.ct;
 use std.crypto.hash.sha256;
 use std.crypto.hash.sha512;
@@ -96,45 +95,42 @@ fun failed(error: contracts.Error) contracts.Operation {
 
 #[oblivious]
 fun hash512_secret(input: *^u8, len: usize, digest: *^u8) contracts.Error {
-    var state: sha2.State384;
-    sha2.init512(?state);
-    if (!sha2.update512_secret(?state, input, len)) {
-        sha2.destroy512(?state);
+    var state: sha512.SecretState512 = sha512.init_secret512();
+    if (!lift.update512_secret(?state, input, len)) {
+        sha512.destroy_secret512(?state);
         ret contracts.INVALID_INPUT;
     }
-    sha2.final512(?state, digest);
-    sha2.destroy512(?state);
+    sha512.final_secret512(?state, digest);
+    sha512.destroy_secret512(?state);
     ret contracts.OK;
 }
 
 #[oblivious]
 fun hash512_secret_public(secret: *^u8, secret_len: usize,
     public: contracts.Bytes, digest: *^u8) contracts.Error {
-    var state: sha2.State384;
-    sha2.init512(?state);
-    if (!sha2.update512_secret(?state, secret, secret_len) ||
-        !sha2.update512_public(?state, public.data, public.len)) {
-        sha2.destroy512(?state);
+    var state: sha512.SecretState512 = sha512.init_secret512();
+    if (!lift.update512_secret(?state, secret, secret_len) ||
+        !lift.update512_public(?state, public.data, public.len)) {
+        sha512.destroy_secret512(?state);
         ret contracts.INVALID_INPUT;
     }
-    sha2.final512(?state, digest);
-    sha2.destroy512(?state);
+    sha512.final_secret512(?state, digest);
+    sha512.destroy_secret512(?state);
     ret contracts.OK;
 }
 
 #[oblivious]
 fun hash512_two_secret_public(first: *^u8, second: *^u8,
     public: contracts.Bytes, digest: *^u8) contracts.Error {
-    var state: sha2.State384;
-    sha2.init512(?state);
-    if (!sha2.update512_secret(?state, first, 32) ||
-        !sha2.update512_secret(?state, second, 32) ||
-        !sha2.update512_public(?state, public.data, public.len)) {
-        sha2.destroy512(?state);
+    var state: sha512.SecretState512 = sha512.init_secret512();
+    if (!lift.update512_secret(?state, first, 32) ||
+        !lift.update512_secret(?state, second, 32) ||
+        !lift.update512_public(?state, public.data, public.len)) {
+        sha512.destroy_secret512(?state);
         ret contracts.INVALID_INPUT;
     }
-    sha2.final512(?state, digest);
-    sha2.destroy512(?state);
+    sha512.final_secret512(?state, digest);
+    sha512.destroy_secret512(?state);
     ret contracts.OK;
 }
 
