@@ -3,12 +3,14 @@
 use crypto.contracts;
 use ed: crypto.internal.ed25519;
 use crypto.internal.hmac;
+use crypto.internal.lift;
 use core: crypto.internal.p256;
 use crypto.internal.p384;
 use crypto.internal.rsa;
 use crypto.internal.sha2;
 use std.crypto.ct;
 use std.crypto.hash.sha256;
+use std.crypto.hash.sha512;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
@@ -384,14 +386,14 @@ fun valid_rsa_private(key: RsaPrivateKey) bool {
 fun rsa_hash_message(output: *^u8, message: contracts.Bytes,
     sha384: bool) contracts.Error {
     if (sha384) {
-        var state384: sha2.State384;
-        sha2.init384(?state384);
-        if (!sha2.update384_public(?state384, message.data, message.len)) {
-            sha2.destroy384(?state384);
+        var state384: sha512.SecretState384;
+        state384 = sha512.init_secret384();
+        if (!lift.update384_public(?state384, message.data, message.len)) {
+            sha512.destroy_secret384(?state384);
             ret contracts.INVALID_INPUT;
         }
-        sha2.final384(?state384, output);
-        sha2.destroy384(?state384);
+        sha512.final_secret384(?state384, output);
+        sha512.destroy_secret384(?state384);
         ret contracts.OK;
     }
     ret hash_message(message, output);
@@ -403,30 +405,30 @@ fun pss_hash_prime(output: *^u8, message_hash: *^u8, salt: *^u8,
     var zeros: [8]^u8;
     ct.zeroize(?zeros[0], 8);
     if (sha384) {
-        var state384: sha2.State384;
-        sha2.init384(?state384);
-        if (!sha2.update384_secret(?state384, ?zeros[0], 8) ||
-            !sha2.update384_secret(?state384, message_hash, hash_len) ||
-            !sha2.update384_secret(?state384, salt, hash_len)) {
-            sha2.destroy384(?state384);
+        var state384: sha512.SecretState384;
+        state384 = sha512.init_secret384();
+        if (!lift.update384_secret(?state384, ?zeros[0], 8) ||
+            !lift.update384_secret(?state384, message_hash, hash_len) ||
+            !lift.update384_secret(?state384, salt, hash_len)) {
+            sha512.destroy_secret384(?state384);
             ct.zeroize(?zeros[0], 8);
             ret contracts.INVALID_INPUT;
         }
-        sha2.final384(?state384, output);
-        sha2.destroy384(?state384);
+        sha512.final_secret384(?state384, output);
+        sha512.destroy_secret384(?state384);
     }
     or {
-        var state256: sha2.State256;
-        sha2.init256(?state256);
-        if (!sha2.update256_secret(?state256, ?zeros[0], 8) ||
-            !sha2.update256_secret(?state256, message_hash, hash_len) ||
-            !sha2.update256_secret(?state256, salt, hash_len)) {
-            sha2.destroy256(?state256);
+        var state256: sha256.SecretState;
+        state256 = sha256.init_secret();
+        if (!lift.update256_secret(?state256, ?zeros[0], 8) ||
+            !lift.update256_secret(?state256, message_hash, hash_len) ||
+            !lift.update256_secret(?state256, salt, hash_len)) {
+            sha256.destroy_secret(?state256);
             ct.zeroize(?zeros[0], 8);
             ret contracts.INVALID_INPUT;
         }
-        sha2.final256(?state256, output);
-        sha2.destroy256(?state256);
+        sha256.final_secret(?state256, output);
+        sha256.destroy_secret(?state256);
     }
     ct.zeroize(?zeros[0], 8);
     ret contracts.OK;
@@ -448,29 +450,29 @@ fun pss_mgf1(output: *^u8, output_len: usize, seed: *^u8,
         counter[2] = (block >> 8)::u8;
         counter[3] = block::u8;
         if (sha384) {
-            var state384: sha2.State384;
-            sha2.init384(?state384);
-            if (!sha2.update384_secret(?state384, seed, hash_len) ||
-                !sha2.update384_secret(?state384, ?counter[0], 4)) {
-                sha2.destroy384(?state384);
+            var state384: sha512.SecretState384;
+            state384 = sha512.init_secret384();
+            if (!lift.update384_secret(?state384, seed, hash_len) ||
+                !lift.update384_secret(?state384, ?counter[0], 4)) {
+                sha512.destroy_secret384(?state384);
                 status = contracts.INVALID_INPUT;
             }
             or {
-                sha2.final384(?state384, ?digest[0]);
-                sha2.destroy384(?state384);
+                sha512.final_secret384(?state384, ?digest[0]);
+                sha512.destroy_secret384(?state384);
             }
         }
         or {
-            var state256: sha2.State256;
-            sha2.init256(?state256);
-            if (!sha2.update256_secret(?state256, seed, hash_len) ||
-                !sha2.update256_secret(?state256, ?counter[0], 4)) {
-                sha2.destroy256(?state256);
+            var state256: sha256.SecretState;
+            state256 = sha256.init_secret();
+            if (!lift.update256_secret(?state256, seed, hash_len) ||
+                !lift.update256_secret(?state256, ?counter[0], 4)) {
+                sha256.destroy_secret(?state256);
                 status = contracts.INVALID_INPUT;
             }
             or {
-                sha2.final256(?state256, ?digest[0]);
-                sha2.destroy256(?state256);
+                sha256.final_secret(?state256, ?digest[0]);
+                sha256.destroy_secret(?state256);
             }
         }
         if (status != contracts.OK) {
@@ -768,11 +770,11 @@ fun destroy_nonce(state: *NonceState) {
 # the message is public, so it hashes on std's sha256 and the digest is lifted
 # into the secret buffer the arithmetic reads
 fun hash_message(message: contracts.Bytes, digest: *^u8) contracts.Error {
-    if (message.len::u64 > sha2.SHA256_MAX_BYTES) { ret contracts.INVALID_INPUT; }
+    if (message.len::u64 > lift.SHA256_MAX_BYTES) { ret contracts.INVALID_INPUT; }
     var public_digest: [32]u8;
     sha256.hash(message.data, message.len, ?public_digest[0]);
     var i: usize = 0;
-    for (i < sha2.SHA256_DIGEST_SIZE) {
+    for (i < sha256.DIGEST_SIZE) {
         digest[i] = public_digest[i];
         i         = i + 1;
     }
