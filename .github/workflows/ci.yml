@@ -28,11 +28,12 @@ jobs:
     uses: briar-systems/.github/.github/workflows/mach-lib.yml@main
     with:
       heavy: ${{ inputs.heavy }}
-      # the leakage controls must fail to compile, so they are only resolved here.
-      # tools/assurance builds each one from assurance/leakage.tsv and judges the rejection
+      # the leakage controls are judged per target by tools/assurance from
+      # assurance/leakage.tsv (refused, or admitted in hardware), so they are only resolved here
       subprojects: >-
         [{"path": "test/leakage-negative", "test": false},
-         {"path": "test/leakage-index", "test": false}]
+         {"path": "test/leakage-index", "test": false},
+         {"path": "test/multiply-negative", "test": false}]
 
   # the release evidence gate the README documents. it resolves every project,
   # runs the suite and the release-only performance budget, builds six targets

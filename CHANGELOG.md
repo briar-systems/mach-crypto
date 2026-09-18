@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Performance
+
+- Secret word products use the processor's multiply where mach admits it as constant time. `crypto.internal.word.multiply` selects `left * right` when `$mach.build.ct_mul(low, 64)` folds to 1 for the build target and keeps the bit-serial masked sum as `word.serial_multiply` everywhere else. mach 5.5 admits x86-64 on every OS and riscv64 under Zkt, and refuses aarch64 until its DIT mode is guaranteed (mach#3508). P-256, P-384, RSA and Poly1305 go through the primitive, so on x86_64 every 32 x 32 product is one instruction instead of 32 masked steps. Instructions per op on x86_64: P-256 key derivation 23.8M to 6.8M, signing 40.0M to 8.6M (0.64 ms), verification 123.6M to 33.8M (2.6 ms), ECDH 88.3M to 26.8M, ChaCha20-Poly1305 over 1 KiB 720k to 198k. An x25519 + ECDSA P-256 handshake drops from 212M to 122M. X25519 and Ed25519 keep their row-serial field until mach admits the 128-bit product (mach#3511) (#83).
+
+### Added
+
+- A primitive differential test runs `word.multiply` against `word.serial_multiply` on edge words and a deterministic sweep on every target, so the hardware path is checked against the reference on each native CI leg (#83).
+- `test/multiply-negative`, a bare secret multiply with no gate, joins the leakage controls. `assurance/leakage.tsv` gained an `admitted` column naming the targets on which mach admits the product in hardware: there the control must compile with `mul.secret` in its IR, and everywhere else it must be refused. The row is the record of where crypto computes secret products in hardware (#83).
+
 ## [0.15.0] - 2026-09-18
 
 ### Performance

@@ -1,16 +1,31 @@
 # the secret word multiply every field and ring shares
 #
-# native multiplication on secrets is refused on every target until mach
-# declares a data-independent multiply for it (briar-systems/mach#3497), so the
-# product is a masked sum over the multiplier's low bits. this is the one place
-# that changes when a target declares the multiply (#83).
+# a target that admits a constant-time low multiply of 64-bit secrets
+# (briar-systems/mach#3497, queried with $mach.build.ct_mul) computes the product
+# with that instruction. every other target keeps the masked sum over the
+# multiplier's low bits. this is the one place that knows which (#83)
 
 use std.types.size.usize;
+
+# 1 where the build target computes secret products in hardware
+pub val HARDWARE: u8 = $mach.build.ct_mul(low, 64);
 
 # low 64 bits of left * right, for right below 2^bits
 #[oblivious]
 #[inline]
 pub fun multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
+    $if (HARDWARE == 1) {
+        val mask: u64 = 0xFFFFFFFFFFFFFFFF >> (64 - bits);
+        ret left * (right & mask);
+    }
+    $or {
+        ret serial_multiply(left, right, bits);
+    }
+}
+
+# the bit-serial reference: a masked add per multiplier bit, on every target
+#[oblivious]
+pub fun serial_multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
     var product:    ^u64  = 0;
     var shifted:    ^u64  = left;
     var multiplier: ^u64  = right;
@@ -36,5 +51,40 @@ test "word: products match exact values at 32 and 29 bits" {
     if (multiply(0x7FFFFFFFF, 0x1FFFFFFF, 29):>u64 != 0xFFFFFFF7E0000001) { ret 7; }
     if (multiply(0x3FFFFFF, 0x1FFFFFFB, 29):>u64 != 0x7FFFFFCC000005)     { ret 8; }
     if (multiply(0x12345678, 0x9ABCDEF, 29):>u64 != 0xB00EA4E242D208)     { ret 9; }
+    ret 0;
+}
+
+# the primitive differential: the selected path against the serial reference on
+# edge words and a deterministic sweep. on a target without the hardware cell
+# both sides are the serial path and the test still runs
+test "word: the selected multiply agrees with the serial reference" {
+    val edges: [12]u64 = [12]u64{
+        0, 1, 2, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0x100000000, 0x100000001,
+        0x8000000000000000, 0xFFFFFFFFFFFFFFFF, 0xAAAAAAAAAAAAAAAA, 0x5555555555555555
+    };
+    var i: usize = 0;
+    for (i < 12) {
+        var j: usize = 0;
+        for (j < 12) {
+            val left:  ^u64 = edges[i];
+            val right: ^u64 = edges[j];
+            if (multiply(left, right, 32):>u64 != serial_multiply(left, right, 32):>u64) { ret 1; }
+            if (multiply(left, right, 29):>u64 != serial_multiply(left, right, 29):>u64) { ret 2; }
+            if (multiply(left, right, 64):>u64 != serial_multiply(left, right, 64):>u64) { ret 3; }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    var state: u64 = 0x9E3779B97F4A7C15;
+    i = 0;
+    for (i < 4096) {
+        state = state * 6364136223846793005 + 1442695040888963407;
+        val left: ^u64 = state;
+        state = state * 6364136223846793005 + 1442695040888963407;
+        val right: ^u64 = state;
+        if (multiply(left, right, 32):>u64 != serial_multiply(left, right, 32):>u64) { ret 4; }
+        if (multiply(left, right, 64):>u64 != serial_multiply(left, right, 64):>u64) { ret 5; }
+        i = i + 1;
+    }
     ret 0;
 }
