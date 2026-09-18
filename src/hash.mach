@@ -5,9 +5,10 @@
 # stays on the secret-state sha2 until std carries one
 
 use crypto.contracts;
-use crypto.internal.sha2;
+use crypto.internal.lift;
 use std.crypto.ct;
 use std.crypto.hash.sha256;
+use std.crypto.hash.sha512;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
@@ -27,7 +28,7 @@ pub rec Sha256 {
 }
 
 pub rec Sha384 {
-    inner: sha2.State384;
+    inner: sha512.SecretState384;
     state: State;
 }
 
@@ -46,7 +47,7 @@ pub fun empty_sha256() Sha256 {
 
 pub fun empty_sha384() Sha384 {
     var context: Sha384;
-    sha2.destroy384(?context.inner);
+    sha512.destroy_secret384(?context.inner);
     context.state = EMPTY;
     ret context;
 }
@@ -54,16 +55,16 @@ pub fun empty_sha384() Sha384 {
 fun valid_sha256(context: *Sha256) bool {
     ret context != nil && context.state == ACTIVE &&
         context.inner.buf_len < sha256.BLOCK_SIZE &&
-        context.inner.total <= sha2.SHA256_MAX_BYTES &&
+        context.inner.total <= lift.SHA256_MAX_BYTES &&
         context.inner.buf_len ==
         (context.inner.total % sha256.BLOCK_SIZE::u64)::usize;
 }
 
 fun valid_sha384(context: *Sha384) bool {
     ret context != nil && context.state == ACTIVE &&
-        context.inner.block_len < sha2.SHA384_BLOCK_SIZE &&
-        context.inner.block_len ==
-        (context.inner.total % sha2.SHA384_BLOCK_SIZE::u64)::usize;
+        context.inner.buf_len < sha512.BLOCK_SIZE &&
+        context.inner.buf_len ==
+        (context.inner.total % sha512.BLOCK_SIZE::u64)::usize;
 }
 
 pub fun init_sha256(context: *Sha256) contracts.Error {
@@ -77,8 +78,8 @@ pub fun init_sha256(context: *Sha256) contracts.Error {
 pub fun init_sha384(context: *Sha384) contracts.Error {
     if (context == nil)         { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
-    sha2.destroy384(?context.inner);
-    sha2.init384(?context.inner);
+    sha512.destroy_secret384(?context.inner);
+    context.inner = sha512.init_secret384();
     context.state = ACTIVE;
     ret contracts.OK;
 }
@@ -87,7 +88,7 @@ pub fun update_sha256(context: *Sha256, input: contracts.Bytes) contracts.Error 
     if (context == nil)                     { ret contracts.INVALID_INPUT; }
     if (!valid_sha256(context))             { ret contracts.INVALID_STATE; }
     if (input.len > 0 && input.data == nil) { ret contracts.INVALID_INPUT; }
-    if (input.len::u64 > sha2.SHA256_MAX_BYTES - context.inner.total) {
+    if (input.len::u64 > lift.SHA256_MAX_BYTES - context.inner.total) {
         ret contracts.INVALID_INPUT;
     }
     sha256.update(?context.inner, input.data, input.len);
@@ -98,7 +99,7 @@ pub fun update_sha384(context: *Sha384, input: contracts.Bytes) contracts.Error 
     if (context == nil)                     { ret contracts.INVALID_INPUT; }
     if (!valid_sha384(context))             { ret contracts.INVALID_STATE; }
     if (input.len > 0 && input.data == nil) { ret contracts.INVALID_INPUT; }
-    if (!sha2.update384_public(?context.inner, input.data, input.len)) {
+    if (!lift.update384_public(?context.inner, input.data, input.len)) {
         ret contracts.INVALID_INPUT;
     }
     ret contracts.OK;
@@ -138,10 +139,10 @@ pub fun snapshot_sha384(context: *Sha384,
     if (output.data == nil) {
         ret contracts.Operation{error: contracts.INVALID_INPUT, written: 0};
     }
-    var copy:   sha2.State384 = context.inner;
+    var copy:   sha512.SecretState384 = context.inner;
     var digest: [48]^u8;
-    sha2.final384(?copy, ?digest[0]);
-    sha2.destroy384(?copy);
+    sha512.final_secret384(?copy, ?digest[0]);
+    sha512.destroy_secret384(?copy);
     var i: usize = 0;
     for (i < SHA384_DIGEST_SIZE) {
         output.data[i] = digest[i]:>u8;
@@ -165,7 +166,7 @@ pub fun final_sha384(context: *Sha384,
     output: contracts.Buffer) contracts.Operation {
     val result: contracts.Operation = snapshot_sha384(context, output);
     if (result.error != contracts.OK) { ret result; }
-    sha2.destroy384(?context.inner);
+    sha512.destroy_secret384(?context.inner);
     context.state = EMPTY;
     ret result;
 }
@@ -182,7 +183,7 @@ pub fun destroy_sha256(context: *Sha256) contracts.Error {
 pub fun destroy_sha384(context: *Sha384) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     val valid: bool = context.state == EMPTY || context.state == ACTIVE;
-    sha2.destroy384(?context.inner);
+    sha512.destroy_secret384(?context.inner);
     context.state = EMPTY;
     if (!valid) { ret contracts.INVALID_STATE; }
     ret contracts.OK;

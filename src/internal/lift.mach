@@ -1,0 +1,105 @@
+# public input into std's secret-typed sha-2 states, and the length bounds
+#
+# std's secret entries take `*^u8` only, so public bytes are lifted here in
+# block-sized steps through a secret stack buffer that is zeroized after. every
+# update reports whether the running length stays inside the algorithm's bound,
+# which callers surface as an invalid input
+
+use std.crypto.ct;
+use std.crypto.hash.sha256;
+use std.crypto.hash.sha512;
+use std.types.bool.bool;
+use std.types.bool.false;
+use std.types.bool.true;
+use std.types.size.usize;
+
+pub val SHA256_MAX_BYTES: u64 = 0x1FFFFFFFFFFFFFFF;
+pub val SHA384_MAX_BYTES: u64 = 0xFFFFFFFFFFFFFFFF;
+pub val SHA512_MAX_BYTES: u64 = SHA384_MAX_BYTES;
+
+pub fun fits256(state: *sha256.SecretState, len: usize) bool {
+    ret len::u64 <= SHA256_MAX_BYTES - state.total;
+}
+
+pub fun fits384(state: *sha512.SecretState384, len: usize) bool {
+    ret len::u64 <= SHA384_MAX_BYTES - state.total;
+}
+
+pub fun fits512(state: *sha512.SecretState512, len: usize) bool {
+    ret len::u64 <= SHA512_MAX_BYTES - state.total;
+}
+
+pub fun update256_secret(state: *sha256.SecretState, data: *^u8, len: usize) bool {
+    if (!fits256(state, len)) { ret false; }
+    sha256.update_secret(state, data, len);
+    ret true;
+}
+
+pub fun update384_secret(state: *sha512.SecretState384, data: *^u8, len: usize) bool {
+    if (!fits384(state, len)) { ret false; }
+    sha512.update_secret384(state, data, len);
+    ret true;
+}
+
+pub fun update512_secret(state: *sha512.SecretState512, data: *^u8, len: usize) bool {
+    if (!fits512(state, len)) { ret false; }
+    sha512.update_secret512(state, data, len);
+    ret true;
+}
+
+pub fun update256_public(state: *sha256.SecretState, data: *u8, len: usize) bool {
+    if (!fits256(state, len)) { ret false; }
+    var lifted: [64]^u8;
+    var offset: usize = 0;
+    for (offset < len) {
+        var take: usize = len - offset;
+        if (take > sha256.BLOCK_SIZE) { take = sha256.BLOCK_SIZE; }
+        var i: usize = 0;
+        for (i < take) {
+            lifted[i] = data[offset + i];
+            i         = i + 1;
+        }
+        sha256.update_secret(state, ?lifted[0], take);
+        offset = offset + take;
+    }
+    ct.zeroize(?lifted[0], sha256.BLOCK_SIZE);
+    ret true;
+}
+
+pub fun update384_public(state: *sha512.SecretState384, data: *u8, len: usize) bool {
+    if (!fits384(state, len)) { ret false; }
+    var lifted: [128]^u8;
+    var offset: usize = 0;
+    for (offset < len) {
+        var take: usize = len - offset;
+        if (take > sha512.BLOCK_SIZE) { take = sha512.BLOCK_SIZE; }
+        var i: usize = 0;
+        for (i < take) {
+            lifted[i] = data[offset + i];
+            i         = i + 1;
+        }
+        sha512.update_secret384(state, ?lifted[0], take);
+        offset = offset + take;
+    }
+    ct.zeroize(?lifted[0], sha512.BLOCK_SIZE);
+    ret true;
+}
+
+pub fun update512_public(state: *sha512.SecretState512, data: *u8, len: usize) bool {
+    if (!fits512(state, len)) { ret false; }
+    var lifted: [128]^u8;
+    var offset: usize = 0;
+    for (offset < len) {
+        var take: usize = len - offset;
+        if (take > sha512.BLOCK_SIZE) { take = sha512.BLOCK_SIZE; }
+        var i: usize = 0;
+        for (i < take) {
+            lifted[i] = data[offset + i];
+            i         = i + 1;
+        }
+        sha512.update_secret512(state, ?lifted[0], take);
+        offset = offset + take;
+    }
+    ct.zeroize(?lifted[0], sha512.BLOCK_SIZE);
+    ret true;
+}

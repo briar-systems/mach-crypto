@@ -1,9 +1,10 @@
 # constant-shape secp384r1 arithmetic
 
 use crypto.contracts;
-use crypto.internal.sha2;
+use crypto.internal.lift;
 use crypto.internal.word;
 use std.crypto.ct;
+use std.crypto.hash.sha512;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
@@ -755,14 +756,14 @@ fun parse_signature(r: *UInt, s: *UInt, signature: contracts.Bytes) bool {
 
 #[oblivious]
 fun hash_message(message: contracts.Bytes, digest: *^u8) contracts.Error {
-    var state: sha2.State384;
-    sha2.init384(?state);
-    if (!sha2.update384_public(?state, message.data, message.len)) {
-        sha2.destroy384(?state);
+    var state: sha512.SecretState384;
+    state = sha512.init_secret384();
+    if (!lift.update384_public(?state, message.data, message.len)) {
+        sha512.destroy_secret384(?state);
         ret contracts.INVALID_INPUT;
     }
-    sha2.final384(?state, digest);
-    sha2.destroy384(?state);
+    sha512.final_secret384(?state, digest);
+    sha512.destroy_secret384(?state);
     ret contracts.OK;
 }
 
