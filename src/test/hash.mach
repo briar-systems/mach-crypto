@@ -64,16 +64,17 @@ fun equal_sha256(left: *hash.Sha256, right: *hash.Sha256) bool {
 }
 
 fun equal_sha384(left: *hash.Sha384, right: *hash.Sha384) bool {
-    if (left.state != right.state || left.inner.block_len != right.inner.block_len ||
+    if (left.state != right.state || left.inner.buf_len != right.inner.buf_len ||
         left.inner.total != right.inner.total) { ret false; }
-    var i: usize = 0;
-    for (i < 8) {
-        if (left.inner.h[i]:>u64 != right.inner.h[i]:>u64) { ret false; }
-        i = i + 1;
+    if (left.inner.h0:>u64 != right.inner.h0:>u64 || left.inner.h1:>u64 != right.inner.h1:>u64 ||
+        left.inner.h2:>u64 != right.inner.h2:>u64 || left.inner.h3:>u64 != right.inner.h3:>u64 ||
+        left.inner.h4:>u64 != right.inner.h4:>u64 || left.inner.h5:>u64 != right.inner.h5:>u64 ||
+        left.inner.h6:>u64 != right.inner.h6:>u64 || left.inner.h7:>u64 != right.inner.h7:>u64) {
+        ret false;
     }
-    i = 0;
+    var i: usize = 0;
     for (i < 128) {
-        if (left.inner.block[i]:>u8 != right.inner.block[i]:>u8) { ret false; }
+        if (left.inner.buf[i]:>u8 != right.inner.buf[i]:>u8) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -95,16 +96,16 @@ fun zero_sha256(context: *hash.Sha256) bool {
 }
 
 fun zero_sha384(context: *hash.Sha384) bool {
-    if (context.state != hash.EMPTY || context.inner.block_len != 0 ||
+    if (context.state != hash.EMPTY || context.inner.buf_len != 0 ||
         context.inner.total != 0) { ret false; }
-    var i: usize = 0;
-    for (i < 8) {
-        if (context.inner.h[i]:>u64 != 0) { ret false; }
-        i = i + 1;
+    if ((context.inner.h0:>u64 | context.inner.h1:>u64 | context.inner.h2:>u64 |
+        context.inner.h3:>u64 | context.inner.h4:>u64 | context.inner.h5:>u64 |
+        context.inner.h6:>u64 | context.inner.h7:>u64) != 0) {
+        ret false;
     }
-    i = 0;
+    var i: usize = 0;
     for (i < 128) {
-        if (context.inner.block[i]:>u8 != 0) { ret false; }
+        if (context.inner.buf[i]:>u8 != 0) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -387,12 +388,12 @@ test "hash: validation and overflow failures preserve state and output" {
         ret 4;
     }
 
-    sha256.inner.total     = 0x1fffffffffffffff;
-    sha256.inner.buf_len   = 63;
-    sha384.inner.total     = 1;
-    sha384.inner.block_len = 1;
-    before256              = sha256;
-    before384              = sha384;
+    sha256.inner.total   = 0x1fffffffffffffff;
+    sha256.inner.buf_len = 63;
+    sha384.inner.total   = 1;
+    sha384.inner.buf_len = 1;
+    before256            = sha256;
+    before384            = sha384;
     if (hash.update_sha256(?sha256,
         contracts.Bytes{data: ?output[0], len: 1}) != contracts.INVALID_INPUT ||
         hash.update_sha384(?sha384,
@@ -405,10 +406,10 @@ test "hash: validation and overflow failures preserve state and output" {
         hash.destroy_sha256(?sha256) != contracts.OK ||
         hash.destroy_sha384(?sha384) != contracts.OK ||
         !zero_sha256(?sha256) || !zero_sha384(?sha384)) { ret 6; }
-    sha256.state      = 7;
-    sha384.state      = 7;
-    sha256.inner.h0   = 1;
-    sha384.inner.h[0] = 1;
+    sha256.state    = 7;
+    sha384.state    = 7;
+    sha256.inner.h0 = 1;
+    sha384.inner.h0 = 1;
     if (hash.destroy_sha256(?sha256) != contracts.INVALID_STATE ||
         hash.destroy_sha384(?sha384) != contracts.INVALID_STATE ||
         !zero_sha256(?sha256) || !zero_sha384(?sha384)) { ret 7; }

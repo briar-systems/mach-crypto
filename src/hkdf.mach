@@ -2,8 +2,10 @@
 
 use crypto.contracts;
 use core: crypto.internal.hmac;
-use crypto.internal.sha2;
+use crypto.internal.lift;
 use std.crypto.ct;
+use std.crypto.hash.sha256;
+use std.crypto.hash.sha512;
 use std.types.size.usize;
 
 pub val SHA256_PRK_SIZE:   usize = 32;
@@ -116,7 +118,7 @@ pub fun expand_sha256(prk: contracts.SecretBytes, info: contracts.Bytes,
     if (prk.data == nil)                     { ret failed(contracts.INVALID_INPUT); }
     if (info.len != 0 && info.data == nil)   { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity > SHA256_MAX_OUTPUT) { ret failed(contracts.INVALID_INPUT); }
-    if (info.len::u64 > sha2.SHA256_MAX_BYTES - sha2.SHA256_BLOCK_SIZE - SHA256_PRK_SIZE - 1) {
+    if (info.len::u64 > lift.SHA256_MAX_BYTES - sha256.BLOCK_SIZE - SHA256_PRK_SIZE - 1) {
         ret failed(contracts.INVALID_INPUT);
     }
     if (output.capacity == 0) {
@@ -187,7 +189,7 @@ pub fun expand_sha384(prk: contracts.SecretBytes, info: contracts.Bytes,
     if (prk.data == nil)                     { ret failed(contracts.INVALID_INPUT); }
     if (info.len != 0 && info.data == nil)   { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity > SHA384_MAX_OUTPUT) { ret failed(contracts.INVALID_INPUT); }
-    if (info.len::u64 > sha2.SHA384_MAX_BYTES - sha2.SHA384_BLOCK_SIZE - SHA384_PRK_SIZE - 1) {
+    if (info.len::u64 > lift.SHA384_MAX_BYTES - sha512.BLOCK_SIZE - SHA384_PRK_SIZE - 1) {
         ret failed(contracts.INVALID_INPUT);
     }
     if (output.capacity == 0) {
