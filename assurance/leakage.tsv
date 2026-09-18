@@ -1,3 +1,4 @@
-project	artifact	expected	source
-test/leakage-negative	leakage-negative	secret value used as a branch condition	Mach secret-flow negative control: secret branch
-test/leakage-index	leakage-index	secret value used as a memory index	Mach secret-flow negative control: secret table index
+project	artifact	expected	source	admitted
+test/leakage-negative	leakage-negative	secret value used as a branch condition	Mach secret-flow negative control: secret branch	
+test/leakage-index	leakage-index	secret value used as a memory index	Mach secret-flow negative control: secret table index	
+test/multiply-negative	multiply-negative	secret value used as an operand of a variable-latency integer multiply	Mach secret-flow negative control: ungated secret multiply	linux-x86_64,windows-x86_64,darwin-x86_64

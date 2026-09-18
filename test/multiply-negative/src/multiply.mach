@@ -1,0 +1,10 @@
+# a secret product written as a bare multiply, with no gate on the target
+#
+# crypto.internal.word selects this shape only where $mach.build.ct_mul admits
+# the cell and keeps the bit-serial product elsewhere. every target that does
+# not admit it must refuse this file, and every target that does must accept it
+
+#[oblivious]
+pub fun ungated_secret_product(left: ^u64, right: ^u64) ^u64 {
+    ret left * right;
+}

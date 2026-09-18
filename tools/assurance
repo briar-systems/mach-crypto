@@ -295,10 +295,13 @@ write_artifact_manifest() {
 }
 
 # every control in assurance/leakage.tsv must be refused for its stated reason on
-# every target and profile, and must leave no generated code behind
+# every target and profile, and must leave no generated code behind. a control
+# that names admitted targets is the other way round there: the compiler must
+# accept it and the IR must carry the secret multiply, which pins the target
+# set that computes secret products in hardware
 run_leakage_negative_controls() {
-    local project artifact expected source target profile log relative hash name
-    while IFS=$'\t' read -r project artifact expected source; do
+    local project artifact expected source admitted target profile log relative hash name ir
+    while IFS=$'\t' read -r project artifact expected source admitted; do
         [[ "$project" == project ]] && continue
         name=${project##*/}
         for target in "${targets[@]}"; do
@@ -308,6 +311,19 @@ run_leakage_negative_controls() {
                 mkdir -p "$(dirname -- "$log")"
                 (cd "$root" && mach clean "$project") >/dev/null 2>&1 </dev/null || \
                     die "could not clean the leakage control $project"
+                if [[ ",$admitted," == *",$target,"* ]]; then
+                    (cd "$root" && mach build "$project" --target "$target" \
+                        --profile "$profile" --emit-ir) > "$log" 2>&1 </dev/null || \
+                        die "compiler refused the control $project on the admitted target $target $profile: $log"
+                    ir=$(find "$root/$project/out/$target/$profile" -type f -name '*.ir' -print -quit 2>/dev/null)
+                    [[ -n "$ir" ]] || die "admitted control $project produced no IR for $target $profile"
+                    grep -q 'mul\.secret' "$ir" || \
+                        die "admitted control $project carries no secret multiply in its IR for $target $profile"
+                    hash=$(sha256_file "$log")
+                    record_result leakage "$project" all-secret-algorithms \
+                        "$source, admitted in hardware" "$target" "$profile" "$relative" "$hash"
+                    continue
+                fi
                 if (cd "$root" && mach build "$project" --target "$target" \
                     --profile "$profile" --emit-ir) > "$log" 2>&1 </dev/null; then
                     die "compiler accepted the leakage control $project for $target $profile"

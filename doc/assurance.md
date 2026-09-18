@@ -41,9 +41,15 @@ The layers run separately so one kind of evidence cannot stand in for another:
 7. Every leakage control in `assurance/leakage.tsv` must be rejected for every
    target and profile, with the diagnostic that row names. Rejection for any
    other reason fails. The controls are a secret-dependent branch
-   (`test/leakage-negative`) and a table read at a secret index
+   (`test/leakage-negative`), a table read at a secret index
    (`test/leakage-index`), which is the shape the fixed-base comb tables must
-   never take: they read every entry under a mask.
+   never take: they read every entry under a mask, and a bare secret multiply
+   (`test/multiply-negative`). That last row names the targets on which mach
+   admits the multiply as constant-time hardware (`admitted`). On those the
+   control must compile and its IR must carry the secret multiply, so the row
+   is the record of where `crypto.internal.word` computes secret products in
+   hardware, and a change in mach's catalog fails the run until the record is
+   updated on purpose.
 8. Every project is built for all six targets and both profiles with emitted
    IR and emitted assembly (IR verification is mandatory in mach 5.0).
 9. A second clean matrix build must produce byte-identical artifacts.
