@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Performance
+
+- The public SHA-256 paths run on `std.crypto.hash.sha256`, which dispatches to SHA-NI on x86_64 and ARMv8 SHA2 on aarch64 at run time: the transcript hash (`hash.Sha256`) and the message hash under ECDSA P-256 and RSA SHA-256 signing and verification. On a SHA-NI host a 4 KiB TLS transcript with seven digests drops from 879k to 26k instructions (55 µs to 4.6 µs). Every secret path (HMAC, HKDF, PSS salt, MGF1) and SHA-384 stay on the constant-time secret-state `internal.sha2`: std's state is public-typed, and a secret cannot cross into it without a declassify (#122).
+
+### Changed
+
+- Dependencies: requires mach-std 5.5.0 and mach 5.5 or later. Every manifest declares `mach = "^5.5"` (#122).
+- `hash.Sha256` wraps std's public state. Callers still treat it as opaque, and an empty context is still all zero (#122).
+
 ## [0.13.2] - 2026-09-17
 
 ### Changed

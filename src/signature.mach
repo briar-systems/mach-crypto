@@ -8,6 +8,7 @@ use crypto.internal.p384;
 use crypto.internal.rsa;
 use crypto.internal.sha2;
 use std.crypto.ct;
+use std.crypto.hash.sha256;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
@@ -393,15 +394,7 @@ fun rsa_hash_message(output: *^u8, message: contracts.Bytes,
         sha2.destroy384(?state384);
         ret contracts.OK;
     }
-    var state256: sha2.State256;
-    sha2.init256(?state256);
-    if (!sha2.update256_public(?state256, message.data, message.len)) {
-        sha2.destroy256(?state256);
-        ret contracts.INVALID_INPUT;
-    }
-    sha2.final256(?state256, output);
-    sha2.destroy256(?state256);
-    ret contracts.OK;
+    ret hash_message(message, output);
 }
 
 #[oblivious]
@@ -772,16 +765,17 @@ fun destroy_nonce(state: *NonceState) {
     ct.zeroize(?state.value[0], 32);
 }
 
-#[oblivious]
+# the message is public, so it hashes on std's sha256 and the digest is lifted
+# into the secret buffer the arithmetic reads
 fun hash_message(message: contracts.Bytes, digest: *^u8) contracts.Error {
-    var state: sha2.State256;
-    sha2.init256(?state);
-    if (!sha2.update256_public(?state, message.data, message.len)) {
-        sha2.destroy256(?state);
-        ret contracts.INVALID_INPUT;
+    if (message.len::u64 > sha2.SHA256_MAX_BYTES) { ret contracts.INVALID_INPUT; }
+    var public_digest: [32]u8;
+    sha256.hash(message.data, message.len, ?public_digest[0]);
+    var i: usize = 0;
+    for (i < sha2.SHA256_DIGEST_SIZE) {
+        digest[i] = public_digest[i];
+        i         = i + 1;
     }
-    sha2.final256(?state, digest);
-    sha2.destroy256(?state);
     ret contracts.OK;
 }
 
