@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-18
+
 ### Performance
 
 - Secret word products use the processor's multiply where mach admits it as constant time. `crypto.internal.word.multiply` selects `left * right` when `$mach.build.ct_mul(low, 64)` folds to 1 for the build target and keeps the bit-serial masked sum as `word.serial_multiply` everywhere else. mach 5.5 admits x86-64 on every OS and riscv64 under Zkt, and refuses aarch64 until its DIT mode is guaranteed (mach#3508). P-256, P-384, RSA and Poly1305 go through the primitive, so on x86_64 every 32 x 32 product is one instruction instead of 32 masked steps. Instructions per op on x86_64: P-256 key derivation 23.8M to 6.8M, signing 40.0M to 8.6M (0.64 ms), verification 123.6M to 33.8M (2.6 ms), ECDH 88.3M to 26.8M, ChaCha20-Poly1305 over 1 KiB 720k to 198k. An x25519 + ECDSA P-256 handshake drops from 212M to 122M. X25519 and Ed25519 keep their row-serial field until mach admits the 128-bit product (mach#3511) (#83).
