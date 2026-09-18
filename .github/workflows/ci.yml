@@ -2,7 +2,7 @@ name: CI
 
 # the family pipeline from briar-systems/.github. a pull request into dev runs
 # the light tier on x86_64-linux, a pull request into main runs every tier, and
-# a dispatch pulls named heavy work onto any ref, and release.yml calls it with
+# a dispatch pulls named heavy work onto any ref, and cd.yml calls it with
 # heavy: all. nothing runs on push.
 
 on:

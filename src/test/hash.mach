@@ -47,16 +47,17 @@ fun filled(input: *u8, byte: u8, len: usize) bool {
 }
 
 fun equal_sha256(left: *hash.Sha256, right: *hash.Sha256) bool {
-    if (left.state != right.state || left.inner.block_len != right.inner.block_len ||
+    if (left.state != right.state || left.inner.buf_len != right.inner.buf_len ||
         left.inner.total != right.inner.total) { ret false; }
-    var i: usize = 0;
-    for (i < 8) {
-        if (left.inner.h[i]:>u32 != right.inner.h[i]:>u32) { ret false; }
-        i = i + 1;
+    if (left.inner.h0 != right.inner.h0 || left.inner.h1 != right.inner.h1 ||
+        left.inner.h2 != right.inner.h2 || left.inner.h3 != right.inner.h3 ||
+        left.inner.h4 != right.inner.h4 || left.inner.h5 != right.inner.h5 ||
+        left.inner.h6 != right.inner.h6 || left.inner.h7 != right.inner.h7) {
+        ret false;
     }
-    i = 0;
+    var i: usize = 0;
     for (i < 64) {
-        if (left.inner.block[i]:>u8 != right.inner.block[i]:>u8) { ret false; }
+        if (left.inner.buf[i] != right.inner.buf[i]) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -79,16 +80,15 @@ fun equal_sha384(left: *hash.Sha384, right: *hash.Sha384) bool {
 }
 
 fun zero_sha256(context: *hash.Sha256) bool {
-    if (context.state != hash.EMPTY || context.inner.block_len != 0 ||
+    if (context.state != hash.EMPTY || context.inner.buf_len != 0 ||
         context.inner.total != 0) { ret false; }
-    var i: usize = 0;
-    for (i < 8) {
-        if (context.inner.h[i]:>u32 != 0) { ret false; }
-        i = i + 1;
+    if ((context.inner.h0 | context.inner.h1 | context.inner.h2 | context.inner.h3 |
+        context.inner.h4 | context.inner.h5 | context.inner.h6 | context.inner.h7) != 0) {
+        ret false;
     }
-    i = 0;
+    var i: usize = 0;
     for (i < 64) {
-        if (context.inner.block[i]:>u8 != 0) { ret false; }
+        if (context.inner.buf[i] != 0) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -388,7 +388,7 @@ test "hash: validation and overflow failures preserve state and output" {
     }
 
     sha256.inner.total     = 0x1fffffffffffffff;
-    sha256.inner.block_len = 63;
+    sha256.inner.buf_len   = 63;
     sha384.inner.total     = 1;
     sha384.inner.block_len = 1;
     before256              = sha256;
@@ -407,7 +407,7 @@ test "hash: validation and overflow failures preserve state and output" {
         !zero_sha256(?sha256) || !zero_sha384(?sha384)) { ret 6; }
     sha256.state      = 7;
     sha384.state      = 7;
-    sha256.inner.h[0] = 1;
+    sha256.inner.h0   = 1;
     sha384.inner.h[0] = 1;
     if (hash.destroy_sha256(?sha256) != contracts.INVALID_STATE ||
         hash.destroy_sha384(?sha384) != contracts.INVALID_STATE ||
