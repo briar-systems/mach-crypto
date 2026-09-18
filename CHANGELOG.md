@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-18
+
 ### Performance
 
 - Every SHA-2 path runs on `std.crypto.hash`. The secret paths (HMAC, and with it HKDF and the RFC 6979 nonce, PSS salt, MGF1, P-384, the SHA-384 transcript, Ed25519's SHA-512) use std's secret-typed states, which share the SHA-NI and ARMv8 SHA2 dispatch of the public entries. `crypto.internal.sha2` is deleted, and `crypto.internal.lift` lifts public input into the secret states block by block and keeps the length bounds. On a SHA-NI host the TLS 1.3 key schedule (three extracts and ten expands) drops from 747k to 160k instructions, HKDF expand from 57k to 12.8k, and ECDSA P-256 signing from 44.4M to 40.0M. The hash share of an x25519 + ECDSA P-256 handshake is now 0.09% (#126).
