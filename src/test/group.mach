@@ -471,18 +471,21 @@ val POINT_VECTORS: [600]u64 = [600]u64{
     0xE9874713, 0x09BAD0A6, 0x717B3FD2, 0x45FA6ED1, 0x0816C3A4, 0x075A70A7, 0xEB619854, 0x8D95F60A
 };
 
+# the vectors are 8 little-endian 32-bit words per value; the field is four 64-bit limbs
 fun load_limbs(output: *core.UInt, vectors: *u64, offset: usize) {
     var i: usize = 0;
-    for (i < 8) {
-        output.limb[i] = vectors[offset + i];
+    for (i < 4) {
+        val limb: u64 = vectors[offset + i * 2] | (vectors[offset + i * 2 + 1] << 32);
+        output.limb[i] = limb;
         i              = i + 1;
     }
 }
 
 fun limbs_equal(value: *core.UInt, vectors: *u64, offset: usize) bool {
     var i: usize = 0;
-    for (i < 8) {
-        if (value.limb[i]:>u64 != vectors[offset + i]) { ret false; }
+    for (i < 4) {
+        val expected: u64 = vectors[offset + i * 2] | (vectors[offset + i * 2 + 1] << 32);
+        if (value.limb[i]:>u64 != expected) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -498,13 +501,19 @@ test "p256 internal: field arithmetic matches independent vectors" {
         var result: core.UInt;
         load_limbs(?left, vectors, base);
         load_limbs(?right, vectors, base + 8);
+        core.field_to_montgomery(?left, ?left);
+        core.field_to_montgomery(?right, ?right);
         core.field_multiply(?result, ?left, ?right);
+        core.field_from_montgomery(?result, ?result);
         if (!limbs_equal(?result, vectors, base + 16)) { ret 1; }
         core.field_square(?result, ?left);
+        core.field_from_montgomery(?result, ?result);
         if (!limbs_equal(?result, vectors, base + 24)) { ret 2; }
         core.field_inverse(?result, ?left);
+        core.field_from_montgomery(?result, ?result);
         if (!limbs_equal(?result, vectors, base + 32)) { ret 3; }
         core.field_multiply(?left, ?left, ?right);
+        core.field_from_montgomery(?left, ?left);
         if (!limbs_equal(?left, vectors, base + 16)) { ret 4; }
         index = index + 1;
     }
@@ -543,7 +552,9 @@ test "p256 internal: windowed scalar multiplication matches independent vectors"
         load_limbs(?scalar, vectors, base);
         load_limbs(?point.x, vectors, base + 8);
         load_limbs(?point.y, vectors, base + 16);
-        core.set_small(?point.z, 1);
+        core.field_to_montgomery(?point.x, ?point.x);
+        core.field_to_montgomery(?point.y, ?point.y);
+        core.field_one(?point.z);
         core.scalar_multiply(?product, ?scalar, ?point);
         core.to_affine(?x, ?y, ?product);
         if (!limbs_equal(?x, vectors, base + 24)) { ret 1; }

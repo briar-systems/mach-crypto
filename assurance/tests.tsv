@@ -36,6 +36,8 @@ differential	.	ed25519	independent Python group law	ed25519 internal: windowed s
 differential	.	x25519,ed25519	independent Python integer arithmetic	x25519 internal: field arithmetic matches independent vectors
 differential	.	x25519,ed25519	bit-serial field reference	x25519 field: the selected multiply agrees with the serial reference
 differential	.	ed25519	independent Python integer arithmetic	mont: products and wide reductions match independent values mod the ed25519 order
+differential	.	ecdsa-p384-sha384	independent Python integer arithmetic	mont: six-limb products, squares and wide reductions match independent values
+differential	.	p-256-ecdh,ecdsa-p256-sha256,ed25519	loop-form montgomery reference	mont: the unrolled four-limb ring agrees with the loop form
 differential	.	x25519,ed25519,p-256-ecdh,ecdsa-p256-sha256,ecdsa-p384-sha384,chacha20-poly1305,rsa-pss-sha256,rsa-pss-sha384,rsa-pkcs1-sha256,rsa-pkcs1-sha384	bit-serial word reference	word: the selected multiply agrees with the serial reference
 differential	.	x25519	independent Python cryptography X25519	x25519: agreement matches independent vectors across private keys and coordinates
 differential	.	ecdsa-p384-sha384	independent Python big-integer products	p384 internal: modular products match independent big integers
