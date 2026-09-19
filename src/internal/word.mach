@@ -10,6 +10,10 @@ use std.types.size.usize;
 # 1 where the build target computes secret products in hardware
 pub val HARDWARE: u8 = $mach.build.ct_mul(low, 64);
 
+# 1 where the build target computes the full 64 x 64 product in hardware: one
+# widening instruction for the low half and one for the high half
+pub val HARDWARE_WIDE: u8 = $mach.build.ct_mul(low, 128);
+
 # low 64 bits of left * right, for right below 2^bits
 #[oblivious]
 #[inline]
@@ -41,6 +45,36 @@ pub fun serial_multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
     ret product;
 }
 
+# the full 128-bit product left * right
+#[oblivious]
+#[inline]
+pub fun multiply_wide(left: ^u64, right: ^u64) ^u128 {
+    $if (HARDWARE_WIDE == 1) {
+        ret (left::^u128) * (right::^u128);
+    }
+    $or {
+        ret serial_multiply_wide(left, right);
+    }
+}
+
+# the bit-serial reference for the full product, on every target
+#[oblivious]
+pub fun serial_multiply_wide(left: ^u64, right: ^u64) ^u128 {
+    var product:    ^u128 = 0;
+    var shifted:    ^u128 = left::^u128;
+    var multiplier: ^u64  = right;
+    var i:          usize = 0;
+    for (i < 64) {
+        product    = product + (shifted & (0 - (multiplier & 1)::^u128));
+        shifted    = shifted << 1;
+        multiplier = multiplier >> 1;
+        i          = i + 1;
+    }
+    shifted    = 0;
+    multiplier = 0;
+    ret product;
+}
+
 test "word: products match exact values at 32 and 29 bits" {
     if (multiply(0, 0xFFFFFFFF, 32):>u64 != 0)                            { ret 1; }
     if (multiply(1, 0xFFFFFFFF, 32):>u64 != 0xFFFFFFFF)                   { ret 2; }
@@ -51,6 +85,19 @@ test "word: products match exact values at 32 and 29 bits" {
     if (multiply(0x7FFFFFFFF, 0x1FFFFFFF, 29):>u64 != 0xFFFFFFF7E0000001) { ret 7; }
     if (multiply(0x3FFFFFF, 0x1FFFFFFB, 29):>u64 != 0x7FFFFFCC000005)     { ret 8; }
     if (multiply(0x12345678, 0x9ABCDEF, 29):>u64 != 0xB00EA4E242D208)     { ret 9; }
+    ret 0;
+}
+
+test "word: wide products match exact values" {
+    val all: u64 = 0xFFFFFFFFFFFFFFFF;
+    if (multiply_wide(0, all):>u128 != 0)                                        { ret 1; }
+    if (multiply_wide(1, all):>u128 != all::u128)                                { ret 2; }
+    if (multiply_wide(all, all):>u128 != 0xFFFFFFFFFFFFFFFE0000000000000001u128) { ret 3; }
+    if (multiply_wide(0x8000000000000000, 2):>u128 != (1u128 << 64))             { ret 4; }
+    if (multiply_wide(0x123456789ABCDEF0, 0xFEDCBA9876543210):>u128 !=
+        0x121FA00AD77D7422236D88FE5618CF00u128) { ret 5; }
+    if ((multiply_wide(0x123456789ABCDEF0, 0xFEDCBA9876543210):>u128 >> 64)::u64 !=
+        0x121FA00AD77D7422) { ret 6; }
     ret 0;
 }
 
@@ -68,9 +115,10 @@ test "word: the selected multiply agrees with the serial reference" {
         for (j < 12) {
             val left:  ^u64 = edges[i];
             val right: ^u64 = edges[j];
-            if (multiply(left, right, 32):>u64 != serial_multiply(left, right, 32):>u64) { ret 1; }
-            if (multiply(left, right, 29):>u64 != serial_multiply(left, right, 29):>u64) { ret 2; }
-            if (multiply(left, right, 64):>u64 != serial_multiply(left, right, 64):>u64) { ret 3; }
+            if (multiply(left, right, 32):>u64 != serial_multiply(left, right, 32):>u64)     { ret 1; }
+            if (multiply(left, right, 29):>u64 != serial_multiply(left, right, 29):>u64)     { ret 2; }
+            if (multiply(left, right, 64):>u64 != serial_multiply(left, right, 64):>u64)     { ret 3; }
+            if (multiply_wide(left, right):>u128 != serial_multiply_wide(left, right):>u128) { ret 4; }
             j = j + 1;
         }
         i = i + 1;
@@ -82,8 +130,9 @@ test "word: the selected multiply agrees with the serial reference" {
         val left: ^u64 = state;
         state = state * 6364136223846793005 + 1442695040888963407;
         val right: ^u64 = state;
-        if (multiply(left, right, 32):>u64 != serial_multiply(left, right, 32):>u64) { ret 4; }
-        if (multiply(left, right, 64):>u64 != serial_multiply(left, right, 64):>u64) { ret 5; }
+        if (multiply(left, right, 32):>u64 != serial_multiply(left, right, 32):>u64)     { ret 7; }
+        if (multiply(left, right, 64):>u64 != serial_multiply(left, right, 64):>u64)     { ret 5; }
+        if (multiply_wide(left, right):>u128 != serial_multiply_wide(left, right):>u128) { ret 6; }
         i = i + 1;
     }
     ret 0;

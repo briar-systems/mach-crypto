@@ -28,6 +28,9 @@ jobs:
     uses: briar-systems/.github/.github/workflows/mach-lib.yml@main
     with:
       heavy: ${{ inputs.heavy }}
+      # every test binary links a DIT-admitted secret multiply on aarch64, so a
+      # runner without FEAT_DIT runs the tests under qemu-aarch64 -cpu max
+      dit: required
       # the leakage controls are judged per target by tools/assurance from
       # assurance/leakage.tsv (refused, or admitted in hardware), so they are only resolved here
       subprojects: >-
