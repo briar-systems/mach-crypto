@@ -1,12 +1,14 @@
 # secret-state x25519 montgomery ladder
 
 use crypto.contracts;
+use crypto.internal.word;
 use std.crypto.ct;
 use std.types.size.usize;
 
 val LIMB_BITS: usize = 51;
 val LIMB_MASK: u64   = 2251799813685247;
 val PRIME_LOW: u64   = 2251799813685229;
+val A24:       u64   = 121665;
 
 pub rec Field {
     limb: [5]^u64;
@@ -23,25 +25,26 @@ fun times_19(value: ^u64) ^u64 {
     ret value + (value << 1) + (value << 4);
 }
 
+# one carry pass over the limbs, written to output
+#[oblivious]
+#[inline]
+fun store_carried(output: *Field, s0: ^u64, s1: ^u64, s2: ^u64, s3: ^u64, s4: ^u64) {
+    val t1: ^u64 = s1 + (s0 >> LIMB_BITS);
+    val t2: ^u64 = s2 + (t1 >> LIMB_BITS);
+    val t3: ^u64 = s3 + (t2 >> LIMB_BITS);
+    val t4: ^u64 = s4 + (t3 >> LIMB_BITS);
+    output.limb[0] = (s0 & LIMB_MASK) + times_19(t4 >> LIMB_BITS);
+    output.limb[1] = t1 & LIMB_MASK;
+    output.limb[2] = t2 & LIMB_MASK;
+    output.limb[3] = t3 & LIMB_MASK;
+    output.limb[4] = t4 & LIMB_MASK;
+}
+
 #[oblivious]
 #[inline]
 fun normalize(value: *Field) {
-    var carry: ^u64 = value.limb[0] >> LIMB_BITS;
-    value.limb[0] = value.limb[0] & LIMB_MASK;
-    value.limb[1] = value.limb[1] + carry;
-    carry         = value.limb[1] >> LIMB_BITS;
-    value.limb[1] = value.limb[1] & LIMB_MASK;
-    value.limb[2] = value.limb[2] + carry;
-    carry         = value.limb[2] >> LIMB_BITS;
-    value.limb[2] = value.limb[2] & LIMB_MASK;
-    value.limb[3] = value.limb[3] + carry;
-    carry         = value.limb[3] >> LIMB_BITS;
-    value.limb[3] = value.limb[3] & LIMB_MASK;
-    value.limb[4] = value.limb[4] + carry;
-    carry         = value.limb[4] >> LIMB_BITS;
-    value.limb[4] = value.limb[4] & LIMB_MASK;
-    value.limb[0] = value.limb[0] + times_19(carry);
-    carry         = 0;
+    store_carried(value, value.limb[0], value.limb[1], value.limb[2], value.limb[3],
+        value.limb[4]);
 }
 
 #[oblivious]
@@ -92,27 +95,28 @@ pub fun set_small(output: *Field, value: u64) {
     }
 }
 
+# the limb contract: every field operation accepts limbs below 2^54 and leaves
+# limbs below 2^52. one carry pass takes any element below 2^54 there, since
+# the top carry is at most 7 and wraps as at most 133 into limb 0
 #[oblivious]
 pub fun add(output: *Field, left: *Field, right: *Field) {
-    var i: usize = 0;
-    for (i < 5) {
-        output.limb[i] = left.limb[i] + right.limb[i];
-        i              = i + 1;
-    }
-    normalize(output);
-    normalize(output);
+    store_carried(output,
+        left.limb[0] + right.limb[0],
+        left.limb[1] + right.limb[1],
+        left.limb[2] + right.limb[2],
+        left.limb[3] + right.limb[3],
+        left.limb[4] + right.limb[4]);
 }
 
+# left + 4p - right, which cannot borrow while right is below 2^53
 #[oblivious]
 pub fun subtract(output: *Field, left: *Field, right: *Field) {
-    output.limb[0] = left.limb[0] + 4503599627370458 - right.limb[0];
-    var i: usize = 1;
-    for (i < 5) {
-        output.limb[i] = left.limb[i] + 4503599627370494 - right.limb[i];
-        i              = i + 1;
-    }
-    normalize(output);
-    normalize(output);
+    store_carried(output,
+        left.limb[0] + 9007199254740916 - right.limb[0],
+        left.limb[1] + 9007199254740988 - right.limb[1],
+        left.limb[2] + 9007199254740988 - right.limb[2],
+        left.limb[3] + 9007199254740988 - right.limb[3],
+        left.limb[4] + 9007199254740988 - right.limb[4]);
 }
 
 # double a field element whose limbs are at most 2^51 + 38, keeping that bound
@@ -131,16 +135,144 @@ fun double_in_place(value: *Field) {
     value.limb[4] = ((value.limb[4] << 1) & LIMB_MASK) + carry3;
 }
 
-# multiply by walking the multiplier's bits once over a doubling multiplicand
+# the field product, lazily reduced
 #
-# native multiplication is gated on secrets, so the product is a masked sum of
-# left * 2^k mod p for every set bit k. the multiplicand keeps limbs at most
-# 2^51 + 38 while it doubles, and both operands are read before the first write,
-# so output may alias either. the product is left lazy: two carry passes bound
-# its limbs by 2^51 + 18, which every field operation accepts, and encode
-# canonicalizes before any byte leaves the field.
+# every field operation leaves limbs below 2^52 and accepts limbs below 2^52,
+# and both operands are read before the first write, so output may alias
+# either. encode canonicalizes before any byte leaves the field. the product is
+# 25 hardware word products where the target admits them and the bit-serial
+# reference elsewhere (#83)
 #[oblivious]
+#[inline]
 pub fun multiply(output: *Field, left: *Field, right: *Field) {
+    $if (word.HARDWARE_WIDE == 1) {
+        multiply_wide(output, left, right);
+    }
+    $or {
+        serial_multiply(output, left, right);
+    }
+}
+
+#[oblivious]
+#[inline]
+pub fun square(output: *Field, input: *Field) {
+    $if (word.HARDWARE_WIDE == 1) {
+        square_wide(output, input);
+    }
+    $or {
+        serial_multiply(output, input, input);
+    }
+}
+
+# schoolbook over radix 2^51 with the wrap folded in: limb i of the product
+# collects f_j * g_(i-j) and 19 * f_j * g_(5+i-j). limbs below 2^52 keep every
+# accumulator below 2^112 and every carry below 2^61, so the chain that follows
+# leaves r0, r1, r3 and r4 below 2^51 and r2 below 2^51 + 2
+#[oblivious]
+fun multiply_wide(output: *Field, left: *Field, right: *Field) {
+    val f0:    ^u64  = left.limb[0];
+    val f1:    ^u64  = left.limb[1];
+    val f2:    ^u64  = left.limb[2];
+    val f3:    ^u64  = left.limb[3];
+    val f4:    ^u64  = left.limb[4];
+    val g0:    ^u64  = right.limb[0];
+    val g1:    ^u64  = right.limb[1];
+    val g2:    ^u64  = right.limb[2];
+    val g3:    ^u64  = right.limb[3];
+    val g4:    ^u64  = right.limb[4];
+    val g1_19: ^u64  = times_19(g1);
+    val g2_19: ^u64  = times_19(g2);
+    val g3_19: ^u64  = times_19(g3);
+    val g4_19: ^u64  = times_19(g4);
+    var t0:    ^u128 = word.multiply_wide(f0, g0) + word.multiply_wide(f1, g4_19) +
+        word.multiply_wide(f2, g3_19) + word.multiply_wide(f3, g2_19) +
+        word.multiply_wide(f4, g1_19);
+    var t1: ^u128 = word.multiply_wide(f0, g1) + word.multiply_wide(f1, g0) +
+        word.multiply_wide(f2, g4_19) + word.multiply_wide(f3, g3_19) +
+        word.multiply_wide(f4, g2_19);
+    var t2: ^u128 = word.multiply_wide(f0, g2) + word.multiply_wide(f1, g1) +
+        word.multiply_wide(f2, g0) + word.multiply_wide(f3, g4_19) +
+        word.multiply_wide(f4, g3_19);
+    var t3: ^u128 = word.multiply_wide(f0, g3) + word.multiply_wide(f1, g2) +
+        word.multiply_wide(f2, g1) + word.multiply_wide(f3, g0) +
+        word.multiply_wide(f4, g4_19);
+    var t4: ^u128 = word.multiply_wide(f0, g4) + word.multiply_wide(f1, g3) +
+        word.multiply_wide(f2, g2) + word.multiply_wide(f3, g1) +
+        word.multiply_wide(f4, g0);
+    carry_wide(output, ?t0, ?t1, ?t2, ?t3, ?t4);
+}
+
+# the square is the product with the 10 symmetric terms formed once and doubled
+#[oblivious]
+fun square_wide(output: *Field, input: *Field) {
+    val f0:    ^u64  = input.limb[0];
+    val f1:    ^u64  = input.limb[1];
+    val f2:    ^u64  = input.limb[2];
+    val f3:    ^u64  = input.limb[3];
+    val f4:    ^u64  = input.limb[4];
+    val d0:    ^u64  = f0 << 1;
+    val d1:    ^u64  = f1 << 1;
+    val d2:    ^u64  = f2 << 1;
+    val d3:    ^u64  = f3 << 1;
+    val f3_19: ^u64  = times_19(f3);
+    val f4_19: ^u64  = times_19(f4);
+    var t0:    ^u128 = word.multiply_wide(f0, f0) + word.multiply_wide(d1, f4_19) +
+        word.multiply_wide(d2, f3_19);
+    var t1: ^u128 = word.multiply_wide(d0, f1) + word.multiply_wide(d2, f4_19) +
+        word.multiply_wide(f3, f3_19);
+    var t2: ^u128 = word.multiply_wide(d0, f2) + word.multiply_wide(f1, f1) +
+        word.multiply_wide(d3, f4_19);
+    var t3: ^u128 = word.multiply_wide(d0, f3) + word.multiply_wide(d1, f2) +
+        word.multiply_wide(f4, f4_19);
+    var t4: ^u128 = word.multiply_wide(d0, f4) + word.multiply_wide(d1, f3) +
+        word.multiply_wide(f2, f2);
+    carry_wide(output, ?t0, ?t1, ?t2, ?t3, ?t4);
+}
+
+# one carry pass over the wide accumulators, the wrap of the top carry into
+# limb 0, and two more single-limb carries to settle it. the accumulators are
+# wiped on the way out
+#[oblivious]
+#[inline]
+fun carry_wide(output: *Field, t0: *^u128, t1: *^u128, t2: *^u128, t3: *^u128,
+    t4: *^u128) {
+    @t1 = @t1 + (@t0 >> LIMB_BITS);
+    var r0: ^u64 = (@t0)::^u64 & LIMB_MASK;
+    @t2 = @t2 + (@t1 >> LIMB_BITS);
+    var r1: ^u64 = (@t1)::^u64 & LIMB_MASK;
+    @t3 = @t3 + (@t2 >> LIMB_BITS);
+    var r2: ^u64 = (@t2)::^u64 & LIMB_MASK;
+    @t4 = @t4 + (@t3 >> LIMB_BITS);
+    val r3: ^u64 = (@t3)::^u64 & LIMB_MASK;
+    val r4: ^u64 = (@t4)::^u64 & LIMB_MASK;
+    r0             = r0 + times_19((@t4 >> LIMB_BITS)::^u64);
+    r1             = r1 + (r0 >> LIMB_BITS);
+    r0             = r0 & LIMB_MASK;
+    r2             = r2 + (r1 >> LIMB_BITS);
+    r1             = r1 & LIMB_MASK;
+    output.limb[0] = r0;
+    output.limb[1] = r1;
+    output.limb[2] = r2;
+    output.limb[3] = r3;
+    output.limb[4] = r4;
+    @t0            = 0;
+    @t1            = 0;
+    @t2            = 0;
+    @t3            = 0;
+    @t4            = 0;
+    r0             = 0;
+    r1             = 0;
+    r2             = 0;
+}
+
+# the bit-serial reference: walk the multiplier's bits once over a doubling
+# multiplicand
+#
+# the product is a masked sum of left * 2^k mod p for every set bit k. the
+# multiplicand keeps limbs at most 2^51 + 38 while it doubles. the product is
+# left lazy: two carry passes bound its limbs by 2^51 + 18
+#[oblivious]
+pub fun serial_multiply(output: *Field, left: *Field, right: *Field) {
     var multiple: Field;
     var bits:     Field;
     copy(?multiple, left);
@@ -209,25 +341,34 @@ pub fun multiply(output: *Field, left: *Field, right: *Field) {
     destroy(?product);
 }
 
-#[oblivious]
-#[inline]
-pub fun square(output: *Field, input: *Field) {
-    multiply(output, input, input);
-}
-
 # multiply by the public ladder constant (486662 - 2) / 4 = 121665
 #[oblivious]
+#[inline]
 fun multiply_a24(output: *Field, input: *Field) {
+    $if (word.HARDWARE_WIDE == 1) {
+        var t0: ^u128 = word.multiply_wide(input.limb[0], A24);
+        var t1: ^u128 = word.multiply_wide(input.limb[1], A24);
+        var t2: ^u128 = word.multiply_wide(input.limb[2], A24);
+        var t3: ^u128 = word.multiply_wide(input.limb[3], A24);
+        var t4: ^u128 = word.multiply_wide(input.limb[4], A24);
+        carry_wide(output, ?t0, ?t1, ?t2, ?t3, ?t4);
+    }
+    $or {
+        serial_multiply_a24(output, input);
+    }
+}
+
+#[oblivious]
+fun serial_multiply_a24(output: *Field, input: *Field) {
     var multiple: Field;
     var product:  Field;
     copy(?multiple, input);
     normalize(?multiple);
     normalize(?multiple);
     set_small(?product, 0);
-    val constant: u64 = 121665;
-    var bit:      u64 = 0;
+    var bit: u64 = 0;
     for (bit < 17) {
-        if (((constant >> bit) & 1) == 1) {
+        if (((A24 >> bit) & 1) == 1) {
             var i: usize = 0;
             for (i < 5) {
                 product.limb[i] = product.limb[i] + multiple.limb[i];
@@ -353,14 +494,22 @@ pub fun encode(output: *^u8, input: *Field) {
 #[oblivious]
 #[inline]
 fun conditional_swap(swap: ^u8, left: *Field, right: *Field) {
-    val mask: ^u64  = 0 - swap::^u64;
-    var i:    usize = 0;
-    for (i < 5) {
-        val difference: ^u64 = (left.limb[i] ^ right.limb[i]) & mask;
-        left.limb[i]  = left.limb[i] ^ difference;
-        right.limb[i] = right.limb[i] ^ difference;
-        i             = i + 1;
-    }
+    val mask: ^u64 = 0 - swap::^u64;
+    val d0:   ^u64 = (left.limb[0] ^ right.limb[0]) & mask;
+    val d1:   ^u64 = (left.limb[1] ^ right.limb[1]) & mask;
+    val d2:   ^u64 = (left.limb[2] ^ right.limb[2]) & mask;
+    val d3:   ^u64 = (left.limb[3] ^ right.limb[3]) & mask;
+    val d4:   ^u64 = (left.limb[4] ^ right.limb[4]) & mask;
+    left.limb[0]  = left.limb[0] ^ d0;
+    left.limb[1]  = left.limb[1] ^ d1;
+    left.limb[2]  = left.limb[2] ^ d2;
+    left.limb[3]  = left.limb[3] ^ d3;
+    left.limb[4]  = left.limb[4] ^ d4;
+    right.limb[0] = right.limb[0] ^ d0;
+    right.limb[1] = right.limb[1] ^ d1;
+    right.limb[2] = right.limb[2] ^ d2;
+    right.limb[3] = right.limb[3] ^ d3;
+    right.limb[4] = right.limb[4] ^ d4;
 }
 
 #[oblivious]
@@ -385,8 +534,18 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
     set_small(?z2, 0);
     copy(?x3, ?x1);
     set_small(?z3, 1);
-    var swap:     ^u8   = 0;
-    var position: usize = 255;
+    var swap:      ^u8   = 0;
+    var position:  usize = 255;
+    var a:         Field;
+    var aa:        Field;
+    var b:         Field;
+    var bb:        Field;
+    var e:         Field;
+    var c:         Field;
+    var d:         Field;
+    var da:        Field;
+    var cb:        Field;
+    var temporary: Field;
     for (position > 0) {
         position = position - 1;
         val scalar_byte:  usize = position >> 3;
@@ -397,16 +556,6 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
         conditional_swap(swap, ?z2, ?z3);
         swap = bit;
 
-        var a:         Field;
-        var aa:        Field;
-        var b:         Field;
-        var bb:        Field;
-        var e:         Field;
-        var c:         Field;
-        var d:         Field;
-        var da:        Field;
-        var cb:        Field;
-        var temporary: Field;
         add(?a, ?x2, ?z2);
         square(?aa, ?a);
         subtract(?b, ?x2, ?z2);
@@ -425,17 +574,17 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
         multiply_a24(?temporary, ?e);
         add(?temporary, ?aa, ?temporary);
         multiply(?z2, ?e, ?temporary);
-        destroy(?a);
-        destroy(?aa);
-        destroy(?b);
-        destroy(?bb);
-        destroy(?e);
-        destroy(?c);
-        destroy(?d);
-        destroy(?da);
-        destroy(?cb);
-        destroy(?temporary);
     }
+    destroy(?a);
+    destroy(?aa);
+    destroy(?b);
+    destroy(?bb);
+    destroy(?e);
+    destroy(?c);
+    destroy(?d);
+    destroy(?da);
+    destroy(?cb);
+    destroy(?temporary);
     conditional_swap(swap, ?x2, ?x3);
     conditional_swap(swap, ?z2, ?z3);
     swap = 0;
@@ -453,4 +602,68 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
     destroy(?z3);
     destroy(?inverse_z);
     destroy(?result);
+}
+
+# the field differential: the selected product against the bit-serial reference
+# on edge elements up to the 2^54 limb bound and a deterministic sweep, compared
+# canonically. on a target
+# without the hardware cell both sides are the serial path and the test still runs
+test "x25519 field: the selected multiply agrees with the serial reference" {
+    val edges: [6]u64 = [6]u64{
+        0, 1, 2251799813685229, 2251799813685247, 4503599627370495, 18014398509481983
+    };
+    var state: u64   = 0x9E3779B97F4A7C15;
+    var round: usize = 0;
+    for (round < 512) {
+        var left:  Field;
+        var right: Field;
+        var i:     usize = 0;
+        for (i < 5) {
+            state = state * 6364136223846793005 + 1442695040888963407;
+            if (round < 36) {
+                left.limb[i]  = edges[round / 6];
+                right.limb[i] = edges[round % 6];
+            }
+            or {
+                val left_limb: u64 = state & 18014398509481983;
+                state = state * 6364136223846793005 + 1442695040888963407;
+                val right_limb: u64 = state & 18014398509481983;
+                left.limb[i]  = left_limb;
+                right.limb[i] = right_limb;
+            }
+            i = i + 1;
+        }
+        var selected:  Field;
+        var reference: Field;
+        var squared:   Field;
+        multiply(?selected, ?left, ?right);
+        serial_multiply(?reference, ?left, ?right);
+        canonicalize(?selected);
+        canonicalize(?reference);
+        i = 0;
+        for (i < 5) {
+            if (selected.limb[i]:>u64 != reference.limb[i]:>u64) { ret 1; }
+            i = i + 1;
+        }
+        square(?squared, ?left);
+        serial_multiply(?reference, ?left, ?left);
+        canonicalize(?squared);
+        canonicalize(?reference);
+        i = 0;
+        for (i < 5) {
+            if (squared.limb[i]:>u64 != reference.limb[i]:>u64) { ret 2; }
+            i = i + 1;
+        }
+        multiply_a24(?selected, ?left);
+        serial_multiply_a24(?reference, ?left);
+        canonicalize(?selected);
+        canonicalize(?reference);
+        i = 0;
+        for (i < 5) {
+            if (selected.limb[i]:>u64 != reference.limb[i]:>u64) { ret 3; }
+            i = i + 1;
+        }
+        round = round + 1;
+    }
+    ret 0;
 }

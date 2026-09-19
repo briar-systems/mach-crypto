@@ -1219,13 +1219,7 @@ val AGREE_VECTORS: [1455]u8 = [1455]u8{
 
 #[oblivious]
 fun load_scalar_words(output: *ed.Scalar, bytes: *u8) {
-    var word: usize = 0;
-    for (word < 8) {
-        val offset: usize = word * 4;
-        output.limb[word] = bytes[offset]::u64 | (bytes[offset + 1]::u64 << 8) |
-            (bytes[offset + 2]::u64 << 16) | (bytes[offset + 3]::u64 << 24);
-        word = word + 1;
-    }
+    ed.scalar_decode_public(output, bytes, 0);
 }
 
 test "ed25519 internal: windowed scalar multiplication matches independent vectors across the scalar range" {

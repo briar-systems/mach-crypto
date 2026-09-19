@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-19
+
+### Performance
+
+- X25519 and the Ed25519 field compute each product as 25 limb products on the 64 x 64 widening multiply where mach admits it (`$mach.build.ct_mul(low, 128)`: x86-64 on every OS, aarch64-linux and aarch64-darwin under PSTATE.DIT, riscv64 under Zkt) and keep the 255-step masked sum as `serial_multiply` everywhere else. Squaring forms its 15 products once, the a24 step is 5 products, and the ladder's ten temporaries are allocated and wiped once per ladder instead of per step. `word.multiply_wide` is the primitive, gated like `word.multiply`. Instructions per op on x86_64 with mach 5.9.0: x25519 agreement 54.0M to 1.26M, key derivation 15.1M to 0.75M, Ed25519 verification 218.6M to 10.0M. An x25519 + ECDSA P-256 handshake drops from 102.4M (122.3M under mach 5.5.1) to 35.4M, with the ladder at 3.6% of it and P-256 verification at 94% (#83).
+- The Ed25519 scalar ring is four 64-bit limbs on a Montgomery multiply mod l (`crypto.internal.mont`, the 256-bit ring the scalar rings share): a product is 32 limb products and two reductions, and reducing a 64-byte digest is three products, instead of 256 or 512 conditional additions. Ed25519 signing drops from 33.9M to 1.61M instructions on x86_64 (#83).
+
+### Changed
+
+- Dependencies: requires mach 5.9 (`u128` widening) and mach-std 5.8.0, whose start code turns PSTATE.DIT on for aarch64-linux and aarch64-darwin programs that link a secret multiply and refuses to start without the mode (#83).
+- Field elements accept limbs below 2^54 and every field operation leaves them below 2^52. `add` and `subtract` carry once; `subtract` adds 4p (#83).
+- `assurance/leakage.tsv` admits the ungated multiply control on linux-arm64 and darwin-aarch64, where mach 5.9 admits the product under DIT (#83).
+
+### Added
+
+- A field differential runs the selected x25519 multiply, square and a24 step against the bit-serial reference on edge elements up to the 2^54 bound and a deterministic sweep, on every target. `crypto.internal.mont` is checked against independent big-integer products and a 512-bit reduction mod l, and `word.multiply_wide` against `word.serial_multiply_wide` (#83).
+
 ## [0.16.0] - 2026-09-18
 
 ### Performance
