@@ -846,7 +846,7 @@ pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
         index = 1;
         for (index < 16) {
             point_select(?selected, ?selected, ?table[index],
-                ct.eq_u64(digit, index::u64));
+                ct.eq[u64](digit, index::u64));
             index = index + 1;
         }
         point_add_distinct(?result, ?result, ?selected, ?same);
@@ -961,12 +961,12 @@ pub fun scalar_multiply_base(output: *Point, scalar: *UInt) {
         set_small(?lifted.z, 1);
         var candidate: u64 = 1;
         for (candidate <= p256_base.DIGITS) {
-            val mask: ^u64 = 0 - ct.eq_u64(digit, candidate)::^u64;
+            val mask: ^u64 = 0 - ct.eq[u64](digit, candidate)::^u64;
             accumulate_entry(?lifted.x, ?lifted.y, window, candidate, mask);
             candidate = candidate + 1;
         }
         val infinity: ^u8 = point_is_infinity(?result);
-        val zero:     ^u8 = ct.eq_u64(digit, 0);
+        val zero:     ^u8 = ct.eq[u64](digit, 0);
         point_add_mixed(?sum, ?result, ?lifted.x, ?lifted.y);
         point_select(?sum, ?sum, ?lifted, infinity);
         point_select(?result, ?sum, ?result, zero);

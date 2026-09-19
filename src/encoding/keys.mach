@@ -117,7 +117,7 @@ fun secret_equal(value: contracts.SecretBytes, expected: *u8, len: usize) bool {
         difference = difference | (value.data[i] ^ expected[i]);
         i          = i + 1;
     }
-    ret ct.eq_u8(difference, 0):>u8 == 1;
+    ret ct.eq[u8](difference, 0):>u8 == 1;
 }
 
 fun version_public(element: *der.Element, expected: u8) bool {

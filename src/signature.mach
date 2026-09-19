@@ -547,18 +547,18 @@ fun pss_check(encoded: *^u8, encoded_len: usize, message: contracts.Bytes,
         status = pss_mgf1(?mask[0], data_len, ?encoded[data_len], hash_len, sha384);
     }
     var valid: ^u8 = 1;
-    valid = valid & ct.eq_u8(encoded[encoded_len - 1], 0xbc);
-    valid = valid & ct.eq_u8(encoded[0] & 0x80, 0);
+    valid = valid & ct.eq[u8](encoded[encoded_len - 1], 0xbc);
+    valid = valid & ct.eq[u8](encoded[0] & 0x80, 0);
     val padding_len: usize = encoded_len - (hash_len << 1) - 2;
     var i:           usize = 0;
     for (i < padding_len) {
         var value: ^u8 = encoded[i] ^ mask[i];
         if (i == 0) { value = value & 0x7f; }
-        valid = valid & ct.eq_u8(value, 0);
+        valid = valid & ct.eq[u8](value, 0);
         value = 0;
         i     = i + 1;
     }
-    valid = valid & ct.eq_u8(encoded[padding_len] ^ mask[padding_len], 1);
+    valid = valid & ct.eq[u8](encoded[padding_len] ^ mask[padding_len], 1);
     i     = 0;
     for (i < hash_len) {
         salt[i] = encoded[padding_len + 1 + i] ^ mask[padding_len + 1 + i];
@@ -686,25 +686,25 @@ fun pkcs1_check(encoded: *^u8, encoded_len: usize, message: contracts.Bytes,
     ct.zeroize(?digest[0], 48);
     val status: contracts.Error = rsa_hash_message(?digest[0], message, sha384);
     var valid:  ^u8             = 1;
-    valid = valid & ct.eq_u8(encoded[0], 0);
-    valid = valid & ct.eq_u8(encoded[1], 1);
+    valid = valid & ct.eq[u8](encoded[0], 0);
+    valid = valid & ct.eq[u8](encoded[1], 1);
     var i: usize = 2;
     for (i < separator) {
-        valid = valid & ct.eq_u8(encoded[i], 0xff);
+        valid = valid & ct.eq[u8](encoded[i], 0xff);
         i     = i + 1;
     }
-    valid = valid & ct.eq_u8(encoded[separator], 0);
+    valid = valid & ct.eq[u8](encoded[separator], 0);
     i     = 0;
     if (sha384) {
         for (i < RSA_PKCS1_DIGEST_INFO_PREFIX_SIZE) {
-            valid = valid & ct.eq_u8(encoded[digest_info_offset + i],
+            valid = valid & ct.eq[u8](encoded[digest_info_offset + i],
                 RSA_PKCS1_SHA384_DIGEST_INFO[i]);
             i = i + 1;
         }
     }
     or {
         for (i < RSA_PKCS1_DIGEST_INFO_PREFIX_SIZE) {
-            valid = valid & ct.eq_u8(encoded[digest_info_offset + i],
+            valid = valid & ct.eq[u8](encoded[digest_info_offset + i],
                 RSA_PKCS1_SHA256_DIGEST_INFO[i]);
             i = i + 1;
         }
