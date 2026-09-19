@@ -204,10 +204,10 @@ Plaintext is bounded to 274,877,906,880 bytes, or `2^32 - 1` payload blocks.
 Counter zero is reserved for the Poly1305 one-time key and payload counters run
 from one through `0xffffffff`. Additional-data and ciphertext byte lengths are
 encoded as the complete 64-bit RFC 8439 length fields. ChaCha20 uses fixed
-rotations and positions. Poly1305 uses fixed-position limb arithmetic without
-secret-dependent table accesses or hardware multiplication. Keys, stream
-state, one-time keys, accumulators, authentication tags, and stream blocks are
-explicitly zeroized.
+rotations and positions. Poly1305 runs on three 44-bit limbs, nine
+`crypto.internal.word` products and one carry chain per block, with no
+secret-dependent table access. Keys, stream state, one-time keys,
+accumulators, authentication tags, and stream blocks are explicitly zeroized.
 
 This module protects TLS records and QUIC packet payloads. QUIC header
 protection remains a separate primitive contract because it consumes a packet

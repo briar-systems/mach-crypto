@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Performance
+
+- Poly1305 runs on three 44-bit limbs: a block is nine `word.multiply_wide` products and one carry chain instead of 25 low products over five 26-bit limbs, and the final reduction and pad addition work on 64-bit words. `process_block` is 310 instructions on x86_64 release against 516; a 1 KiB ChaCha20-Poly1305 seal drops from 185k to 161k instructions and 16 KiB from 2.76M to 2.39M, the rest being ChaCha20 (#83).
+
+### Added
+
+- Poly1305 carry edges are checked against independent big-integer vectors over the AEAD's padded layout: a fully clamped `r` on all-ones blocks, `h` crossing `p` at the final reduction, the pad addition carrying between tag words, and aad with a partial final block (#83).
+
 ## [0.19.0] - 2026-09-19
 
 ### Performance
