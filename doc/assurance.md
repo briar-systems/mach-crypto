@@ -133,3 +133,11 @@ took 110 through 113 milliseconds, with a 111-millisecond median, on an AMD
 Ryzen 7 5800X3D 8-Core Processor with frequency boost disabled and Mach 4.26.5.
 This machine-specific measurement characterizes the implementation. The
 250-millisecond release gate is the enforced regression contract.
+
+The same gate budgets RSA-PSS with SHA-256 on OpenSSL-generated 2048 and
+3072-bit keys: a five-sample median of signing at or below 250 and 500
+milliseconds, and of verifying the signature it produced at or below 25 and 50
+milliseconds. On 2026-09-19, with Mach 5.9.0 on the same machine, signing took
+13.5 and 42 milliseconds and verification 0.32 and 0.66 milliseconds. Signing
+runs the private exponent through a masked-scan windowed exponentiation, so its
+budget is the constant-time cost of the full exponent width, not a fast path.
