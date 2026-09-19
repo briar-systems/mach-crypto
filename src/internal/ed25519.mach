@@ -101,19 +101,19 @@ pub fun scalar_set_small(output: *Scalar, value: ^u64) {
 
 #[oblivious]
 pub fun scalar_valid(value: *Scalar) ^u8 {
-    ret mont.less_than(?value.limb[0], ?ORDER[0]);
+    ret mont.less_than(?value.limb[0], ?ORDER[0], 4);
 }
 
 #[oblivious]
 pub fun scalar_add(output: *Scalar, left: *Scalar, right: *Scalar) {
-    mont.add(?output.limb[0], ?left.limb[0], ?right.limb[0], ?ORDER[0]);
+    mont.add(?output.limb[0], ?left.limb[0], ?right.limb[0], ?ORDER[0], 4);
 }
 
 # left * right mod l, for left below 2^256 and right below l
 #[oblivious]
 pub fun scalar_multiply_values(output: *Scalar, left: *Scalar, right: *Scalar) {
     mont.multiply_values(?output.limb[0], ?left.limb[0], ?right.limb[0], ?ORDER[0],
-        ORDER_FACTOR, ?ORDER_R2[0]);
+        ORDER_FACTOR, ?ORDER_R2[0], 4);
 }
 
 #[oblivious]
@@ -165,7 +165,7 @@ pub fun scalar_reduce_secret(output: *Scalar, input: *^u8, len: usize) {
         wide[i >> 3] = wide[i >> 3] | (input[i]::^u64 << ((i & 7) << 3));
         i            = i + 1;
     }
-    mont.reduce_wide(?output.limb[0], ?wide[0], ?ORDER[0], ORDER_FACTOR, ?ORDER_R2[0]);
+    mont.reduce_wide(?output.limb[0], ?wide[0], ?ORDER[0], ORDER_FACTOR, ?ORDER_R2[0], 4);
     ct.zeroize((?wide[0]):~*^u8, 64);
 }
 

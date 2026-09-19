@@ -1,16 +1,34 @@
-# the 256-bit montgomery ring every scalar ring shares
+# the montgomery ring every prime field and scalar ring shares
 #
-# values are four 64-bit limbs, little-endian, and every product is a word
-# product from crypto.internal.word, so the target that admits the hardware
-# cell computes one instruction per limb pair and every other target keeps the
-# serial reference (#83). a ring is (modulus, factor, r2): the modulus below
-# 2^256, factor = -modulus^-1 mod 2^64 and r2 = 2^512 mod modulus
+# values are 64-bit limbs, little-endian, $limbs of them up to LIMBS (four for
+# the 256-bit rings, six for P-384), and every product is a word product from
+# crypto.internal.word, so the target that admits the hardware cell computes
+# one instruction per limb pair and every other target keeps the serial
+# reference (#83). a ring is (modulus, factor, r2): the modulus below
+# 2^(64 * limbs), factor = -modulus^-1 mod 2^64 and r2 = 2^(128 * limbs) mod
+# modulus. the limb count is a comptime argument because an array cannot be
+# sized by one, so the loop forms size their scratch for the widest ring and
+# run every loop to the ring's own count. the four-limb ring, which every
+# 256-bit field and order runs on, has unrolled forms in scalar temporaries
+# that keep the limbs in registers; the loop forms are their reference
 
 use crypto.internal.word;
-use std.crypto.ct;
 use std.types.size.usize;
 
-pub val LIMBS: usize = 4;
+# the widest ring
+pub val LIMBS: usize = 6;
+
+# wipe count limbs of scratch: limb stores, not a byte loop, because this runs
+# on every ring operation
+#[oblivious]
+#[inline]
+fun wipe(scratch: *^u64, $count: usize) {
+    var i: usize = 0;
+    for (i < count) {
+        scratch[i] = 0;
+        i          = i + 1;
+    }
+}
 
 # 1 where the sum of two limbs would carry
 #[oblivious]
@@ -27,54 +45,218 @@ fun borrow_of(left: ^u64, right: ^u64, difference: ^u64) ^u64 {
 }
 
 # output = value - modulus where that does not borrow, else value. value is
-# below 2 * modulus, so one pass reduces it
+# below 2 * modulus, so one pass reduces it; high is the value's limb above
+# the ring, which forces the subtraction
 #[oblivious]
-fun subtract_modulus(output: *^u64, value: *^u64, modulus: *u64, high: ^u64) {
-    var reduced: [4]^u64;
+fun subtract_modulus(output: *^u64, value: *^u64, modulus: *u64, high: ^u64,
+    $limbs: usize) {
+    var reduced: [6]^u64;
     var borrow:  ^u64  = 0;
     var i:       usize = 0;
-    for (i < 4) {
+    for (i < limbs) {
         val step:       ^u64 = value[i] - modulus[i];
         val difference: ^u64 = step - borrow;
         borrow     = borrow_of(value[i], modulus[i], step) | borrow_of(step, borrow, difference);
         reduced[i] = difference;
         i          = i + 1;
     }
-    # the subtraction holds when the value's fifth limb covers the borrow
     val keep_mask: ^u64 = 0 - (borrow & ~high);
     i = 0;
-    for (i < 4) {
+    for (i < limbs) {
         output[i] = (value[i] & keep_mask) | (reduced[i] & ~keep_mask);
         i         = i + 1;
     }
     borrow = 0;
-    ct.zeroize((?reduced[0]):~*^u8, 32);
+    wipe(?reduced[0], limbs);
+}
+
+# the four-limb forms of the modular subtract-if-above, add and subtract, in
+# scalar temporaries
+#[oblivious]
+#[inline]
+fun subtract_modulus4(output: *^u64, v0: ^u64, v1: ^u64, v2: ^u64, v3: ^u64, modulus: *u64,
+    high: ^u64) {
+    val m0: ^u64 = modulus[0];
+    val m1: ^u64 = modulus[1];
+    val m2: ^u64 = modulus[2];
+    val m3: ^u64 = modulus[3];
+    val s0: ^u64 = v0 - m0;
+    var b:  ^u64 = borrow_of(v0, m0, s0);
+    val s1: ^u64 = v1 - m1;
+    val d1: ^u64 = s1 - b;
+    b = borrow_of(v1, m1, s1) | borrow_of(s1, b, d1);
+    val s2: ^u64 = v2 - m2;
+    val d2: ^u64 = s2 - b;
+    b = borrow_of(v2, m2, s2) | borrow_of(s2, b, d2);
+    val s3: ^u64 = v3 - m3;
+    val d3: ^u64 = s3 - b;
+    b = borrow_of(v3, m3, s3) | borrow_of(s3, b, d3);
+    val keep: ^u64 = 0 - (b & ~high);
+    output[0] = (v0 & keep) | (s0 & ~keep);
+    output[1] = (v1 & keep) | (d1 & ~keep);
+    output[2] = (v2 & keep) | (d2 & ~keep);
+    output[3] = (v3 & keep) | (d3 & ~keep);
+    b         = 0;
+}
+
+#[oblivious]
+fun add4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
+    val l0: ^u64 = left[0];
+    val l1: ^u64 = left[1];
+    val l2: ^u64 = left[2];
+    val l3: ^u64 = left[3];
+    val r0: ^u64 = right[0];
+    val r1: ^u64 = right[1];
+    val r2: ^u64 = right[2];
+    val r3: ^u64 = right[3];
+    val s0: ^u64 = l0 + r0;
+    var c:  ^u64 = carry_of(l0, r0, s0);
+    val s1: ^u64 = l1 + r1;
+    val t1: ^u64 = s1 + c;
+    c = carry_of(l1, r1, s1) | carry_of(s1, c, t1);
+    val s2: ^u64 = l2 + r2;
+    val t2: ^u64 = s2 + c;
+    c = carry_of(l2, r2, s2) | carry_of(s2, c, t2);
+    val s3: ^u64 = l3 + r3;
+    val t3: ^u64 = s3 + c;
+    c = carry_of(l3, r3, s3) | carry_of(s3, c, t3);
+    subtract_modulus4(output, s0, t1, t2, t3, modulus, c);
+    c = 0;
+}
+
+#[oblivious]
+fun subtract4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
+    val l0: ^u64 = left[0];
+    val l1: ^u64 = left[1];
+    val l2: ^u64 = left[2];
+    val l3: ^u64 = left[3];
+    val r0: ^u64 = right[0];
+    val r1: ^u64 = right[1];
+    val r2: ^u64 = right[2];
+    val r3: ^u64 = right[3];
+    val s0: ^u64 = l0 - r0;
+    var b:  ^u64 = borrow_of(l0, r0, s0);
+    val s1: ^u64 = l1 - r1;
+    val d1: ^u64 = s1 - b;
+    b = borrow_of(l1, r1, s1) | borrow_of(s1, b, d1);
+    val s2: ^u64 = l2 - r2;
+    val d2: ^u64 = s2 - b;
+    b = borrow_of(l2, r2, s2) | borrow_of(s2, b, d2);
+    val s3: ^u64 = l3 - r3;
+    val d3: ^u64 = s3 - b;
+    b = borrow_of(l3, r3, s3) | borrow_of(s3, b, d3);
+    # a borrow means the difference wrapped, so the modulus is added back
+    val mask: ^u64 = 0 - b;
+    val m0:   ^u64 = modulus[0] & mask;
+    val m1:   ^u64 = modulus[1] & mask;
+    val m2:   ^u64 = modulus[2] & mask;
+    val m3:   ^u64 = modulus[3] & mask;
+    val a0:   ^u64 = s0 + m0;
+    var c:    ^u64 = carry_of(s0, m0, a0);
+    val a1:   ^u64 = d1 + m1;
+    val t1:   ^u64 = a1 + c;
+    c = carry_of(d1, m1, a1) | carry_of(a1, c, t1);
+    val a2: ^u64 = d2 + m2;
+    val t2: ^u64 = a2 + c;
+    c = carry_of(d2, m2, a2) | carry_of(a2, c, t2);
+    val a3: ^u64 = d3 + m3;
+    val t3: ^u64 = a3 + c;
+    output[0] = a0;
+    output[1] = t1;
+    output[2] = t2;
+    output[3] = t3;
+    b         = 0;
+    c         = 0;
 }
 
 # output = left + right mod modulus, for both below the modulus
 #[oblivious]
-pub fun add(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
-    var sum:   [4]^u64;
+#[inline]
+pub fun add(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
+    $if (limbs == 4) {
+        add4(output, left, right, modulus);
+    }
+    $or {
+        add_general(output, left, right, modulus, limbs);
+    }
+}
+
+#[oblivious]
+fun add_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
+    var sum:   [6]^u64;
     var carry: ^u64  = 0;
     var i:     usize = 0;
-    for (i < 4) {
+    for (i < limbs) {
         val step:  ^u64 = left[i] + right[i];
         val total: ^u64 = step + carry;
         carry  = carry_of(left[i], right[i], step) | carry_of(step, carry, total);
         sum[i] = total;
         i      = i + 1;
     }
-    subtract_modulus(output, ?sum[0], modulus, carry);
+    subtract_modulus(output, ?sum[0], modulus, carry, limbs);
     carry = 0;
-    ct.zeroize((?sum[0]):~*^u8, 32);
+    wipe(?sum[0], limbs);
+}
+
+# output = left - right mod modulus, for both below the modulus
+#[oblivious]
+#[inline]
+pub fun subtract(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
+    $if (limbs == 4) {
+        subtract4(output, left, right, modulus);
+    }
+    $or {
+        subtract_general(output, left, right, modulus, limbs);
+    }
+}
+
+#[oblivious]
+fun subtract_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
+    var difference: [6]^u64;
+    var borrow:     ^u64  = 0;
+    var i:          usize = 0;
+    for (i < limbs) {
+        val step:  ^u64 = left[i] - right[i];
+        val total: ^u64 = step - borrow;
+        borrow        = borrow_of(left[i], right[i], step) | borrow_of(step, borrow, total);
+        difference[i] = total;
+        i             = i + 1;
+    }
+    # a borrow means the difference wrapped, so the modulus is added back
+    val mask:  ^u64 = 0 - borrow;
+    var carry: ^u64 = 0;
+    i = 0;
+    for (i < limbs) {
+        val addend: ^u64 = modulus[i] & mask;
+        val step:   ^u64 = difference[i] + addend;
+        val total:  ^u64 = step + carry;
+        carry     = carry_of(difference[i], addend, step) | carry_of(step, carry, total);
+        output[i] = total;
+        i         = i + 1;
+    }
+    borrow = 0;
+    carry  = 0;
+    wipe(?difference[0], limbs);
+}
+
+# output = -value mod modulus, for a value below the modulus
+#[oblivious]
+pub fun negate(output: *^u64, value: *^u64, modulus: *u64, $limbs: usize) {
+    var zero: [6]^u64;
+    var i:    usize = 0;
+    for (i < limbs) {
+        zero[i] = 0;
+        i       = i + 1;
+    }
+    subtract(output, ?zero[0], value, modulus, limbs);
 }
 
 # 1 where value is below the modulus
 #[oblivious]
-pub fun less_than(value: *^u64, modulus: *u64) ^u8 {
+pub fun less_than(value: *^u64, modulus: *u64, $limbs: usize) ^u8 {
     var borrow: ^u64  = 0;
     var i:      usize = 0;
-    for (i < 4) {
+    for (i < limbs) {
         val step:       ^u64 = value[i] - modulus[i];
         val difference: ^u64 = step - borrow;
         borrow = borrow_of(value[i], modulus[i], step) | borrow_of(step, borrow, difference);
@@ -85,63 +267,412 @@ pub fun less_than(value: *^u64, modulus: *u64) ^u8 {
     ret result;
 }
 
-# output = left * right * 2^-256 mod modulus, below the modulus, for left below
-# 2^256 and right below the modulus
+# montgomery reduction of the eight limbs p0..p7 in place, unrolled: after
+# round i limb i is zero and the carry rides into the limbs above
 #[oblivious]
-pub fun multiply(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u64) {
-    var product: [8]^u64;
+#[inline]
+fun reduce4(output: *^u64, p0: ^u64, p1: ^u64, p2: ^u64, p3: ^u64, p4: ^u64, p5: ^u64,
+    p6: ^u64, p7: ^u64, modulus: *u64, factor: u64) {
+    val m0: ^u64  = modulus[0];
+    val m1: ^u64  = modulus[1];
+    val m2: ^u64  = modulus[2];
+    val m3: ^u64  = modulus[3];
+    var p8: ^u64  = 0;
+    var t:  ^u128 = 0;
+    var c:  ^u128 = 0;
+    var m:  ^u64  = 0;
+    var r0: ^u64  = p0;
+    var r1: ^u64  = p1;
+    var r2: ^u64  = p2;
+    var r3: ^u64  = p3;
+    var r4: ^u64  = p4;
+    var r5: ^u64  = p5;
+    var r6: ^u64  = p6;
+    var r7: ^u64  = p7;
+    m  = word.multiply(r0, factor, 64);
+    t  = word.multiply_wide(m, m0) + r0::^u128;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m1) + r1::^u128 + c;
+    r1 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m2) + r2::^u128 + c;
+    r2 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m3) + r3::^u128 + c;
+    r3 = t::^u64;
+    c  = t >> 64;
+    t  = r4::^u128 + c;
+    r4 = t::^u64;
+    c  = t >> 64;
+    t  = r5::^u128 + c;
+    r5 = t::^u64;
+    c  = t >> 64;
+    t  = r6::^u128 + c;
+    r6 = t::^u64;
+    c  = t >> 64;
+    t  = r7::^u128 + c;
+    r7 = t::^u64;
+    c  = t >> 64;
+    t  = p8::^u128 + c;
+    p8 = t::^u64;
+    c  = t >> 64;
+    m  = word.multiply(r1, factor, 64);
+    t  = word.multiply_wide(m, m0) + r1::^u128;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m1) + r2::^u128 + c;
+    r2 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m2) + r3::^u128 + c;
+    r3 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m3) + r4::^u128 + c;
+    r4 = t::^u64;
+    c  = t >> 64;
+    t  = r5::^u128 + c;
+    r5 = t::^u64;
+    c  = t >> 64;
+    t  = r6::^u128 + c;
+    r6 = t::^u64;
+    c  = t >> 64;
+    t  = r7::^u128 + c;
+    r7 = t::^u64;
+    c  = t >> 64;
+    t  = p8::^u128 + c;
+    p8 = t::^u64;
+    c  = t >> 64;
+    m  = word.multiply(r2, factor, 64);
+    t  = word.multiply_wide(m, m0) + r2::^u128;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m1) + r3::^u128 + c;
+    r3 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m2) + r4::^u128 + c;
+    r4 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m3) + r5::^u128 + c;
+    r5 = t::^u64;
+    c  = t >> 64;
+    t  = r6::^u128 + c;
+    r6 = t::^u64;
+    c  = t >> 64;
+    t  = r7::^u128 + c;
+    r7 = t::^u64;
+    c  = t >> 64;
+    t  = p8::^u128 + c;
+    p8 = t::^u64;
+    c  = t >> 64;
+    m  = word.multiply(r3, factor, 64);
+    t  = word.multiply_wide(m, m0) + r3::^u128;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m1) + r4::^u128 + c;
+    r4 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m2) + r5::^u128 + c;
+    r5 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(m, m3) + r6::^u128 + c;
+    r6 = t::^u64;
+    c  = t >> 64;
+    t  = r7::^u128 + c;
+    r7 = t::^u64;
+    c  = t >> 64;
+    t  = p8::^u128 + c;
+    p8 = t::^u64;
+    c  = t >> 64;
+    subtract_modulus4(output, r4, r5, r6, r7, modulus, p8);
+    t  = 0;
+    c  = 0;
+    m  = 0;
+    r0 = 0;
+    r1 = 0;
+    r2 = 0;
+    r3 = 0;
+    r4 = 0;
+    r5 = 0;
+    r6 = 0;
+    r7 = 0;
+    p8 = 0;
+}
+
+# the four-limb product, unrolled into scalar temporaries so the limbs stay in
+# registers, then reduced
+#[oblivious]
+fun multiply4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u64) {
+    val a0: ^u64  = left[0];
+    val a1: ^u64  = left[1];
+    val a2: ^u64  = left[2];
+    val a3: ^u64  = left[3];
+    val b0: ^u64  = right[0];
+    val b1: ^u64  = right[1];
+    val b2: ^u64  = right[2];
+    val b3: ^u64  = right[3];
+    var t:  ^u128 = word.multiply_wide(a0, b0);
+    var p0: ^u64  = t::^u64;
+    var c:  ^u128 = t >> 64;
+    t = word.multiply_wide(a1, b0) + c;
+    var p1: ^u64 = t::^u64;
+    c = t >> 64;
+    t = word.multiply_wide(a2, b0) + c;
+    var p2: ^u64 = t::^u64;
+    c = t >> 64;
+    t = word.multiply_wide(a3, b0) + c;
+    var p3: ^u64 = t::^u64;
+    var p4: ^u64 = (t >> 64)::^u64;
+    t  = word.multiply_wide(a0, b1) + p1::^u128;
+    p1 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a1, b1) + p2::^u128 + c;
+    p2 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a2, b1) + p3::^u128 + c;
+    p3 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a3, b1) + p4::^u128 + c;
+    p4 = t::^u64;
+    var p5: ^u64 = (t >> 64)::^u64;
+    t  = word.multiply_wide(a0, b2) + p2::^u128;
+    p2 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a1, b2) + p3::^u128 + c;
+    p3 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a2, b2) + p4::^u128 + c;
+    p4 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a3, b2) + p5::^u128 + c;
+    p5 = t::^u64;
+    var p6: ^u64 = (t >> 64)::^u64;
+    t  = word.multiply_wide(a0, b3) + p3::^u128;
+    p3 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a1, b3) + p4::^u128 + c;
+    p4 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a2, b3) + p5::^u128 + c;
+    p5 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a3, b3) + p6::^u128 + c;
+    p6 = t::^u64;
+    var p7: ^u64 = (t >> 64)::^u64;
+    reduce4(output, p0, p1, p2, p3, p4, p5, p6, p7, modulus, factor);
+    t  = 0;
+    c  = 0;
+    p0 = 0;
+    p1 = 0;
+    p2 = 0;
+    p3 = 0;
+    p4 = 0;
+    p5 = 0;
+    p6 = 0;
+    p7 = 0;
+}
+
+# the four-limb square, unrolled: the six cross products are formed once and
+# doubled, then the four squares are added along the diagonal
+#[oblivious]
+fun square4(output: *^u64, value: *^u64, modulus: *u64, factor: u64) {
+    val a0: ^u64  = value[0];
+    val a1: ^u64  = value[1];
+    val a2: ^u64  = value[2];
+    val a3: ^u64  = value[3];
+    var t:  ^u128 = word.multiply_wide(a1, a0);
+    var p1: ^u64  = t::^u64;
+    var c:  ^u128 = t >> 64;
+    t = word.multiply_wide(a2, a0) + c;
+    var p2: ^u64 = t::^u64;
+    c = t >> 64;
+    t = word.multiply_wide(a3, a0) + c;
+    var p3: ^u64 = t::^u64;
+    var p4: ^u64 = (t >> 64)::^u64;
+    t  = word.multiply_wide(a2, a1) + p3::^u128;
+    p3 = t::^u64;
+    c  = t >> 64;
+    t  = word.multiply_wide(a3, a1) + p4::^u128 + c;
+    p4 = t::^u64;
+    var p5: ^u64 = (t >> 64)::^u64;
+    t  = word.multiply_wide(a3, a2) + p5::^u128;
+    p5 = t::^u64;
+    var p6: ^u64 = (t >> 64)::^u64;
+    var p7: ^u64 = p6 >> 63;
+    p6 = (p6 << 1) | (p5 >> 63);
+    p5 = (p5 << 1) | (p4 >> 63);
+    p4 = (p4 << 1) | (p3 >> 63);
+    p3 = (p3 << 1) | (p2 >> 63);
+    p2 = (p2 << 1) | (p1 >> 63);
+    p1 = p1 << 1;
+    t  = word.multiply_wide(a0, a0);
+    var p0: ^u64 = t::^u64;
+    t  = p1::^u128 + (t >> 64);
+    p1 = t::^u64;
+    t  = word.multiply_wide(a1, a1) + p2::^u128 + (t >> 64);
+    p2 = t::^u64;
+    t  = p3::^u128 + (t >> 64);
+    p3 = t::^u64;
+    t  = word.multiply_wide(a2, a2) + p4::^u128 + (t >> 64);
+    p4 = t::^u64;
+    t  = p5::^u128 + (t >> 64);
+    p5 = t::^u64;
+    t  = word.multiply_wide(a3, a3) + p6::^u128 + (t >> 64);
+    p6 = t::^u64;
+    p7 = p7 + (t >> 64)::^u64;
+    reduce4(output, p0, p1, p2, p3, p4, p5, p6, p7, modulus, factor);
+    t  = 0;
+    c  = 0;
+    p0 = 0;
+    p1 = 0;
+    p2 = 0;
+    p3 = 0;
+    p4 = 0;
+    p5 = 0;
+    p6 = 0;
+    p7 = 0;
+}
+
+# output = left * right * 2^-(64 * limbs) mod modulus, below the modulus, for
+# left below 2^(64 * limbs) and right below the modulus
+#[oblivious]
+#[inline]
+pub fun multiply(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u64,
+    $limbs: usize) {
+    $if (limbs == 4) {
+        multiply4(output, left, right, modulus, factor);
+    }
+    $or {
+        multiply_general(output, left, right, modulus, factor, limbs);
+    }
+}
+
+# the loop form over any limb count, the reference for the unrolled ring
+#[oblivious]
+fun multiply_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u64,
+    $limbs: usize) {
+    var product: [12]^u64;
     var carry:   ^u128 = 0;
     var i:       usize = 0;
-    for (i < 8) {
+    for (i < limbs * 2) {
         product[i] = 0;
         i          = i + 1;
     }
     i = 0;
-    for (i < 4) {
+    for (i < limbs) {
         carry = 0;
         var j: usize = 0;
-        for (j < 4) {
+        for (j < limbs) {
             val term: ^u128 = word.multiply_wide(left[j], right[i]) +
                 product[i + j]::^u128 + carry;
             product[i + j] = term::^u64;
             carry          = term >> 64;
             j              = j + 1;
         }
-        product[i + 4] = carry::^u64;
-        i              = i + 1;
+        product[i + limbs] = carry::^u64;
+        i                  = i + 1;
     }
-    reduce(output, ?product[0], modulus, factor);
+    reduce_general(output, ?product[0], modulus, factor, limbs);
     carry = 0;
-    ct.zeroize((?product[0]):~*^u8, 64);
+    wipe(?product[0], limbs * 2);
 }
 
-# output = value * 2^-256 mod modulus, below the modulus, for a value below
-# modulus * 2^256. a value below 2^512 that is not below that bound still
-# reduces to a single-limb overflow, which the final subtraction absorbs only
-# when the modulus is above 2^255, so callers reduce wider values in halves
+# output = value * value * 2^-(64 * limbs) mod modulus, for a value below the
+# modulus: the cross products are formed once and doubled
 #[oblivious]
-pub fun reduce(output: *^u64, value: *^u64, modulus: *u64, factor: u64) {
-    var t: [9]^u64;
+#[inline]
+pub fun square(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
+    $if (limbs == 4) {
+        square4(output, value, modulus, factor);
+    }
+    $or {
+        square_general(output, value, modulus, factor, limbs);
+    }
+}
+
+#[oblivious]
+fun square_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
+    var product: [12]^u64;
+    var carry:   ^u128 = 0;
+    var i:       usize = 0;
+    for (i < limbs * 2) {
+        product[i] = 0;
+        i          = i + 1;
+    }
+    i = 0;
+    for (i < limbs) {
+        carry = 0;
+        var j: usize = i + 1;
+        for (j < limbs) {
+            val term: ^u128 = word.multiply_wide(value[j], value[i]) +
+                product[i + j]::^u128 + carry;
+            product[i + j] = term::^u64;
+            carry          = term >> 64;
+            j              = j + 1;
+        }
+        product[i + limbs] = carry::^u64;
+        i                  = i + 1;
+    }
+    # double the cross products, then add the squares along the diagonal
+    var top: ^u64 = 0;
+    i = 0;
+    for (i < limbs * 2) {
+        val doubled: ^u64 = (product[i] << 1) | top;
+        top        = product[i] >> 63;
+        product[i] = doubled;
+        i          = i + 1;
+    }
+    carry = 0;
+    i     = 0;
+    for (i < limbs) {
+        val low: ^u128 = word.multiply_wide(value[i], value[i]) +
+            product[i * 2]::^u128 + carry;
+        product[i * 2] = low::^u64;
+        val high: ^u128 = product[i * 2 + 1]::^u128 + (low >> 64);
+        product[i * 2 + 1] = high::^u64;
+        carry              = high >> 64;
+        i                  = i + 1;
+    }
+    reduce_general(output, ?product[0], modulus, factor, limbs);
+    carry = 0;
+    top   = 0;
+    wipe(?product[0], limbs * 2);
+}
+
+# output = value * 2^-(64 * limbs) mod modulus, below the modulus, for a value
+# below modulus * 2^(64 * limbs). a wider value still reduces to a single-limb
+# overflow, which the final subtraction absorbs only when the modulus is above
+# 2^(64 * limbs - 1), so callers reduce wider values in halves
+#[oblivious]
+#[inline]
+pub fun reduce(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
+    $if (limbs == 4) {
+        reduce4(output, value[0], value[1], value[2], value[3], value[4], value[5], value[6],
+            value[7], modulus, factor);
+    }
+    $or {
+        reduce_general(output, value, modulus, factor, limbs);
+    }
+}
+
+#[oblivious]
+fun reduce_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
+    var t: [13]^u64;
     var i: usize = 0;
-    for (i < 8) {
+    for (i < limbs * 2) {
         t[i] = value[i];
         i    = i + 1;
     }
-    t[8] = 0;
-    i    = 0;
-    for (i < 4) {
+    t[limbs * 2] = 0;
+    i            = 0;
+    for (i < limbs) {
         val multiplier: ^u64  = word.multiply(t[i], factor, 64);
         var carry:      ^u128 = 0;
         var j:          usize = 0;
-        for (j < 4) {
+        for (j < limbs) {
             val term: ^u128 = word.multiply_wide(multiplier, modulus[j]) +
                 t[i + j]::^u128 + carry;
             t[i + j] = term::^u64;
             carry    = term >> 64;
             j        = j + 1;
         }
-        j = i + 4;
-        for (j < 9) {
+        j = i + limbs;
+        for (j < limbs * 2 + 1) {
             val term: ^u128 = t[j]::^u128 + carry;
             t[j]  = term::^u64;
             carry = term >> 64;
@@ -149,47 +680,71 @@ pub fun reduce(output: *^u64, value: *^u64, modulus: *u64, factor: u64) {
         }
         i = i + 1;
     }
-    subtract_modulus(output, ?t[4], modulus, t[8]);
-    ct.zeroize((?t[0]):~*^u8, 72);
+    subtract_modulus(output, ?t[limbs], modulus, t[limbs * 2], limbs);
+    wipe(?t[0], limbs * 2 + 1);
 }
 
-# output = value mod modulus for a 512-bit value in eight limbs: the high half
-# enters through r2 as high * 2^256, the low half is reduced through the ring
-# and back, and the two are added
+# output = value mod modulus for a value twice the ring's width, in 2 * limbs
+# limbs: the high half enters through r2 as high * 2^(64 * limbs), the low half
+# is reduced through the ring and back, and the two are added
 #[oblivious]
-pub fun reduce_wide(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2: *u64) {
-    var high: [4]^u64;
-    var low:  [4]^u64;
-    var one:  [4]^u64;
-    var r2s:  [4]^u64;
+pub fun reduce_wide(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2: *u64,
+    $limbs: usize) {
+    var high: [6]^u64;
+    var low:  [6]^u64;
+    var one:  [6]^u64;
+    var r2s:  [6]^u64;
     var i:    usize = 0;
-    for (i < 4) {
+    for (i < limbs) {
         r2s[i] = r2[i];
         one[i] = 0;
         i      = i + 1;
     }
     one[0] = 1;
-    multiply(?high[0], ?value[4], ?r2s[0], modulus, factor);
-    multiply(?low[0], ?value[0], ?r2s[0], modulus, factor);
-    multiply(?low[0], ?low[0], ?one[0], modulus, factor);
-    add(output, ?high[0], ?low[0], modulus);
-    ct.zeroize((?high[0]):~*^u8, 32);
-    ct.zeroize((?low[0]):~*^u8, 32);
+    multiply(?high[0], ?value[limbs], ?r2s[0], modulus, factor, limbs);
+    multiply(?low[0], ?value[0], ?r2s[0], modulus, factor, limbs);
+    multiply(?low[0], ?low[0], ?one[0], modulus, factor, limbs);
+    add(output, ?high[0], ?low[0], modulus, limbs);
+    wipe(?high[0], limbs);
+    wipe(?low[0], limbs);
 }
 
-# output = left * right mod modulus, for left below 2^256 and right below the
-# modulus
+# output = value * r2 * 2^-(64 * limbs) = value * 2^(64 * limbs) mod modulus,
+# the montgomery form of a value below 2^(64 * limbs)
 #[oblivious]
-pub fun multiply_values(output: *^u64, left: *^u64, right: *^u64, modulus: *u64,
-    factor: u64, r2: *u64) {
-    var r2s: [4]^u64;
+pub fun to_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2: *u64,
+    $limbs: usize) {
+    var r2s: [6]^u64;
     var i:   usize = 0;
-    for (i < 4) {
+    for (i < limbs) {
         r2s[i] = r2[i];
         i      = i + 1;
     }
-    multiply(output, left, right, modulus, factor);
-    multiply(output, output, ?r2s[0], modulus, factor);
+    multiply(output, value, ?r2s[0], modulus, factor, limbs);
+}
+
+# output = value * 2^-(64 * limbs) mod modulus, the value a montgomery form
+# represents
+#[oblivious]
+pub fun from_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64,
+    $limbs: usize) {
+    var one: [6]^u64;
+    var i:   usize = 0;
+    for (i < limbs) {
+        one[i] = 0;
+        i      = i + 1;
+    }
+    one[0] = 1;
+    multiply(output, value, ?one[0], modulus, factor, limbs);
+}
+
+# output = left * right mod modulus, for left below 2^(64 * limbs) and right
+# below the modulus
+#[oblivious]
+pub fun multiply_values(output: *^u64, left: *^u64, right: *^u64, modulus: *u64,
+    factor: u64, r2: *u64, $limbs: usize) {
+    multiply(output, left, right, modulus, factor, limbs);
+    to_montgomery(output, output, modulus, factor, r2, limbs);
 }
 
 val TEST_ORDER: [4]u64 = [4]u64{
@@ -220,7 +775,8 @@ test "mont: products and wide reductions match independent values mod the ed2551
         0x313970EA5CC66E89, 0x5C08B1A9FDCE9E44, 0xE68CB005A2610AE1, 0x0D84678C305AB7A0
     };
     var output: [4]^u64;
-    multiply_values(?output[0], ?left[0], ?right[0], ?TEST_ORDER[0], TEST_FACTOR, ?TEST_R2[0]);
+    var i:      usize = 0;
+    multiply_values(?output[0], ?left[0], ?right[0], ?TEST_ORDER[0], TEST_FACTOR, ?TEST_R2[0], 4);
     if (test_equal(?output[0], ?product[0]) == 0) { ret 1; }
 
     var wide: [8]^u64 = [8]^u64{
@@ -230,7 +786,7 @@ test "mont: products and wide reductions match independent values mod the ed2551
     val reduced: [4]u64 = [4]u64{
         0xB5AAC971E5C41A84, 0x2268957D8178F04D, 0xD08347048FD8AE62, 0x08A7EE0CF2BE4ED9
     };
-    reduce_wide(?output[0], ?wide[0], ?TEST_ORDER[0], TEST_FACTOR, ?TEST_R2[0]);
+    reduce_wide(?output[0], ?wide[0], ?TEST_ORDER[0], TEST_FACTOR, ?TEST_R2[0], 4);
     if (test_equal(?output[0], ?reduced[0]) == 0) { ret 2; }
 
     # one below the order plus one is zero, and the order itself is not below it
@@ -239,12 +795,168 @@ test "mont: products and wide reductions match independent values mod the ed2551
     };
     var one:  [4]^u64 = [4]^u64{1, 0, 0, 0};
     val zero: [4]u64  = [4]u64{0, 0, 0, 0};
-    add(?output[0], ?top[0], ?one[0], ?TEST_ORDER[0]);
-    if (test_equal(?output[0], ?zero[0]) == 0)       { ret 3; }
-    if (less_than(?top[0], ?TEST_ORDER[0]):>u8 != 1) { ret 4; }
+    add(?output[0], ?top[0], ?one[0], ?TEST_ORDER[0], 4);
+    if (test_equal(?output[0], ?zero[0]) == 0)          { ret 3; }
+    if (less_than(?top[0], ?TEST_ORDER[0], 4):>u8 != 1) { ret 4; }
     var order: [4]^u64 = [4]^u64{
         0x5812631A5CF5D3ED, 0x14DEF9DEA2F79CD6, 0x0000000000000000, 0x1000000000000000
     };
-    if (less_than(?order[0], ?TEST_ORDER[0]):>u8 != 0) { ret 5; }
+    if (less_than(?order[0], ?TEST_ORDER[0], 4):>u8 != 0) { ret 5; }
+
+    # the square agrees with the product, subtract undoes add, and negating
+    # one gives the order less one
+    var squared: [4]^u64;
+    square(?squared[0], ?right[0], ?TEST_ORDER[0], TEST_FACTOR, 4);
+    multiply(?output[0], ?right[0], ?right[0], ?TEST_ORDER[0], TEST_FACTOR, 4);
+    i = 0;
+    for (i < 4) {
+        if (squared[i]:>u64 != output[i]:>u64) { ret 6; }
+        i = i + 1;
+    }
+    add(?output[0], ?right[0], ?top[0], ?TEST_ORDER[0], 4);
+    subtract(?output[0], ?output[0], ?top[0], ?TEST_ORDER[0], 4);
+    i = 0;
+    for (i < 4) {
+        if (output[i]:>u64 != right[i]:>u64) { ret 7; }
+        i = i + 1;
+    }
+    negate(?output[0], ?one[0], ?TEST_ORDER[0], 4);
+    i = 0;
+    for (i < 4) {
+        if (output[i]:>u64 != top[i]:>u64) { ret 8; }
+        i = i + 1;
+    }
+    ret 0;
+}
+
+val P384_PRIME: [6]u64 = [6]u64{
+    0x00000000FFFFFFFF, 0xFFFFFFFF00000000, 0xFFFFFFFFFFFFFFFE,
+    0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
+};
+val P384_FACTOR: u64    = 0x0000000100000001;
+val P384_R2:     [6]u64 = [6]u64{
+    0xFFFFFFFE00000001, 0x0000000200000000, 0xFFFFFFFE00000000,
+    0x0000000200000000, 0x0000000000000001, 0x0000000000000000
+};
+val P384_ORDER: [6]u64 = [6]u64{
+    0xECEC196ACCC52973, 0x581A0DB248B0A77A, 0xC7634D81F4372DDF,
+    0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
+};
+val P384_ORDER_FACTOR: u64    = 0x6ED46089E88FDC45;
+val P384_ORDER_R2:     [6]u64 = [6]u64{
+    0x2D319B2419B409A9, 0xFF3D81E5DF1AA419, 0xBC3E483AFCB82947,
+    0xD40D49174AAB1CC5, 0x3FB05B7A28266895, 0x0C84EE012B39BF21
+};
+
+fun test_equal6(value: *^u64, expected: *u64) u8 {
+    var i: usize = 0;
+    for (i < 6) {
+        if (value[i]:>u64 != expected[i]) { ret 0; }
+        i = i + 1;
+    }
+    ret 1;
+}
+
+# the six-limb ring, the loop form, against independent values mod the p-384
+# prime and order
+test "mont: six-limb products, squares and wide reductions match independent values" {
+    var left: [6]^u64 = [6]^u64{
+        0xDDA1494C73CF256D, 0xDB5B5FAB8F4D3E27, 0xC7FDE805EC99108D,
+        0x73AB48767734D7C1, 0xDAE445508201E2BD, 0x309D6B79965EDA32
+    };
+    var right: [6]^u64 = [6]^u64{
+        0xCDCC69292F45E678, 0x79CB9E86830C71C2, 0x9D2C67EDA13FFE79,
+        0x2FA91425CB008853, 0x7253EDC618187993, 0x244CAF9C4DABB481
+    };
+    val product: [6]u64 = [6]u64{
+        0xB20514ECF73520B1, 0x2C16A171C794EF40, 0xDE11A79CE9375870,
+        0x7DC4C282E231AAD7, 0x415E0F05921A3994, 0xEFE9A817A8DF71CB
+    };
+    val squared: [6]u64 = [6]u64{
+        0xD71A9497016DE795, 0xBB6C23232151BDAF, 0x3CB98639594F1990,
+        0x3FB34BD5442EC281, 0x8AF148374EA7AA37, 0x283E85581805FB2E
+    };
+    var output: [6]^u64;
+    multiply_values(?output[0], ?left[0], ?right[0], ?P384_PRIME[0], P384_FACTOR, ?P384_R2[0], 6);
+    if (test_equal6(?output[0], ?product[0]) == 0) { ret 1; }
+    var form: [6]^u64;
+    to_montgomery(?form[0], ?left[0], ?P384_PRIME[0], P384_FACTOR, ?P384_R2[0], 6);
+    square(?output[0], ?form[0], ?P384_PRIME[0], P384_FACTOR, 6);
+    from_montgomery(?output[0], ?output[0], ?P384_PRIME[0], P384_FACTOR, 6);
+    if (test_equal6(?output[0], ?squared[0]) == 0) { ret 2; }
+    var wide: [12]^u64 = [12]^u64{
+        0x89E7D15F17362F25, 0xE3EFF9C0CF44DD3F, 0xA26B7F62B1852F27,
+        0x986E86CB0AB8AB67, 0x656ABD72FB710734, 0x73F778AAF6FA5DB8,
+        0xBD299753A7677796, 0xA66B0D389D95847E, 0x9F8558A628518867,
+        0xD4EA65D003D71684, 0x102B938B8743FEB6, 0x09208A650F3EBDD3
+    };
+    val reduced: [6]u64 = [6]u64{
+        0x4E71B539984AF67C, 0x0D260AEB2E69316C, 0x4B326EF796796E41,
+        0xCC2AFA49F592C4DE, 0x290FF249BB0CF392, 0x7366FFD245BAD1E7
+    };
+    reduce_wide(?output[0], ?wide[0], ?P384_ORDER[0], P384_ORDER_FACTOR, ?P384_ORDER_R2[0], 6);
+    if (test_equal6(?output[0], ?reduced[0]) == 0) { ret 3; }
+    add(?output[0], ?left[0], ?right[0], ?P384_PRIME[0], 6);
+    subtract(?output[0], ?output[0], ?right[0], ?P384_PRIME[0], 6);
+    var i: usize = 0;
+    for (i < 6) {
+        if (output[i]:>u64 != left[i]:>u64) { ret 4; }
+        i = i + 1;
+    }
+    ret 0;
+}
+
+# the unrolled four-limb ring against the loop form on a deterministic sweep
+# mod the ed25519 order, so the two never drift apart
+test "mont: the unrolled four-limb ring agrees with the loop form" {
+    var state: u64   = 0x9E3779B97F4A7C15;
+    var round: usize = 0;
+    for (round < 256) {
+        var left:  [4]^u64;
+        var right: [4]^u64;
+        var i:     usize = 0;
+        for (i < 4) {
+            state = state * 6364136223846793005 + 1442695040888963407;
+            val l: u64 = state;
+            state = state * 6364136223846793005 + 1442695040888963407;
+            # the right operand and the square's value must sit below the modulus
+            var r: u64 = state;
+            if (i == 3) { r = r & 0x0FFFFFFFFFFFFFFF; }
+            left[i]  = l;
+            right[i] = r;
+            i        = i + 1;
+        }
+        var fast: [4]^u64;
+        var slow: [4]^u64;
+        multiply4(?fast[0], ?left[0], ?right[0], ?TEST_ORDER[0], TEST_FACTOR);
+        multiply_general(?slow[0], ?left[0], ?right[0], ?TEST_ORDER[0], TEST_FACTOR, 4);
+        i = 0;
+        for (i < 4) {
+            if (fast[i]:>u64 != slow[i]:>u64) { ret 1; }
+            i = i + 1;
+        }
+        square4(?fast[0], ?right[0], ?TEST_ORDER[0], TEST_FACTOR);
+        square_general(?slow[0], ?right[0], ?TEST_ORDER[0], TEST_FACTOR, 4);
+        i = 0;
+        for (i < 4) {
+            if (fast[i]:>u64 != slow[i]:>u64) { ret 2; }
+            i = i + 1;
+        }
+        add4(?fast[0], ?right[0], ?fast[0], ?TEST_ORDER[0]);
+        add_general(?slow[0], ?right[0], ?slow[0], ?TEST_ORDER[0], 4);
+        i = 0;
+        for (i < 4) {
+            if (fast[i]:>u64 != slow[i]:>u64) { ret 3; }
+            i = i + 1;
+        }
+        subtract4(?fast[0], ?fast[0], ?right[0], ?TEST_ORDER[0]);
+        subtract_general(?slow[0], ?slow[0], ?right[0], ?TEST_ORDER[0], 4);
+        i = 0;
+        for (i < 4) {
+            if (fast[i]:>u64 != slow[i]:>u64) { ret 4; }
+            i = i + 1;
+        }
+        round = round + 1;
+    }
     ret 0;
 }
