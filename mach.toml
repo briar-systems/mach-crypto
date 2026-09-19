@@ -1,6 +1,6 @@
 [project]
 id = "crypto"
-version = "0.17.0"
+version = "0.18.0"
 mach = "^5.9"
 src = "src"
 out = "out/{target.name}/{profile.name}"
