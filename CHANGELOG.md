@@ -4,6 +4,11 @@
 
 ## [0.18.0] - 2026-09-19
 
+### Changed
+
+- Dependencies: requires mach-std 6.0.0, selected by `version = "^6.0"`. The width-named constant-time comparisons are gone from std, so the 33 `ct.eq_u8` and `ct.eq_u64` sites are `ct.eq[u8]` and `ct.eq[u64]`. Each instance lowers to the same `cmp; sete; movzx` the removed functions did, and the release assembly of every module that uses them is unchanged apart from the instance symbol; nothing else in std's migration guide (sort, heap, map, set, buffer accounts) is used here. `mach = "^5.9"` is unchanged (#136).
+- `test/performance` pins std by tag itself, because a path dependency carries no pin for a dependency it selects by version and that tree is not committed (#136).
+
 ## [0.17.0] - 2026-09-19
 
 ### Performance
