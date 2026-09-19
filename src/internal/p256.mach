@@ -1,42 +1,48 @@
 # constant-shape secp256r1 arithmetic
 
+use crypto.internal.mont;
 use crypto.internal.p256_base;
-use crypto.internal.word;
 use std.crypto.ct;
 use std.types.size.usize;
 
-val WORD_MASK: u64 = 0xFFFFFFFF;
+# the field and the scalar ring are montgomery rings over four 64-bit limbs
+# (crypto.internal.mont): (modulus, -modulus^-1 mod 2^64, 2^512 mod modulus).
+# every field element inside a point is in montgomery form, times 2^256 mod p,
+# and the codecs convert at the edges. scalars stay in the ordinary domain
+val LIMBS: usize = 4;
 
-val PRIME: [8]u64 = [8]u64{
-    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000,
-    0x00000000, 0x00000000, 0x00000001, 0xFFFFFFFF
+val PRIME: [4]u64 = [4]u64{
+    0xFFFFFFFFFFFFFFFF, 0x00000000FFFFFFFF, 0x0000000000000000, 0xFFFFFFFF00000001
+};
+val PRIME_FACTOR: u64    = 0x0000000000000001;
+val PRIME_R2:     [4]u64 = [4]u64{
+    0x0000000000000003, 0xFFFFFFFBFFFFFFFF, 0xFFFFFFFFFFFFFFFE, 0x00000004FFFFFFFD
 };
 
-val ORDER: [8]u64 = [8]u64{
-    0xFC632551, 0xF3B9CAC2, 0xA7179E84, 0xBCE6FAAD,
-    0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF
+# 2^256 mod p, the montgomery form of one
+val FIELD_ONE: [4]u64 = [4]u64{
+    0x0000000000000001, 0xFFFFFFFF00000000, 0xFFFFFFFFFFFFFFFF, 0x00000000FFFFFFFE
 };
 
-val ORDER_R2: [8]u64 = [8]u64{
-    0xBE79EEA2, 0x83244C95, 0x49BD6FA6, 0x4699799C,
-    0x2B6BEC59, 0x2845B239, 0xF3D95620, 0x66E12D94
+val ORDER: [4]u64 = [4]u64{
+    0xF3B9CAC2FC632551, 0xBCE6FAADA7179E84, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFF00000000
+};
+val ORDER_FACTOR: u64    = 0xCCD1C8AAEE00BC4F;
+val ORDER_R2:     [4]u64 = [4]u64{
+    0x83244C95BE79EEA2, 0x4699799C49BD6FA6, 0x2845B2392B6BEC59, 0x66E12D94F3D95620
 };
 
-val ORDER_MONT_FACTOR: u64 = 0xEE00BC4F;
-
-val CURVE_B: [8]u64 = [8]u64{
-    0x27D2604B, 0x3BCE3C3E, 0xCC53B0F6, 0x651D06B0,
-    0x769886BC, 0xB3EBBD55, 0xAA3A93E7, 0x5AC635D8
+# b and the generator in montgomery form
+val CURVE_B: [4]u64 = [4]u64{
+    0xD89CDF6229C4BDDF, 0xACF005CD78843090, 0xE5A220ABF7212ED6, 0xDC30061D04874834
 };
 
-val GENERATOR_X: [8]u64 = [8]u64{
-    0xD898C296, 0xF4A13945, 0x2DEB33A0, 0x77037D81,
-    0x63A440F2, 0xF8BCE6E5, 0xE12C4247, 0x6B17D1F2
+val GENERATOR_X: [4]u64 = [4]u64{
+    0x79E730D418A9143C, 0x75BA95FC5FEDB601, 0x79FB732B77622510, 0x18905F76A53755C6
 };
 
-val GENERATOR_Y: [8]u64 = [8]u64{
-    0x37BF51F5, 0xCBB64068, 0x6B315ECE, 0x2BCE3357,
-    0x7C0F9E16, 0x8EE7EB4A, 0xFE1A7F9B, 0x4FE342E2
+val GENERATOR_Y: [4]u64 = [4]u64{
+    0xDDF25357CE95560A, 0x8B4AB8E4BA19E45C, 0xD2E88688DD21F325, 0x8571FF1825885D85
 };
 
 # one step of a public addition chain: reg[dst] = reg[src]^(2^squarings) * reg[factor]
@@ -123,7 +129,7 @@ val SCALAR_CHAIN: [SCALAR_STEPS]ChainStep = [SCALAR_STEPS]ChainStep{
 };
 
 pub rec UInt {
-    limb: [8]^u64;
+    limb: [4]^u64;
 }
 
 pub rec Point {
@@ -135,7 +141,7 @@ pub rec Point {
 #[oblivious]
 pub fun destroy_uint(value: *UInt) {
     if (value == nil) { ret; }
-    ct.zeroize((?value.limb[0]):~*^u8, 64);
+    ct.zeroize((?value.limb[0]):~*^u8, 32);
 }
 
 #[oblivious]
@@ -154,25 +160,16 @@ fun nonzero_bit(value: ^u64) ^u8 {
 
 #[oblivious]
 pub fun is_zero(value: *UInt) ^u8 {
-    var combined: ^u64  = 0;
-    var i:        usize = 0;
-    for (i < 8) {
-        combined = combined | value.limb[i];
-        i        = i + 1;
-    }
-    val result: ^u8 = 1 ^ nonzero_bit(combined);
+    var combined: ^u64 = value.limb[0] | value.limb[1] | value.limb[2] | value.limb[3];
+    val result:   ^u8  = 1 ^ nonzero_bit(combined);
     combined = 0;
     ret result;
 }
 
 #[oblivious]
 pub fun equal(left: *UInt, right: *UInt) ^u8 {
-    var difference: ^u64  = 0;
-    var i:          usize = 0;
-    for (i < 8) {
-        difference = difference | (left.limb[i] ^ right.limb[i]);
-        i          = i + 1;
-    }
+    var difference: ^u64 = (left.limb[0] ^ right.limb[0]) | (left.limb[1] ^ right.limb[1]) |
+        (left.limb[2] ^ right.limb[2]) | (left.limb[3] ^ right.limb[3]);
     val result: ^u8 = 1 ^ nonzero_bit(difference);
     difference = 0;
     ret result;
@@ -180,294 +177,73 @@ pub fun equal(left: *UInt, right: *UInt) ^u8 {
 
 #[oblivious]
 pub fun copy(output: *UInt, input: *UInt) {
-    var i: usize = 0;
-    for (i < 8) {
-        output.limb[i] = input.limb[i];
-        i              = i + 1;
-    }
+    output.limb[0] = input.limb[0];
+    output.limb[1] = input.limb[1];
+    output.limb[2] = input.limb[2];
+    output.limb[3] = input.limb[3];
 }
 
 #[oblivious]
 fun copy_constant(output: *UInt, input: *u64) {
-    var i: usize = 0;
-    for (i < 8) {
-        output.limb[i] = input[i];
-        i              = i + 1;
-    }
+    output.limb[0] = input[0];
+    output.limb[1] = input[1];
+    output.limb[2] = input[2];
+    output.limb[3] = input[3];
 }
 
 #[oblivious]
 pub fun set_small(output: *UInt, value: u64) {
     output.limb[0] = value;
-    var i: usize = 1;
-    for (i < 8) {
-        output.limb[i] = 0;
-        i              = i + 1;
-    }
+    output.limb[1] = 0;
+    output.limb[2] = 0;
+    output.limb[3] = 0;
+}
+
+# the field's one, in montgomery form
+#[oblivious]
+pub fun field_one(output: *UInt) {
+    copy_constant(output, (?FIELD_ONE[0]):~*u64);
 }
 
 #[oblivious]
 pub fun select(output: *UInt, left: *UInt, right: *UInt, choose_right: ^u8) {
-    val mask: ^u64  = 0 - choose_right::^u64;
-    var i:    usize = 0;
-    for (i < 8) {
-        output.limb[i] = (left.limb[i] & ~mask) | (right.limb[i] & mask);
-        i              = i + 1;
-    }
-}
-
-#[oblivious]
-fun less_than_modulus(value: *UInt, modulus: *u64) ^u8 {
-    var borrow: ^u64  = 0;
-    var i:      usize = 0;
-    for (i < 8) {
-        val difference: ^u64 = value.limb[i] - modulus[i] - borrow;
-        borrow = difference >> 63;
-        i      = i + 1;
-    }
-    val result: ^u8 = borrow::^u8;
-    borrow = 0;
-    ret result;
-}
-
-#[oblivious]
-fun add_mod(output: *UInt, left: *UInt, right: *UInt, modulus: *u64) {
-    var sum:     UInt;
-    var reduced: UInt;
-    var carry:   ^u64  = 0;
-    var i:       usize = 0;
-    for (i < 8) {
-        val word: ^u64 = left.limb[i] + right.limb[i] + carry;
-        sum.limb[i] = word & WORD_MASK;
-        carry       = word >> 32;
-        i           = i + 1;
-    }
-    var borrow: ^u64 = 0;
-    i = 0;
-    for (i < 8) {
-        val difference: ^u64 = sum.limb[i] - modulus[i] - borrow;
-        reduced.limb[i] = difference & WORD_MASK;
-        borrow          = difference >> 63;
-        i               = i + 1;
-    }
-    val use_reduced: ^u8 = (carry | (borrow ^ 1))::^u8;
-    select(output, ?sum, ?reduced, use_reduced);
-    carry  = 0;
-    borrow = 0;
-    destroy_uint(?sum);
-    destroy_uint(?reduced);
-}
-
-#[oblivious]
-fun subtract_mod(output: *UInt, left: *UInt, right: *UInt, modulus: *u64) {
-    var difference: UInt;
-    var borrow:     ^u64  = 0;
-    var i:          usize = 0;
-    for (i < 8) {
-        val word: ^u64 = left.limb[i] - right.limb[i] - borrow;
-        difference.limb[i] = word & WORD_MASK;
-        borrow             = word >> 63;
-        i                  = i + 1;
-    }
-    val mask:  ^u64 = 0 - borrow;
-    var carry: ^u64 = 0;
-    i = 0;
-    for (i < 8) {
-        val word: ^u64 = difference.limb[i] + (modulus[i] & mask) + carry;
-        output.limb[i] = word & WORD_MASK;
-        carry          = word >> 32;
-        i              = i + 1;
-    }
-    borrow = 0;
-    carry  = 0;
-    destroy_uint(?difference);
-}
-
-#[oblivious]
-#[inline]
-fun accumulate(product: *^u64, index: usize, word: ^u64) {
-    product[index]     = product[index] + (word & WORD_MASK);
-    product[index + 1] = product[index + 1] + (word >> 32);
-}
-
-# reduce a 512-bit product of 32-bit words modulo p with the nist solinas identity
-#
-# the product words may carry lazily above 32 bits. every step is additions,
-# subtractions and fixed shifts, so the reduction has one shape for every input.
-#[oblivious]
-fun reduce_field(output: *UInt, product: *^u64) {
-    var c:     [16]^i64;
-    var carry: ^u64  = 0;
-    var i:     usize = 0;
-    for (i < 16) {
-        val word: ^u64 = product[i] + carry;
-        c[i]  = (word & WORD_MASK)::^i64;
-        carry = word >> 32;
-        i     = i + 1;
-    }
-
-    var w: [8]^i64;
-    w[0] = c[0] + c[8] + c[9] - c[11] - c[12] - c[13] - c[14];
-    w[1] = c[1] + c[9] + c[10] - c[12] - c[13] - c[14] - c[15];
-    w[2] = c[2] + c[10] + c[11] - c[13] - c[14] - c[15];
-    w[3] = c[3] + (c[11] << 1) + (c[12] << 1) + c[13] - c[15] - c[8] - c[9];
-    w[4] = c[4] + (c[12] << 1) + (c[13] << 1) + c[14] - c[9] - c[10];
-    w[5] = c[5] + (c[13] << 1) + (c[14] << 1) + c[15] - c[10] - c[11];
-    w[6] = c[6] + c[14] + (c[14] << 1) + (c[15] << 1) + c[13] - c[8] - c[9];
-    w[7] = c[7] + c[15] + (c[15] << 1) + c[8] - c[10] - c[11] - c[12] - c[13];
-
-    # fold the signed overflow through 2^256 = 2^224 - 2^192 - 2^96 + 1. the second
-    # fold leaves a value in [0, 2^256), so the third pass only normalizes words
-    var fold: usize = 0;
-    for (fold < 3) {
-        var signed_carry: ^i64 = 0;
-        i = 0;
-        for (i < 8) {
-            val word: ^i64 = w[i] + signed_carry;
-            w[i]         = word & 0xFFFFFFFF;
-            signed_carry = word >> 32;
-            i            = i + 1;
-        }
-        w[0]         = w[0] + signed_carry;
-        w[3]         = w[3] - signed_carry;
-        w[6]         = w[6] - signed_carry;
-        w[7]         = w[7] + signed_carry;
-        signed_carry = 0;
-        fold         = fold + 1;
-    }
-
-    var value: UInt;
-    i = 0;
-    for (i < 8) {
-        value.limb[i] = w[i]::^u64;
-        i             = i + 1;
-    }
-    var reduced: UInt;
-    var borrow:  ^u64 = 0;
-    i = 0;
-    for (i < 8) {
-        val difference: ^u64 = value.limb[i] - PRIME[i] - borrow;
-        reduced.limb[i] = difference & WORD_MASK;
-        borrow          = difference >> 63;
-        i               = i + 1;
-    }
-    select(output, ?value, ?reduced, (borrow ^ 1)::^u8);
-    carry  = 0;
-    borrow = 0;
-    ct.zeroize((?c[0]):~*^u8, 128);
-    ct.zeroize((?w[0]):~*^u8, 64);
-    destroy_uint(?value);
-    destroy_uint(?reduced);
-}
-
-#[oblivious]
-fun montgomery_multiply(output: *UInt, left: *UInt, right: *UInt,
-    modulus: *u64, factor: u64) {
-    var temporary: [9]^u64;
-    var i:         usize = 0;
-    for (i < 9) {
-        temporary[i] = 0;
-        i            = i + 1;
-    }
-    i = 0;
-    for (i < 8) {
-        var carry: ^u64  = 0;
-        var j:     usize = 0;
-        for (j < 8) {
-            val product: ^u64 = temporary[j] +
-                word.multiply(left.limb[j], right.limb[i], 32) + carry;
-            temporary[j] = product & WORD_MASK;
-            carry        = product >> 32;
-            j            = j + 1;
-        }
-        temporary[8] = temporary[8] + carry;
-
-        val multiplier: ^u64 =
-            word.multiply(temporary[0], factor, 32) & WORD_MASK;
-        carry = 0;
-        j     = 0;
-        for (j < 8) {
-            val product: ^u64 = temporary[j] +
-                word.multiply(multiplier, modulus[j], 32) + carry;
-            if (j > 0) { temporary[j - 1] = product & WORD_MASK; }
-            carry = product >> 32;
-            j     = j + 1;
-        }
-        val high: ^u64 = temporary[8] + carry;
-        temporary[7] = high & WORD_MASK;
-        temporary[8] = high >> 32;
-        carry        = 0;
-        i            = i + 1;
-    }
-
-    var reduced: UInt;
-    var borrow:  ^u64 = 0;
-    i = 0;
-    for (i < 8) {
-        val difference: ^u64 = temporary[i] - modulus[i] - borrow;
-        reduced.limb[i] = difference & WORD_MASK;
-        borrow          = difference >> 63;
-        i               = i + 1;
-    }
-    val use_reduced: ^u8 = (temporary[8] | (borrow ^ 1))::^u8;
-    var unreduced:   UInt;
-    i = 0;
-    for (i < 8) {
-        unreduced.limb[i] = temporary[i];
-        i                 = i + 1;
-    }
-    select(output, ?unreduced, ?reduced, use_reduced);
-    borrow = 0;
-    ct.zeroize((?temporary[0]):~*^u8, 72);
-    destroy_uint(?unreduced);
-    destroy_uint(?reduced);
+    val mask: ^u64 = 0 - choose_right::^u64;
+    output.limb[0] = (left.limb[0] & ~mask) | (right.limb[0] & mask);
+    output.limb[1] = (left.limb[1] & ~mask) | (right.limb[1] & mask);
+    output.limb[2] = (left.limb[2] & ~mask) | (right.limb[2] & mask);
+    output.limb[3] = (left.limb[3] & ~mask) | (right.limb[3] & mask);
 }
 
 #[oblivious]
 pub fun field_add(output: *UInt, left: *UInt, right: *UInt) {
-    add_mod(output, left, right, (?PRIME[0]):~*u64);
+    mont.add(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], LIMBS);
 }
 
 #[oblivious]
 pub fun field_subtract(output: *UInt, left: *UInt, right: *UInt) {
-    subtract_mod(output, left, right, (?PRIME[0]):~*u64);
+    mont.subtract(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], LIMBS);
 }
 
 #[oblivious]
 pub fun field_multiply(output: *UInt, left: *UInt, right: *UInt) {
-    var product: [16]^u64;
-    var i:       usize = 0;
-    for (i < 8) {
-        var j: usize = 0;
-        for (j < 8) {
-            accumulate(?product[0], i + j,
-                word.multiply(left.limb[i], right.limb[j], 32));
-            j = j + 1;
-        }
-        i = i + 1;
-    }
-    reduce_field(output, ?product[0]);
-    ct.zeroize((?product[0]):~*^u8, 128);
+    mont.multiply(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], PRIME_FACTOR,
+        LIMBS);
 }
 
 #[oblivious]
 pub fun field_square(output: *UInt, input: *UInt) {
-    var product: [16]^u64;
-    var i:       usize = 0;
-    for (i < 8) {
-        accumulate(?product[0], i + i,
-            word.multiply(input.limb[i], input.limb[i], 32));
-        var j: usize = i + 1;
-        for (j < 8) {
-            val cross: ^u64 = word.multiply(input.limb[i], input.limb[j], 32);
-            accumulate(?product[0], i + j, cross);
-            accumulate(?product[0], i + j, cross);
-            j = j + 1;
-        }
-        i = i + 1;
-    }
-    reduce_field(output, ?product[0]);
-    ct.zeroize((?product[0]):~*^u8, 128);
+    mont.square(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, LIMBS);
+}
+
+#[oblivious]
+pub fun field_to_montgomery(output: *UInt, input: *UInt) {
+    mont.to_montgomery(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, ?PRIME_R2[0],
+        LIMBS);
+}
+
+#[oblivious]
+pub fun field_from_montgomery(output: *UInt, input: *UInt) {
+    mont.from_montgomery(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, LIMBS);
 }
 
 # invert by fermat's little theorem, raising to p - 2 along FIELD_CHAIN
@@ -502,31 +278,22 @@ pub fun field_inverse(output: *UInt, input: *UInt) {
 
 #[oblivious]
 pub fun scalar_add(output: *UInt, left: *UInt, right: *UInt) {
-    add_mod(output, left, right, (?ORDER[0]):~*u64);
+    mont.add(?output.limb[0], ?left.limb[0], ?right.limb[0], ?ORDER[0], LIMBS);
 }
 
 # multiply canonical scalars modulo n, in and out of the ordinary domain
 #[oblivious]
 pub fun scalar_multiply_values(output: *UInt, left: *UInt, right: *UInt) {
-    var right_montgomery: UInt;
-    var constant:         UInt;
-    copy_constant(?constant, (?ORDER_R2[0]):~*u64);
-    montgomery_multiply(?right_montgomery, right, ?constant,
-        (?ORDER[0]):~*u64, ORDER_MONT_FACTOR);
-    montgomery_multiply(output, left, ?right_montgomery, (?ORDER[0]):~*u64,
-        ORDER_MONT_FACTOR);
-    destroy_uint(?right_montgomery);
-    destroy_uint(?constant);
+    mont.multiply_values(?output.limb[0], ?left.limb[0], ?right.limb[0], ?ORDER[0],
+        ORDER_FACTOR, ?ORDER_R2[0], LIMBS);
 }
 
 # invert modulo n in the montgomery domain, raising to n - 2 along SCALAR_CHAIN
 #[oblivious]
 pub fun scalar_inverse(output: *UInt, input: *UInt) {
     var registers: [SCALAR_REGISTERS]UInt;
-    var constant:  UInt;
-    copy_constant(?constant, (?ORDER_R2[0]):~*u64);
-    montgomery_multiply(?registers[0], input, ?constant, (?ORDER[0]):~*u64,
-        ORDER_MONT_FACTOR);
+    mont.to_montgomery(?registers[0].limb[0], ?input.limb[0], ?ORDER[0], ORDER_FACTOR,
+        ?ORDER_R2[0], LIMBS);
     var step: usize = 0;
     for (step < SCALAR_STEPS) {
         val current: ChainStep = SCALAR_CHAIN[step];
@@ -534,22 +301,19 @@ pub fun scalar_inverse(output: *UInt, input: *UInt) {
         copy(?value, ?registers[current.src]);
         var count: u8 = 0;
         for (count < current.squarings) {
-            montgomery_multiply(?value, ?value, ?value, (?ORDER[0]):~*u64,
-                ORDER_MONT_FACTOR);
+            mont.square(?value.limb[0], ?value.limb[0], ?ORDER[0], ORDER_FACTOR, LIMBS);
             count = count + 1;
         }
         if (current.factor != NO_FACTOR) {
-            montgomery_multiply(?value, ?value, ?registers[current.factor],
-                (?ORDER[0]):~*u64, ORDER_MONT_FACTOR);
+            mont.multiply(?value.limb[0], ?value.limb[0], ?registers[current.factor].limb[0],
+                ?ORDER[0], ORDER_FACTOR, LIMBS);
         }
         copy(?registers[current.dst], ?value);
         destroy_uint(?value);
         step = step + 1;
     }
-    set_small(?constant, 1);
-    montgomery_multiply(output, ?registers[SCALAR_RESULT], ?constant,
-        (?ORDER[0]):~*u64, ORDER_MONT_FACTOR);
-    destroy_uint(?constant);
+    mont.from_montgomery(?output.limb[0], ?registers[SCALAR_RESULT].limb[0], ?ORDER[0],
+        ORDER_FACTOR, LIMBS);
     var index: usize = 0;
     for (index < SCALAR_REGISTERS) {
         destroy_uint(?registers[index]);
@@ -559,75 +323,79 @@ pub fun scalar_inverse(output: *UInt, input: *UInt) {
 
 #[oblivious]
 pub fun reduce_scalar_once(value: *UInt) {
-    var reduced: UInt;
-    var borrow:  ^u64  = 0;
-    var i:       usize = 0;
-    for (i < 8) {
-        val difference: ^u64 = value.limb[i] - ORDER[i] - borrow;
-        reduced.limb[i] = difference & WORD_MASK;
-        borrow          = difference >> 63;
-        i               = i + 1;
-    }
-    select(value, ?reduced, value, borrow::^u8);
-    borrow = 0;
-    destroy_uint(?reduced);
+    var order: UInt;
+    copy_constant(?order, (?ORDER[0]):~*u64);
+    # value - n when that does not borrow, else value: the ring subtract adds
+    # n back exactly when the subtraction borrows
+    mont.subtract(?value.limb[0], ?value.limb[0], ?order.limb[0], ?ORDER[0], LIMBS);
+    destroy_uint(?order);
 }
 
 #[oblivious]
 pub fun decode_secret(output: *UInt, input: *^u8) {
-    var word: usize = 0;
-    for (word < 8) {
-        val offset: usize = 28 - (word << 2);
-        output.limb[word] = (input[offset]::^u64 << 24) |
-            (input[offset + 1]::^u64 << 16) |
-            (input[offset + 2]::^u64 << 8) | input[offset + 3]::^u64;
-        word = word + 1;
+    var limb: usize = 0;
+    for (limb < 4) {
+        val offset: usize = 24 - (limb << 3);
+        output.limb[limb] = (input[offset]::^u64 << 56) | (input[offset + 1]::^u64 << 48) |
+            (input[offset + 2]::^u64 << 40) | (input[offset + 3]::^u64 << 32) |
+            (input[offset + 4]::^u64 << 24) | (input[offset + 5]::^u64 << 16) |
+            (input[offset + 6]::^u64 << 8) | input[offset + 7]::^u64;
+        limb = limb + 1;
     }
 }
 
 #[oblivious]
 pub fun decode_public(output: *UInt, input: *u8, base: usize) {
-    var word: usize = 0;
-    for (word < 8) {
-        val offset: usize = 28 - (word << 2);
-        output.limb[word] = (input[base + offset]::u64 << 24) |
-            (input[base + offset + 1]::u64 << 16) |
-            (input[base + offset + 2]::u64 << 8) | input[base + offset + 3]::u64;
-        word = word + 1;
+    var limb: usize = 0;
+    for (limb < 4) {
+        val offset: usize = base + 24 - (limb << 3);
+        output.limb[limb] = (input[offset]::u64 << 56) | (input[offset + 1]::u64 << 48) |
+            (input[offset + 2]::u64 << 40) | (input[offset + 3]::u64 << 32) |
+            (input[offset + 4]::u64 << 24) | (input[offset + 5]::u64 << 16) |
+            (input[offset + 6]::u64 << 8) | input[offset + 7]::u64;
+        limb = limb + 1;
     }
 }
 
 #[oblivious]
 pub fun encode_secret(output: *^u8, input: *UInt) {
-    var word: usize = 0;
-    for (word < 8) {
-        val offset: usize = 28 - (word << 2);
-        val value:  ^u64  = input.limb[word];
-        output[offset]     = (value >> 24)::^u8;
-        output[offset + 1] = (value >> 16)::^u8;
-        output[offset + 2] = (value >> 8)::^u8;
-        output[offset + 3] = value::^u8;
-        word               = word + 1;
+    var limb: usize = 0;
+    for (limb < 4) {
+        val offset: usize = 24 - (limb << 3);
+        val value:  ^u64  = input.limb[limb];
+        output[offset]     = (value >> 56)::^u8;
+        output[offset + 1] = (value >> 48)::^u8;
+        output[offset + 2] = (value >> 40)::^u8;
+        output[offset + 3] = (value >> 32)::^u8;
+        output[offset + 4] = (value >> 24)::^u8;
+        output[offset + 5] = (value >> 16)::^u8;
+        output[offset + 6] = (value >> 8)::^u8;
+        output[offset + 7] = value::^u8;
+        limb               = limb + 1;
     }
 }
 
 #[oblivious]
 pub fun encode_public(output: *u8, base: usize, input: *UInt) {
-    var word: usize = 0;
-    for (word < 8) {
-        val offset: usize = 28 - (word << 2);
-        val value:  ^u64  = input.limb[word];
-        output[base + offset]     = (value >> 24)::^u8:>u8;
-        output[base + offset + 1] = (value >> 16)::^u8:>u8;
-        output[base + offset + 2] = (value >> 8)::^u8:>u8;
-        output[base + offset + 3] = value::^u8:>u8;
-        word                      = word + 1;
+    var limb: usize = 0;
+    for (limb < 4) {
+        val offset: usize = base + 24 - (limb << 3);
+        val value:  ^u64  = input.limb[limb];
+        output[offset]     = (value >> 56)::^u8:>u8;
+        output[offset + 1] = (value >> 48)::^u8:>u8;
+        output[offset + 2] = (value >> 40)::^u8:>u8;
+        output[offset + 3] = (value >> 32)::^u8:>u8;
+        output[offset + 4] = (value >> 24)::^u8:>u8;
+        output[offset + 5] = (value >> 16)::^u8:>u8;
+        output[offset + 6] = (value >> 8)::^u8:>u8;
+        output[offset + 7] = value::^u8:>u8;
+        limb               = limb + 1;
     }
 }
 
 #[oblivious]
 pub fun valid_scalar(value: *UInt) ^u8 {
-    ret less_than_modulus(value, (?ORDER[0]):~*u64) & (is_zero(value) ^ 1);
+    ret mont.less_than(?value.limb[0], ?ORDER[0], LIMBS) & (is_zero(value) ^ 1);
 }
 
 #[oblivious]
@@ -647,7 +415,7 @@ fun point_select(output: *Point, left: *Point, right: *Point, choose_right: ^u8)
 #[oblivious]
 pub fun point_infinity(output: *Point) {
     set_small(?output.x, 0);
-    set_small(?output.y, 1);
+    field_one(?output.y);
     set_small(?output.z, 0);
 }
 
@@ -655,7 +423,7 @@ pub fun point_infinity(output: *Point) {
 pub fun generator(output: *Point) {
     copy_constant(?output.x, (?GENERATOR_X[0]):~*u64);
     copy_constant(?output.y, (?GENERATOR_Y[0]):~*u64);
-    set_small(?output.z, 1);
+    field_one(?output.z);
 }
 
 #[oblivious]
@@ -839,8 +607,8 @@ pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
         point_double(?result, ?result);
         point_double(?result, ?result);
         point_double(?result, ?result);
-        val limb_index: usize = window >> 3;
-        val shift:      u64   = ((window & 7) * 4)::u64;
+        val limb_index: usize = window >> 4;
+        val shift:      u64   = ((window & 15) * 4)::u64;
         val digit:      ^u64  = (reduced.limb[limb_index] >> shift) & 15;
         point_infinity(?selected);
         index = 1;
@@ -867,11 +635,11 @@ pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
 # or the affine table entry for digit * 16^window * G into x and y under mask
 #[oblivious]
 fun accumulate_entry(x: *UInt, y: *UInt, window: u64, digit: u64, mask: ^u64) {
-    val base: usize = ((window * p256_base.DIGITS + digit - 1) * 16)::usize;
+    val base: usize = ((window * p256_base.DIGITS + digit - 1) * 8)::usize;
     var i:    usize = 0;
-    for (i < 8) {
-        x.limb[i] = x.limb[i] | (p256_base.TABLE[base + i]::u64 & mask);
-        y.limb[i] = y.limb[i] | (p256_base.TABLE[base + 8 + i]::u64 & mask);
+    for (i < 4) {
+        x.limb[i] = x.limb[i] | (p256_base.TABLE[base + i] & mask);
+        y.limb[i] = y.limb[i] | (p256_base.TABLE[base + 4 + i] & mask);
         i         = i + 1;
     }
 }
@@ -953,12 +721,12 @@ pub fun scalar_multiply_base(output: *Point, scalar: *UInt) {
     point_infinity(?result);
     var window: u64 = 0;
     for (window < p256_base.WINDOWS) {
-        val limb_index: usize = (window >> 3)::usize;
-        val shift:      u64   = (window & 7) * 4;
+        val limb_index: usize = (window >> 4)::usize;
+        val shift:      u64   = (window & 15) * 4;
         val digit:      ^u64  = (reduced.limb[limb_index] >> shift) & 15;
         set_small(?lifted.x, 0);
         set_small(?lifted.y, 0);
-        set_small(?lifted.z, 1);
+        field_one(?lifted.z);
         var candidate: u64 = 1;
         for (candidate <= p256_base.DIGITS) {
             val mask: ^u64 = 0 - ct.eq[u64](digit, candidate)::^u64;
@@ -989,6 +757,8 @@ pub fun to_affine(x: *UInt, y: *UInt, point: *Point) {
     field_multiply(?inverse_cubed, ?inverse_squared, ?inverse);
     field_multiply(x, ?point.x, ?inverse_squared);
     field_multiply(y, ?point.y, ?inverse_cubed);
+    field_from_montgomery(x, x);
+    field_from_montgomery(y, y);
     destroy_uint(?inverse);
     destroy_uint(?inverse_squared);
     destroy_uint(?inverse_cubed);
@@ -998,12 +768,14 @@ pub fun to_affine(x: *UInt, y: *UInt, point: *Point) {
 pub fun parse_point(output: *Point, input: *u8) ^u8 {
     decode_public(?output.x, input, 1);
     decode_public(?output.y, input, 33);
-    set_small(?output.z, 1);
-    val x_canonical: ^u8 = less_than_modulus(?output.x, (?PRIME[0]):~*u64);
-    val y_canonical: ^u8 = less_than_modulus(?output.y, (?PRIME[0]):~*u64);
-    var left:        UInt;
-    var right:       UInt;
-    var temporary:   UInt;
+    field_one(?output.z);
+    val x_canonical: ^u8 = mont.less_than(?output.x.limb[0], ?PRIME[0], LIMBS);
+    val y_canonical: ^u8 = mont.less_than(?output.y.limb[0], ?PRIME[0], LIMBS);
+    field_to_montgomery(?output.x, ?output.x);
+    field_to_montgomery(?output.y, ?output.y);
+    var left:      UInt;
+    var right:     UInt;
+    var temporary: UInt;
     field_square(?left, ?output.y);
     field_square(?right, ?output.x);
     field_multiply(?right, ?right, ?output.x);
@@ -1019,28 +791,43 @@ pub fun parse_point(output: *Point, input: *u8) ^u8 {
     ret x_canonical & y_canonical & on_curve;
 }
 
-test "p256 internal: constants have canonical low words" {
-    if (PRIME[0] != 0xFFFFFFFF || ORDER[0] != 0xFC632551)             { ret 1; }
-    if (GENERATOR_X[7] != 0x6B17D1F2 || GENERATOR_Y[0] != 0x37BF51F5) { ret 2; }
+test "p256 internal: constants are the montgomery forms of the nist values" {
+    if (PRIME[0] != 0xFFFFFFFFFFFFFFFF || ORDER[0] != 0xF3B9CAC2FC632551) { ret 1; }
+    var generator_x: UInt;
+    var generator_y: UInt;
+    var b:           UInt;
+    copy_constant(?generator_x, (?GENERATOR_X[0]):~*u64);
+    copy_constant(?generator_y, (?GENERATOR_Y[0]):~*u64);
+    copy_constant(?b, (?CURVE_B[0]):~*u64);
+    field_from_montgomery(?generator_x, ?generator_x);
+    field_from_montgomery(?generator_y, ?generator_y);
+    field_from_montgomery(?b, ?b);
+    if (generator_x.limb[3]:>u64 != 0x6B17D1F2E12C4247 || generator_x.limb[0]:>u64 != 0xF4A13945D898C296) { ret 2; }
+    if (generator_y.limb[3]:>u64 != 0x4FE342E2FE1A7F9B || generator_y.limb[0]:>u64 != 0xCBB6406837BF51F5) { ret 3; }
+    if (b.limb[3]:>u64 != 0x5AC635D8AA3A93E7 || b.limb[0]:>u64 != 0x3BCE3C3E27D2604B)                     { ret 4; }
+    var one: UInt;
+    field_one(?one);
+    field_from_montgomery(?one, ?one);
+    if (one.limb[0]:>u64 != 1 || one.limb[1]:>u64 != 0 || one.limb[2]:>u64 != 0 || one.limb[3]:>u64 != 0) { ret 5; }
     ret 0;
 }
 
-# run a chain over exponents instead of field elements, as 32-bit words
+# run a chain over exponents instead of field elements, as 64-bit words
 fun chain_exponent(chain: *ChainStep, steps: usize, result: usize, output: *u64) {
-    var exponents: [16][9]u64;
+    var exponents: [16][5]u64;
     exponents[0][0] = 1;
     var step: usize = 0;
     for (step < steps) {
         val current: ChainStep = chain[step];
-        var value:   [9]u64    = exponents[current.src];
+        var value:   [5]u64    = exponents[current.src];
         var count:   u8        = 0;
         for (count < current.squarings) {
             var carry: u64   = 0;
             var i:     usize = 0;
-            for (i < 9) {
+            for (i < 5) {
                 val shifted: u64 = (value[i] << 1) | carry;
-                carry    = shifted >> 32;
-                value[i] = shifted & WORD_MASK;
+                carry    = value[i] >> 63;
+                value[i] = shifted;
                 i        = i + 1;
             }
             count = count + 1;
@@ -1048,10 +835,10 @@ fun chain_exponent(chain: *ChainStep, steps: usize, result: usize, output: *u64)
         if (current.factor != NO_FACTOR) {
             var carry: u64   = 0;
             var i:     usize = 0;
-            for (i < 9) {
-                val sum: u64 = value[i] + exponents[current.factor][i] + carry;
-                carry    = sum >> 32;
-                value[i] = sum & WORD_MASK;
+            for (i < 5) {
+                val sum: u128 = value[i]::u128 + exponents[current.factor][i]::u128 + carry::u128;
+                carry    = (sum >> 64)::u64;
+                value[i] = sum::u64;
                 i        = i + 1;
             }
         }
@@ -1059,26 +846,26 @@ fun chain_exponent(chain: *ChainStep, steps: usize, result: usize, output: *u64)
         step                   = step + 1;
     }
     var i: usize = 0;
-    for (i < 9) {
+    for (i < 5) {
         output[i] = exponents[result][i];
         i         = i + 1;
     }
 }
 
-# modulus - 2 as 32-bit words with a zero ninth word
+# modulus - 2 as 64-bit words with a zero fifth word
 fun minus_two(modulus: *u64, output: *u64) {
     output[0] = modulus[0] - 2;
     var i: usize = 1;
-    for (i < 8) {
+    for (i < 4) {
         output[i] = modulus[i];
         i         = i + 1;
     }
-    output[8] = 0;
+    output[4] = 0;
 }
 
 fun words_equal(left: *u64, right: *u64) u8 {
     var i: usize = 0;
-    for (i < 9) {
+    for (i < 5) {
         if (left[i] != right[i]) { ret 0; }
         i = i + 1;
     }
@@ -1086,8 +873,8 @@ fun words_equal(left: *u64, right: *u64) u8 {
 }
 
 test "p256 internal: inversion chains raise to p - 2 and n - 2" {
-    var actual:   [9]u64;
-    var expected: [9]u64;
+    var actual:   [5]u64;
+    var expected: [5]u64;
     chain_exponent(?FIELD_CHAIN[0], FIELD_STEPS, FIELD_RESULT, ?actual[0]);
     minus_two((?PRIME[0]):~*u64, ?expected[0]);
     if (words_equal(?actual[0], ?expected[0]) != 1) { ret 1; }
@@ -1112,6 +899,8 @@ test "p256 internal: every comb table entry is digit * 16^window * G" {
             var z2:     UInt;
             var z3:     UInt;
             var scaled: UInt;
+            set_small(?x, 0);
+            set_small(?y, 0);
             accumulate_entry(?x, ?y, window, digit, 0 - 1);
             field_square(?z2, ?multiple.z);
             field_multiply(?z3, ?z2, ?multiple.z);

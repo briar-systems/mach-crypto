@@ -265,20 +265,23 @@ accepts an exact 97-byte uncompressed secp384r1 public key and strict DER
 signature of at most 104 bytes. It validates canonical coordinates, the curve
 equation, and scalar ranges. P-384 private signing and ECDH are not exposed.
 
-Field and scalar values use fixed eight-limb storage. Multiplication uses a
-fixed 256-step masked shift-and-add operation, inversions use fixed public
-exponents, and scalar multiplication uses a fixed 256-step point loop without
-secret-indexed tables. Private scalars, nonce state, hashes, field and scalar
-temporaries, and projective points are explicitly zeroized.
+Field and scalar values are four 64-bit limbs on one Montgomery ring
+(`crypto.internal.mont`), and field coordinates stay in Montgomery form inside
+a point. Each product is 16 limb products and a 16-product reduction, computed
+with the processor's 64 x 64 widening multiply where mach admits it as constant
+time (`$mach.build.ct_mul(low, 128)`) and with a fixed 64-step masked sum
+everywhere else. Inversions use fixed public addition chains, scalar
+multiplication uses a fixed 64-window point loop with masked selection and no
+secret-indexed table, and the fixed-base comb table is public data read under
+a mask. Private scalars, nonce state, hashes, field and scalar temporaries, and
+projective points are explicitly zeroized.
 
-P-384 verification uses the same ownership and constant-shape contract with
-fixed twelve-limb storage. Field coordinates stay in Montgomery form. Each
-Montgomery product has fixed 12-by-12 limb bounds, and each 32-bit limb product
-uses a fixed 32-step masked operation rather than a variable-latency machine
-multiply. Verification evaluates the two ECDSA point products together in one
-fixed 384-step loop with masked four-way point selection and no secret-indexed
-table. Inversions retain fixed public exponents. Hashes, field and scalar
-temporaries, and projective points remain welded until explicitly zeroized.
+P-384 verification uses the same ownership and constant-shape contract on six
+64-bit limbs of the same ring. Verification evaluates the two ECDSA point
+products together in one fixed 384-step loop with masked four-way point
+selection and no secret-indexed table. Inversions retain fixed public
+exponents. Hashes, field and scalar temporaries, and projective points remain
+welded until explicitly zeroized.
 
 ## Ed25519 and RSA signatures
 
