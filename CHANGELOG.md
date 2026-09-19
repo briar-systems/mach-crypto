@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-19
+
 ### Performance
 
 - X25519 and the Ed25519 field compute each product as 25 limb products on the 64 x 64 widening multiply where mach admits it (`$mach.build.ct_mul(low, 128)`: x86-64 on every OS, aarch64-linux and aarch64-darwin under PSTATE.DIT, riscv64 under Zkt) and keep the 255-step masked sum as `serial_multiply` everywhere else. Squaring forms its 15 products once, the a24 step is 5 products, and the ladder's ten temporaries are allocated and wiped once per ladder instead of per step. `word.multiply_wide` is the primitive, gated like `word.multiply`. Instructions per op on x86_64 with mach 5.9.0: x25519 agreement 54.0M to 1.26M, key derivation 15.1M to 0.75M, Ed25519 verification 218.6M to 10.0M. An x25519 + ECDSA P-256 handshake drops from 102.4M (122.3M under mach 5.5.1) to 35.4M, with the ladder at 3.6% of it and P-256 verification at 94% (#83).
