@@ -61,3 +61,9 @@ need = []
 
 [dep.crypto]
 path = "../.."
+
+# std is pinned here because a path dependency carries no pin for a
+# dependency it selects by version, and this tree is not committed
+[dep.std]
+git = "https://github.com/briar-systems/mach-std"
+ref = "tag/v6.0.0"
