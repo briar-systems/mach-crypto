@@ -231,10 +231,13 @@ complete scalar is snapshotted before output is written.
 
 The implementation performs the same 255-step Montgomery ladder for every
 private value. Conditional swaps use masks rather than secret branches. Field
-operations use fixed-position radix-`2^51` limbs and fixed 51-step masked
-multiplication rather than secret hardware multiplication or division. Scalar,
-field, inversion, encoded result, and rejected shared-secret state are
-explicitly zeroized.
+operations use fixed-position radix-`2^51` limbs. Each field product is 25
+limb products, computed with the processor's 64 x 64 widening multiply where
+mach admits it as constant time (`$mach.build.ct_mul(low, 128)`: x86-64 on
+every OS, aarch64 on linux and darwin under PSTATE.DIT, riscv64 under Zkt) and
+as a fixed 255-step masked sum everywhere else. Secret division is never
+used. Scalar, field, inversion, encoded result, and rejected shared-secret
+state are explicitly zeroized.
 
 ## P-256, P-384, and ECDSA
 
