@@ -417,7 +417,7 @@ pub fun scalar_multiply(output: *Point, scalar: *Scalar, point: *Point) {
         index = 1;
         for (index < 16) {
             point_select(?selected, ?selected, ?table[index],
-                ct.eq_u64(digit, index::u64));
+                ct.eq[u64](digit, index::u64));
             index = index + 1;
         }
         point_add(?result, ?result, ?selected);
@@ -461,12 +461,12 @@ fun select_entry(entry: *Niels, window: u64, digit: ^u64) {
     field.set_small(?entry.plus, 0);
     field.set_small(?entry.minus, 0);
     field.set_small(?entry.product, 0);
-    val identity: ^u64 = 0 - ct.eq_u64(digit, 0)::^u64;
+    val identity: ^u64 = 0 - ct.eq[u64](digit, 0)::^u64;
     entry.plus.limb[0]  = entry.plus.limb[0] | (identity & 1);
     entry.minus.limb[0] = entry.minus.limb[0] | (identity & 1);
     var candidate: u64 = 1;
     for (candidate <= ed25519_base.DIGITS) {
-        val mask: ^u64 = 0 - ct.eq_u64(digit, candidate)::^u64;
+        val mask: ^u64 = 0 - ct.eq[u64](digit, candidate)::^u64;
         accumulate_entry(entry, window, candidate, mask);
         candidate = candidate + 1;
     }
