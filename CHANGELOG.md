@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-19
+
 ### Performance
 
 - P-256 and P-384 run on 64-bit limbs over `crypto.internal.mont`, the Montgomery ring the Ed25519 scalar ring already used, with the limb count as a comptime argument: four for every 256-bit field and order, six for P-384. The four-limb ring has unrolled multiply, square, reduction, add and subtract in scalar temporaries so the limbs stay in registers, and the loop forms stay as the reference under a differential. P-256 field elements are in Montgomery form inside points, the fixed-base comb table is regenerated in that form as 64-bit limbs (`tools/p256-base-table`), and the Solinas reduction over 32-bit words is gone. Instructions per op on x86_64 with mach 5.9.0: P-256 verification 33.19M to 6.77M (0.76 ms), signing 8.31M to 1.91M (0.22 ms), key derivation 6.56M to 1.35M, ECDH 26.39M to 5.34M, P-384 verification 170.6M to 68.9M (4.4 ms). An x25519 + ECDSA P-256 handshake drops from 35.4M to 9.0M (#83).
