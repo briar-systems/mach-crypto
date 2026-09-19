@@ -1,7 +1,16 @@
 # bounded constant-shape rsa arithmetic
+#
+# values are 64-bit limbs, little-endian, up to LIMBS of them, and every
+# product is a word product from crypto.internal.word, so the target that
+# admits the hardware cell computes one instruction per limb pair (#83). the
+# limb count is a run-time value because the modulus width is, and the width
+# is public, so every loop runs to the operand's count. the montgomery ring is
+# (modulus, factor, r2) as in crypto.internal.mont, factor = -modulus^-1 mod
+# 2^64 and r2 = 2^(128 * limbs) mod modulus, derived per operation because
+# the modulus is a caller value. a modulus need not fill its top limb: the
+# ring only needs it odd and below 2^(64 * limbs)
 
 use crypto.internal.word;
-use std.crypto.ct;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
@@ -10,28 +19,32 @@ use std.types.size.usize;
 pub val MIN_MODULUS_BYTES: usize = 256;
 pub val MAX_MODULUS_BYTES: usize = 512;
 
-val MAX_LIMBS: usize = 128;
-val WORD_MASK: u64   = 0xffffffff;
+val LIMBS: usize = 64;
 
 rec UInt {
-    limb: [128]^u64;
+    limb: [64]^u64;
 }
 
-rec Wide {
-    low:  ^u64;
-    high: ^u64;
+# the limbs a modulus of len bytes occupies
+#[inline]
+fun limbs_of(len: usize) usize {
+    ret (len + 7) >> 3;
 }
 
+# wipe count limbs of scratch with limb stores, not a byte loop
 #[oblivious]
 #[inline]
-fun multiply32(left: ^u64, right: ^u64) Wide {
-    val product: ^u64 = word.multiply(left, right, 32);
-    ret Wide{low: product & WORD_MASK, high: product >> 32};
+fun wipe(scratch: *^u64, count: usize) {
+    var i: usize = 0;
+    for (i < count) {
+        scratch[i] = 0;
+        i          = i + 1;
+    }
 }
 
 #[oblivious]
 fun destroy(value: *UInt) {
-    ct.zeroize((?value.limb[0]):~*^u8, MAX_LIMBS * 8);
+    wipe(?value.limb[0], LIMBS);
 }
 
 pub fun valid_modulus(modulus: *u8, len: usize) bool {
@@ -68,41 +81,19 @@ pub fun public_less_than(left: *u8, right: *u8, len: usize) bool {
 }
 
 #[oblivious]
-fun zero(value: *UInt) {
-    var i: usize = 0;
-    for (i < MAX_LIMBS) {
-        value.limb[i] = 0;
-        i             = i + 1;
-    }
-}
-
-#[oblivious]
 fun set_one(value: *UInt) {
-    zero(value);
+    destroy(value);
     value.limb[0] = 1;
 }
 
 #[oblivious]
-fun copy(output: *UInt, input: *UInt, limbs: usize) {
-    var i: usize = 0;
-    for (i < limbs) {
-        output.limb[i] = input.limb[i];
-        i              = i + 1;
-    }
-    for (i < MAX_LIMBS) {
-        output.limb[i] = 0;
-        i              = i + 1;
-    }
-}
-
-#[oblivious]
 fun decode_public(output: *UInt, input: *u8, len: usize) {
-    zero(output);
+    destroy(output);
     var i: usize = 0;
     for (i < len) {
         val reverse:    usize = len - 1 - i;
-        val limb_index: usize = i >> 2;
-        val shift:      usize = (i & 3) << 3;
+        val limb_index: usize = i >> 3;
+        val shift:      usize = (i & 7) << 3;
         output.limb[limb_index] = output.limb[limb_index] |
             (input[reverse]::u64 << shift);
         i = i + 1;
@@ -111,12 +102,12 @@ fun decode_public(output: *UInt, input: *u8, len: usize) {
 
 #[oblivious]
 fun decode_secret(output: *UInt, input: *^u8, len: usize) {
-    zero(output);
+    destroy(output);
     var i: usize = 0;
     for (i < len) {
         val reverse:    usize = len - 1 - i;
-        val limb_index: usize = i >> 2;
-        val shift:      usize = (i & 3) << 3;
+        val limb_index: usize = i >> 3;
+        val shift:      usize = (i & 7) << 3;
         output.limb[limb_index] = output.limb[limb_index] |
             (input[reverse]::^u64 << shift);
         i = i + 1;
@@ -128,33 +119,36 @@ fun encode_secret(output: *^u8, input: *UInt, len: usize) {
     var i: usize = 0;
     for (i < len) {
         val reverse:    usize = len - 1 - i;
-        val limb_index: usize = i >> 2;
-        val shift:      usize = (i & 3) << 3;
+        val limb_index: usize = i >> 3;
+        val shift:      usize = (i & 7) << 3;
         output[reverse] = (input.limb[limb_index] >> shift)::^u8;
         i               = i + 1;
     }
 }
 
+# output = right where choose_right is 1, else left
 #[oblivious]
-fun select(output: *UInt, left: *UInt, right: *UInt, choose_right: ^u8,
-    limbs: usize) {
+fun select(output: *^u64, left: *^u64, right: *^u64, choose_right: ^u8, limbs: usize) {
     val mask: ^u64  = 0 - choose_right::^u64;
     var i:    usize = 0;
     for (i < limbs) {
-        output.limb[i] = (left.limb[i] & ~mask) | (right.limb[i] & mask);
-        i              = i + 1;
+        output[i] = (left[i] & ~mask) | (right[i] & mask);
+        i         = i + 1;
     }
 }
 
+# output = left - right over limbs, returning 1 where that borrowed
 #[oblivious]
-fun subtract(output: *UInt, left: *UInt, right: *UInt, limbs: usize) ^u8 {
+fun subtract(output: *^u64, left: *^u64, right: *^u64, limbs: usize) ^u8 {
     var borrow: ^u64  = 0;
     var i:      usize = 0;
     for (i < limbs) {
-        val difference: ^u64 = left.limb[i] - right.limb[i] - borrow;
-        output.limb[i] = difference & WORD_MASK;
-        borrow         = difference >> 63;
-        i              = i + 1;
+        val step:       ^u64 = left[i] - right[i];
+        val difference: ^u64 = step - borrow;
+        borrow = word.borrow_of(left[i], right[i], step) |
+            word.borrow_of(step, borrow, difference);
+        output[i] = difference;
+        i         = i + 1;
     }
     val result: ^u8 = borrow::^u8;
     borrow = 0;
@@ -164,162 +158,275 @@ fun subtract(output: *UInt, left: *UInt, right: *UInt, limbs: usize) ^u8 {
 #[oblivious]
 fun less_than(left: *UInt, right: *UInt, limbs: usize) ^u8 {
     var difference: UInt;
-    val result:     ^u8 = subtract(?difference, left, right, limbs);
+    val result:     ^u8 = subtract(?difference.limb[0], ?left.limb[0], ?right.limb[0], limbs);
     destroy(?difference);
     ret result;
 }
 
+# output = value - modulus where that does not borrow, else value. value is
+# below 2 * modulus, so one pass reduces it; high is the value's limb above
+# the ring, which forces the subtraction
 #[oblivious]
-fun double_mod(value: *UInt, modulus: *UInt, limbs: usize) {
-    var doubled: UInt;
+fun subtract_modulus(output: *UInt, value: *^u64, modulus: *UInt, high: ^u64,
+    limbs: usize) {
     var reduced: UInt;
-    var carry:   ^u64  = 0;
-    var i:       usize = 0;
-    for (i < limbs) {
-        val word: ^u64 = (value.limb[i] << 1) | carry;
-        doubled.limb[i] = word & WORD_MASK;
-        carry           = value.limb[i] >> 31;
-        i               = i + 1;
-    }
-    val borrow:      ^u8 = subtract(?reduced, ?doubled, modulus, limbs);
-    val use_reduced: ^u8 = carry::^u8 | (borrow ^ 1);
-    select(value, ?doubled, ?reduced, use_reduced, limbs);
-    carry = 0;
-    destroy(?doubled);
+    val borrow:  ^u8 = subtract(?reduced.limb[0], value, ?modulus.limb[0], limbs);
+    select(?output.limb[0], value, ?reduced.limb[0], high::^u8 | (borrow ^ 1), limbs);
     destroy(?reduced);
 }
 
+# value = 2 * value mod modulus, for a value below the modulus
+#[oblivious]
+fun double_mod(value: *UInt, modulus: *UInt, limbs: usize) {
+    var doubled: [64]^u64;
+    var carry:   ^u64  = 0;
+    var i:       usize = 0;
+    for (i < limbs) {
+        doubled[i] = (value.limb[i] << 1) | carry;
+        carry      = value.limb[i] >> 63;
+        i          = i + 1;
+    }
+    subtract_modulus(value, ?doubled[0], modulus, carry, limbs);
+    carry = 0;
+    wipe(?doubled[0], limbs);
+}
+
+# -modulus^-1 mod 2^64 by newton steps: each doubles the correct low bits,
+# from the one bit every odd modulus gives to all 64 in six steps
 #[oblivious]
 fun montgomery_factor(modulus: *UInt) ^u64 {
     var inverse: ^u64  = 1;
     var i:       usize = 0;
-    for (i < 5) {
-        var first:  Wide = multiply32(modulus.limb[0], inverse);
-        var second: Wide = multiply32(inverse, (2 - first.low) & WORD_MASK);
-        inverse     = second.low;
-        first.low   = 0;
-        first.high  = 0;
-        second.low  = 0;
-        second.high = 0;
-        i           = i + 1;
+    for (i < 6) {
+        val product: ^u64 = word.multiply(modulus.limb[0], inverse, 64);
+        inverse = word.multiply(inverse, 2 - product, 64);
+        i       = i + 1;
     }
-    val result: ^u64 = (0 - inverse) & WORD_MASK;
+    val result: ^u64 = 0 - inverse;
     inverse = 0;
     ret result;
 }
 
+# montgomery reduction of the 2 * limbs product t in place: after round i
+# limb i is zero and the carry rides into the limbs above, and the result is
+# the high half with its overflow in t[2 * limbs]
 #[oblivious]
-fun montgomery_multiply(output: *UInt, left: *UInt, right: *UInt,
-    modulus: *UInt, factor: ^u64, limbs: usize) {
-    var temporary: [129]^u64;
-    var i:         usize = 0;
-    for (i < 129) {
-        temporary[i] = 0;
-        i            = i + 1;
-    }
-    i = 0;
+fun reduce(output: *UInt, t: *^u64, modulus: *UInt, factor: ^u64, limbs: usize) {
+    t[limbs * 2] = 0;
+    var i: usize = 0;
     for (i < limbs) {
-        var carry: ^u64  = 0;
+        val multiplier: ^u64  = word.multiply(t[i], factor, 64);
+        var carry:      ^u128 = 0;
+        var j:          usize = 0;
+        for (j < limbs) {
+            val term: ^u128 = word.multiply_wide(multiplier, modulus.limb[j]) +
+                t[i + j]::^u128 + carry;
+            t[i + j] = term::^u64;
+            carry    = term >> 64;
+            j        = j + 1;
+        }
+        j = i + limbs;
+        for (j < limbs * 2 + 1) {
+            val term: ^u128 = t[j]::^u128 + carry;
+            t[j]  = term::^u64;
+            carry = term >> 64;
+            j     = j + 1;
+        }
+        i = i + 1;
+    }
+    subtract_modulus(output, ?t[limbs], modulus, t[limbs * 2], limbs);
+    wipe(?t[0], limbs * 2 + 1);
+}
+
+# output = left * right * 2^-(64 * limbs) mod modulus, below the modulus, for
+# left below 2^(64 * limbs) and right below the modulus
+#[oblivious]
+fun multiply(output: *UInt, left: *UInt, right: *UInt, modulus: *UInt,
+    factor: ^u64, limbs: usize) {
+    var product: [129]^u64;
+    wipe(?product[0], limbs * 2);
+    var i: usize = 0;
+    for (i < limbs) {
+        var carry: ^u128 = 0;
         var j:     usize = 0;
         for (j < limbs) {
-            var product: Wide = multiply32(left.limb[j], right.limb[i]);
-            val sum:     ^u64 = temporary[j] + product.low + carry;
-            temporary[j] = sum & WORD_MASK;
-            carry        = product.high + (sum >> 32);
-            product.low  = 0;
-            product.high = 0;
-            j            = j + 1;
+            val term: ^u128 = word.multiply_wide(left.limb[j], right.limb[i]) +
+                product[i + j]::^u128 + carry;
+            product[i + j] = term::^u64;
+            carry          = term >> 64;
+            j              = j + 1;
         }
-        temporary[limbs] = temporary[limbs] + carry;
-        var factor_product: Wide = multiply32(temporary[0], factor);
-        val multiple:       ^u64 = factor_product.low;
-        factor_product.low  = 0;
-        factor_product.high = 0;
-        carry               = 0;
-        j                   = 0;
-        for (j < limbs) {
-            var product: Wide = multiply32(multiple, modulus.limb[j]);
-            val sum:     ^u64 = temporary[j] + product.low + carry;
-            if (j > 0) { temporary[j - 1] = sum & WORD_MASK; }
-            carry        = product.high + (sum >> 32);
-            product.low  = 0;
-            product.high = 0;
-            j            = j + 1;
-        }
-        val top: ^u64 = temporary[limbs] + carry;
-        temporary[limbs - 1] = top & WORD_MASK;
-        temporary[limbs]     = top >> 32;
-        i                    = i + 1;
+        product[i + limbs] = carry::^u64;
+        carry              = 0;
+        i                  = i + 1;
     }
-    var candidate: UInt;
-    var reduced:   UInt;
+    reduce(output, ?product[0], modulus, factor, limbs);
+}
+
+# output = value * value * 2^-(64 * limbs) mod modulus, for a value below the
+# modulus: the cross products are formed once and doubled
+#[oblivious]
+fun square(output: *UInt, value: *UInt, modulus: *UInt, factor: ^u64, limbs: usize) {
+    var product: [129]^u64;
+    wipe(?product[0], limbs * 2);
+    var i: usize = 0;
+    for (i < limbs) {
+        var carry: ^u128 = 0;
+        var j:     usize = i + 1;
+        for (j < limbs) {
+            val term: ^u128 = word.multiply_wide(value.limb[j], value.limb[i]) +
+                product[i + j]::^u128 + carry;
+            product[i + j] = term::^u64;
+            carry          = term >> 64;
+            j              = j + 1;
+        }
+        product[i + limbs] = carry::^u64;
+        carry              = 0;
+        i                  = i + 1;
+    }
+    var top: ^u64 = 0;
+    i = 0;
+    for (i < limbs * 2) {
+        val doubled: ^u64 = (product[i] << 1) | top;
+        top        = product[i] >> 63;
+        product[i] = doubled;
+        i          = i + 1;
+    }
+    var carry: ^u128 = 0;
     i = 0;
     for (i < limbs) {
-        candidate.limb[i] = temporary[i];
-        i                 = i + 1;
+        val low: ^u128 = word.multiply_wide(value.limb[i], value.limb[i]) +
+            product[i * 2]::^u128 + carry;
+        product[i * 2] = low::^u64;
+        val high: ^u128 = product[i * 2 + 1]::^u128 + (low >> 64);
+        product[i * 2 + 1] = high::^u64;
+        carry              = high >> 64;
+        i                  = i + 1;
     }
-    val borrow:      ^u8 = subtract(?reduced, ?candidate, modulus, limbs);
-    val use_reduced: ^u8 = temporary[limbs]::^u8 | (borrow ^ 1);
-    select(output, ?candidate, ?reduced, use_reduced, limbs);
-    ct.zeroize((?temporary[0]):~*^u8, 129 * 8);
-    destroy(?candidate);
-    destroy(?reduced);
+    carry = 0;
+    top   = 0;
+    reduce(output, ?product[0], modulus, factor, limbs);
 }
 
+# output = 2^(128 * limbs) mod modulus. the modulus of len bytes has its top
+# bit set, so 2^(8 * len - 1) is already reduced; doublings carry it to
+# 2^(64 * limbs + 1) = 2^(64 * limbs) * 2^t at t = 1, and t reaches 64 * limbs
+# by its binary expansion, a montgomery square doubling t and a modular
+# doubling adding one
 #[oblivious]
-fun prepare_r2(output: *UInt, modulus: *UInt, limbs: usize) {
-    set_one(output);
-    var bit: usize = 0;
-    for (bit < limbs * 64) {
+fun prepare_r2(output: *UInt, modulus: *UInt, factor: ^u64, len: usize, limbs: usize) {
+    val top_bit: usize = len * 8 - 1;
+    destroy(output);
+    val bit_value: u64 = 1u64 << (top_bit & 63);
+    output.limb[top_bit >> 6] = bit_value;
+    var i: usize = top_bit;
+    for (i < limbs * 64 + 1) {
         double_mod(output, modulus, limbs);
-        bit = bit + 1;
+        i = i + 1;
+    }
+    val target:  usize = limbs * 64;
+    var highest: usize = 0;
+    for ((target >> (highest + 1)) != 0) {
+        highest = highest + 1;
+    }
+    var bit: usize = highest;
+    for (bit > 0) {
+        bit = bit - 1;
+        square(output, output, modulus, factor, limbs);
+        if (((target >> bit) & 1) != 0) {
+            double_mod(output, modulus, limbs);
+        }
     }
 }
 
+# copy limbs
+#[oblivious]
+fun copy(output: *UInt, input: *UInt, limbs: usize) {
+    var i: usize = 0;
+    for (i < limbs) {
+        output.limb[i] = input.limb[i];
+        i              = i + 1;
+    }
+}
+
+# 1 where the secret window equals the public table index, for both below 16
+#[oblivious]
+#[inline]
+fun window_is(window: ^u8, index: usize) ^u8 {
+    val difference: ^u8 = window ^ index::u8;
+    ret ((difference - 1) >> 7) & 1;
+}
+
+# the window width in bits and the table it indexes
+val WINDOW: usize = 4;
+val TABLE:  usize = 16;
+
+# output = input^exponent mod modulus by fixed 4-bit windows: four squarings
+# then one multiply by the table entry for the window, which is read by a
+# masked scan over the whole table so no secret indexes memory. the exponent
+# is a whole number of bytes, so every window is full and the count is public
 #[oblivious]
 fun exponentiate(output: *UInt, input: *UInt, exponent_public: *u8,
     exponent_secret: *^u8, exponent_len: usize, secret_exponent: bool,
-    modulus: *UInt, limbs: usize) {
-    var r2:         UInt;
-    var one:        UInt;
-    var base:       UInt;
-    var result:     UInt;
-    var squared:    UInt;
-    var multiplied: UInt;
-    prepare_r2(?r2, modulus, limbs);
-    set_one(?one);
+    modulus: *UInt, modulus_len: usize, limbs: usize) {
+    var r2:     UInt;
+    var one:    UInt;
+    var table:  [16]UInt;
+    var entry:  UInt;
+    var result: UInt;
     val factor: ^u64 = montgomery_factor(modulus);
-    montgomery_multiply(?base, input, ?r2, modulus, factor, limbs);
-    montgomery_multiply(?result, ?one, ?r2, modulus, factor, limbs);
-    var position: usize = exponent_len << 3;
+    prepare_r2(?r2, modulus, factor, modulus_len, limbs);
+    set_one(?one);
+    multiply(?table[0], ?one, ?r2, modulus, factor, limbs);
+    multiply(?table[1], input, ?r2, modulus, factor, limbs);
+    var k: usize = 2;
+    for (k < TABLE) {
+        multiply(?table[k], ?table[k - 1], ?table[1], modulus, factor, limbs);
+        k = k + 1;
+    }
+    copy(?result, ?table[0], limbs);
+    var position: usize = exponent_len * 2;
     for (position > 0) {
         position = position - 1;
-        val byte_index: usize = exponent_len - 1 - (position >> 3);
-        val shift:      usize = position & 7;
-        var take:       ^u8   = 0;
+        val byte_index: usize = exponent_len - 1 - (position >> 1);
+        val shift:      usize = (position & 1) << 2;
+        var window:     ^u8   = 0;
         if (secret_exponent) {
-            take = (exponent_secret[byte_index] >> shift) & 1;
+            window = (exponent_secret[byte_index] >> shift) & 0xf;
         }
         or {
-            take = (exponent_public[byte_index] >> shift) & 1;
+            window = (exponent_public[byte_index] >> shift) & 0xf;
         }
-        montgomery_multiply(?squared, ?result, ?result, modulus, factor, limbs);
-        montgomery_multiply(?multiplied, ?squared, ?base, modulus, factor, limbs);
-        select(?result, ?squared, ?multiplied, take, limbs);
+        var squaring: usize = 0;
+        for (squaring < WINDOW) {
+            square(?result, ?result, modulus, factor, limbs);
+            squaring = squaring + 1;
+        }
+        copy(?entry, ?table[0], limbs);
+        k = 1;
+        for (k < TABLE) {
+            select(?entry.limb[0], ?entry.limb[0], ?table[k].limb[0], window_is(window, k), limbs);
+            k = k + 1;
+        }
+        multiply(?result, ?result, ?entry, modulus, factor, limbs);
+        window = 0;
     }
-    montgomery_multiply(output, ?result, ?one, modulus, factor, limbs);
+    multiply(output, ?result, ?one, modulus, factor, limbs);
     destroy(?r2);
     destroy(?one);
-    destroy(?base);
+    destroy(?entry);
     destroy(?result);
-    destroy(?squared);
-    destroy(?multiplied);
+    k = 0;
+    for (k < TABLE) {
+        destroy(?table[k]);
+        k = k + 1;
+    }
 }
 
 #[oblivious]
 pub fun public_apply(output: *^u8, input: *u8, modulus_bytes: *u8,
     modulus_len: usize, exponent: *u8, exponent_len: usize) ^u8 {
-    val limbs:   usize = modulus_len >> 2;
+    val limbs:   usize = limbs_of(modulus_len);
     var modulus: UInt;
     var value:   UInt;
     var result:  UInt;
@@ -327,7 +434,7 @@ pub fun public_apply(output: *^u8, input: *u8, modulus_bytes: *u8,
     decode_public(?value, input, modulus_len);
     val valid: ^u8 = less_than(?value, ?modulus, limbs);
     exponentiate(?result, ?value, exponent, nil, exponent_len, false,
-        ?modulus, limbs);
+        ?modulus, modulus_len, limbs);
     encode_secret(output, ?result, modulus_len);
     destroy(?modulus);
     destroy(?value);
@@ -338,7 +445,7 @@ pub fun public_apply(output: *^u8, input: *u8, modulus_bytes: *u8,
 #[oblivious]
 pub fun public_apply_secret(output: *^u8, input: *^u8, modulus_bytes: *u8,
     modulus_len: usize, exponent: *u8, exponent_len: usize) ^u8 {
-    val limbs:   usize = modulus_len >> 2;
+    val limbs:   usize = limbs_of(modulus_len);
     var modulus: UInt;
     var value:   UInt;
     var result:  UInt;
@@ -346,7 +453,7 @@ pub fun public_apply_secret(output: *^u8, input: *^u8, modulus_bytes: *u8,
     decode_secret(?value, input, modulus_len);
     val valid: ^u8 = less_than(?value, ?modulus, limbs);
     exponentiate(?result, ?value, exponent, nil, exponent_len, false,
-        ?modulus, limbs);
+        ?modulus, modulus_len, limbs);
     encode_secret(output, ?result, modulus_len);
     destroy(?modulus);
     destroy(?value);
@@ -357,7 +464,7 @@ pub fun public_apply_secret(output: *^u8, input: *^u8, modulus_bytes: *u8,
 #[oblivious]
 pub fun private_apply(output: *^u8, input: *^u8, modulus_bytes: *u8,
     modulus_len: usize, exponent: *^u8, exponent_len: usize) ^u8 {
-    val limbs:   usize = modulus_len >> 2;
+    val limbs:   usize = limbs_of(modulus_len);
     var modulus: UInt;
     var value:   UInt;
     var result:  UInt;
@@ -365,7 +472,7 @@ pub fun private_apply(output: *^u8, input: *^u8, modulus_bytes: *u8,
     decode_secret(?value, input, modulus_len);
     val valid: ^u8 = less_than(?value, ?modulus, limbs);
     exponentiate(?result, ?value, nil, exponent, exponent_len, true,
-        ?modulus, limbs);
+        ?modulus, modulus_len, limbs);
     encode_secret(output, ?result, modulus_len);
     destroy(?modulus);
     destroy(?value);
@@ -373,17 +480,18 @@ pub fun private_apply(output: *^u8, input: *^u8, modulus_bytes: *u8,
     ret valid;
 }
 
+# n = 65521 * 65497, e = 17, d = e^-1 mod (p - 1)(q - 1)
 test "rsa: montgomery exponentiation round trip" {
-    val modulus:          [4]u8  = [4]u8{0x00, 0x00, 0x0c, 0xa1};
+    val modulus:          [4]u8  = [4]u8{0xff, 0xca, 0x02, 0x49};
     val public_exponent:  [1]u8  = [1]u8{17};
-    var private_exponent: [4]^u8 = [4]^u8{0x00, 0x00, 0x0a, 0xc1};
+    var private_exponent: [4]^u8 = [4]^u8{0xb4, 0x8d, 0x2e, 0xf1};
     val message:          [4]u8  = [4]u8{0x00, 0x00, 0x00, 0x41};
     var encrypted:        [4]^u8;
     var recovered:        [4]^u8;
     if (public_apply(?encrypted[0], (?message[0]):~*u8,
         (?modulus[0]):~*u8, 4, (?public_exponent[0]):~*u8, 1):>u8 != 1) { ret 1; }
-    if (encrypted[0]:>u8 != 0 || encrypted[1]:>u8 != 0 ||
-        encrypted[2]:>u8 != 0x0a || encrypted[3]:>u8 != 0xe6) { ret 2; }
+    if (encrypted[0]:>u8 != 0x2a || encrypted[1]:>u8 != 0x7d ||
+        encrypted[2]:>u8 != 0x03 || encrypted[3]:>u8 != 0xa6) { ret 2; }
     if (private_apply(?recovered[0], ?encrypted[0], (?modulus[0]):~*u8, 4,
         ?private_exponent[0], 4):>u8 != 1) { ret 3; }
     if (recovered[0]:>u8 != 0 || recovered[1]:>u8 != 0 ||

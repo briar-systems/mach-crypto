@@ -30,20 +30,6 @@ fun wipe(scratch: *^u64, $count: usize) {
     }
 }
 
-# 1 where the sum of two limbs would carry
-#[oblivious]
-#[inline]
-fun carry_of(left: ^u64, right: ^u64, sum: ^u64) ^u64 {
-    ret ((left & right) | ((left | right) & ~sum)) >> 63;
-}
-
-# 1 where left - right - borrow would borrow
-#[oblivious]
-#[inline]
-fun borrow_of(left: ^u64, right: ^u64, difference: ^u64) ^u64 {
-    ret ((~left & right) | ((~left | right) & difference)) >> 63;
-}
-
 # output = value - modulus where that does not borrow, else value. value is
 # below 2 * modulus, so one pass reduces it; high is the value's limb above
 # the ring, which forces the subtraction
@@ -56,7 +42,7 @@ fun subtract_modulus(output: *^u64, value: *^u64, modulus: *u64, high: ^u64,
     for (i < limbs) {
         val step:       ^u64 = value[i] - modulus[i];
         val difference: ^u64 = step - borrow;
-        borrow     = borrow_of(value[i], modulus[i], step) | borrow_of(step, borrow, difference);
+        borrow     = word.borrow_of(value[i], modulus[i], step) | word.borrow_of(step, borrow, difference);
         reduced[i] = difference;
         i          = i + 1;
     }
@@ -81,16 +67,16 @@ fun subtract_modulus4(output: *^u64, v0: ^u64, v1: ^u64, v2: ^u64, v3: ^u64, mod
     val m2: ^u64 = modulus[2];
     val m3: ^u64 = modulus[3];
     val s0: ^u64 = v0 - m0;
-    var b:  ^u64 = borrow_of(v0, m0, s0);
+    var b:  ^u64 = word.borrow_of(v0, m0, s0);
     val s1: ^u64 = v1 - m1;
     val d1: ^u64 = s1 - b;
-    b = borrow_of(v1, m1, s1) | borrow_of(s1, b, d1);
+    b = word.borrow_of(v1, m1, s1) | word.borrow_of(s1, b, d1);
     val s2: ^u64 = v2 - m2;
     val d2: ^u64 = s2 - b;
-    b = borrow_of(v2, m2, s2) | borrow_of(s2, b, d2);
+    b = word.borrow_of(v2, m2, s2) | word.borrow_of(s2, b, d2);
     val s3: ^u64 = v3 - m3;
     val d3: ^u64 = s3 - b;
-    b = borrow_of(v3, m3, s3) | borrow_of(s3, b, d3);
+    b = word.borrow_of(v3, m3, s3) | word.borrow_of(s3, b, d3);
     val keep: ^u64 = 0 - (b & ~high);
     output[0] = (v0 & keep) | (s0 & ~keep);
     output[1] = (v1 & keep) | (d1 & ~keep);
@@ -110,16 +96,16 @@ fun add4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
     val r2: ^u64 = right[2];
     val r3: ^u64 = right[3];
     val s0: ^u64 = l0 + r0;
-    var c:  ^u64 = carry_of(l0, r0, s0);
+    var c:  ^u64 = word.carry_of(l0, r0, s0);
     val s1: ^u64 = l1 + r1;
     val t1: ^u64 = s1 + c;
-    c = carry_of(l1, r1, s1) | carry_of(s1, c, t1);
+    c = word.carry_of(l1, r1, s1) | word.carry_of(s1, c, t1);
     val s2: ^u64 = l2 + r2;
     val t2: ^u64 = s2 + c;
-    c = carry_of(l2, r2, s2) | carry_of(s2, c, t2);
+    c = word.carry_of(l2, r2, s2) | word.carry_of(s2, c, t2);
     val s3: ^u64 = l3 + r3;
     val t3: ^u64 = s3 + c;
-    c = carry_of(l3, r3, s3) | carry_of(s3, c, t3);
+    c = word.carry_of(l3, r3, s3) | word.carry_of(s3, c, t3);
     subtract_modulus4(output, s0, t1, t2, t3, modulus, c);
     c = 0;
 }
@@ -135,16 +121,16 @@ fun subtract4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
     val r2: ^u64 = right[2];
     val r3: ^u64 = right[3];
     val s0: ^u64 = l0 - r0;
-    var b:  ^u64 = borrow_of(l0, r0, s0);
+    var b:  ^u64 = word.borrow_of(l0, r0, s0);
     val s1: ^u64 = l1 - r1;
     val d1: ^u64 = s1 - b;
-    b = borrow_of(l1, r1, s1) | borrow_of(s1, b, d1);
+    b = word.borrow_of(l1, r1, s1) | word.borrow_of(s1, b, d1);
     val s2: ^u64 = l2 - r2;
     val d2: ^u64 = s2 - b;
-    b = borrow_of(l2, r2, s2) | borrow_of(s2, b, d2);
+    b = word.borrow_of(l2, r2, s2) | word.borrow_of(s2, b, d2);
     val s3: ^u64 = l3 - r3;
     val d3: ^u64 = s3 - b;
-    b = borrow_of(l3, r3, s3) | borrow_of(s3, b, d3);
+    b = word.borrow_of(l3, r3, s3) | word.borrow_of(s3, b, d3);
     # a borrow means the difference wrapped, so the modulus is added back
     val mask: ^u64 = 0 - b;
     val m0:   ^u64 = modulus[0] & mask;
@@ -152,13 +138,13 @@ fun subtract4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
     val m2:   ^u64 = modulus[2] & mask;
     val m3:   ^u64 = modulus[3] & mask;
     val a0:   ^u64 = s0 + m0;
-    var c:    ^u64 = carry_of(s0, m0, a0);
+    var c:    ^u64 = word.carry_of(s0, m0, a0);
     val a1:   ^u64 = d1 + m1;
     val t1:   ^u64 = a1 + c;
-    c = carry_of(d1, m1, a1) | carry_of(a1, c, t1);
+    c = word.carry_of(d1, m1, a1) | word.carry_of(a1, c, t1);
     val a2: ^u64 = d2 + m2;
     val t2: ^u64 = a2 + c;
-    c = carry_of(d2, m2, a2) | carry_of(a2, c, t2);
+    c = word.carry_of(d2, m2, a2) | word.carry_of(a2, c, t2);
     val a3: ^u64 = d3 + m3;
     val t3: ^u64 = a3 + c;
     output[0] = a0;
@@ -189,7 +175,7 @@ fun add_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs:
     for (i < limbs) {
         val step:  ^u64 = left[i] + right[i];
         val total: ^u64 = step + carry;
-        carry  = carry_of(left[i], right[i], step) | carry_of(step, carry, total);
+        carry  = word.carry_of(left[i], right[i], step) | word.carry_of(step, carry, total);
         sum[i] = total;
         i      = i + 1;
     }
@@ -218,7 +204,7 @@ fun subtract_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $l
     for (i < limbs) {
         val step:  ^u64 = left[i] - right[i];
         val total: ^u64 = step - borrow;
-        borrow        = borrow_of(left[i], right[i], step) | borrow_of(step, borrow, total);
+        borrow        = word.borrow_of(left[i], right[i], step) | word.borrow_of(step, borrow, total);
         difference[i] = total;
         i             = i + 1;
     }
@@ -230,7 +216,7 @@ fun subtract_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $l
         val addend: ^u64 = modulus[i] & mask;
         val step:   ^u64 = difference[i] + addend;
         val total:  ^u64 = step + carry;
-        carry     = carry_of(difference[i], addend, step) | carry_of(step, carry, total);
+        carry     = word.carry_of(difference[i], addend, step) | word.carry_of(step, carry, total);
         output[i] = total;
         i         = i + 1;
     }
@@ -259,7 +245,7 @@ pub fun less_than(value: *^u64, modulus: *u64, $limbs: usize) ^u8 {
     for (i < limbs) {
         val step:       ^u64 = value[i] - modulus[i];
         val difference: ^u64 = step - borrow;
-        borrow = borrow_of(value[i], modulus[i], step) | borrow_of(step, borrow, difference);
+        borrow = word.borrow_of(value[i], modulus[i], step) | word.borrow_of(step, borrow, difference);
         i      = i + 1;
     }
     val result: ^u8 = borrow::^u8;

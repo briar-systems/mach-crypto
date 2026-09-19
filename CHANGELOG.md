@@ -4,6 +4,15 @@
 
 ### Performance
 
+- RSA runs on 64-bit limbs: `crypto.internal.rsa` is a run-time-sized Montgomery ring of up to 64 limbs whose products are `word.multiply_wide`, so a 2048-bit multiply is 1024 hardware products instead of 4096 32-bit ones, squaring forms its cross products once, and r2 is derived by a handful of squarings from the modulus's top bit instead of 4096 modular doublings. Exponentiation uses fixed 4-bit windows with a masked table scan in place of square-and-multiply on every bit. Instructions per op on x86_64 with mach 5.9.0: RSA-PSS 2048 signing 1238M to 196M (12.5 ms), verification 74.8M to 4.5M (0.28 ms), 3072 signing 3789M to 625M (40 ms), verification 131M to 9.8M (0.60 ms). Key acceptance is unchanged: any four-byte-increment modulus from 256 to 512 bytes, including one that does not fill its top limb (#83).
+
+### Added
+
+- `test/performance` budgets RSA-PSS 2048 and 3072 signing and verification (250 ms and 25 ms, 500 ms and 50 ms medians) on OpenSSL-generated keys, and an OpenSSL 2080-bit PSS vector checks a modulus whose top 64-bit limb is half filled (#83).
+- `word.carry_of` and `word.borrow_of` are the limb carry and borrow predicates both Montgomery rings share (#83).
+
+### Performance
+
 - P-256 and P-384 run on 64-bit limbs over `crypto.internal.mont`, the Montgomery ring the Ed25519 scalar ring already used, with the limb count as a comptime argument: four for every 256-bit field and order, six for P-384. The four-limb ring has unrolled multiply, square, reduction, add and subtract in scalar temporaries so the limbs stay in registers, and the loop forms stay as the reference under a differential. P-256 field elements are in Montgomery form inside points, the fixed-base comb table is regenerated in that form as 64-bit limbs (`tools/p256-base-table`), and the Solinas reduction over 32-bit words is gone. Instructions per op on x86_64 with mach 5.9.0: P-256 verification 33.19M to 6.77M (0.76 ms), signing 8.31M to 1.91M (0.22 ms), key derivation 6.56M to 1.35M, ECDH 26.39M to 5.34M, P-384 verification 170.6M to 68.9M (4.4 ms). An x25519 + ECDSA P-256 handshake drops from 35.4M to 9.0M (#83).
 
 ### Added
