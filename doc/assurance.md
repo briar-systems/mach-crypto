@@ -63,8 +63,14 @@ The layers run separately so one kind of evidence cannot stand in for another:
 `assurance/leakage.tsv` lists the leakage controls and the rejection each must
 produce. `assurance/tests.tsv` binds each focused test to its category, algorithm, and
 vector or contract source. `assurance/algorithms.tsv` is the algorithm and
-constant-time coverage inventory. `assurance/projects.tsv` is the complete
-build matrix. These files are release policy, not advisory documentation.
+constant-time coverage inventory; its `hardware_multiply` column is `word`
+when the algorithm's secret products go through `crypto.internal.word`
+(`word.multiply` and `word.multiply_wide`, the processor's multiply where
+`$mach.build.ct_mul` admits it as constant time and the bit-serial masked sum
+elsewhere) and `none` when the algorithm performs no secret multiply. GHASH
+in AES-GCM is bit-serial and does not use `word`. `assurance/projects.tsv` is
+the complete build matrix. These files are release policy, not advisory
+documentation.
 
 ## Machine-readable output
 
@@ -133,3 +139,11 @@ took 110 through 113 milliseconds, with a 111-millisecond median, on an AMD
 Ryzen 7 5800X3D 8-Core Processor with frequency boost disabled and Mach 4.26.5.
 This machine-specific measurement characterizes the implementation. The
 250-millisecond release gate is the enforced regression contract.
+
+The same gate budgets RSA-PSS with SHA-256 on OpenSSL-generated 2048 and
+3072-bit keys: a five-sample median of signing at or below 250 and 500
+milliseconds, and of verifying the signature it produced at or below 25 and 50
+milliseconds. On 2026-09-19, with Mach 5.9.0 on the same machine, signing took
+13.5 and 42 milliseconds and verification 0.32 and 0.66 milliseconds. Signing
+runs the private exponent through a masked-scan windowed exponentiation, so its
+budget is the constant-time cost of the full exponent width, not a fast path.

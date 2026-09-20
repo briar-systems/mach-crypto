@@ -10,11 +10,13 @@
 use crypto.contracts;
 use crypto.signature;
 use std.chrono.time;
+use std.crypto.ct;
 use std.runtime;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
 use std.types.size.usize;
+use std.types.string.str;
 
 fun nibble(byte: u8) u8 {
     if (byte >= '0' && byte <= '9') { ret byte - '0'; }
@@ -31,9 +33,50 @@ fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
         val low:  u8 = nibble(text[i * 2 + 1]);
         if (high == 255 || low == 255) { ret false; }
         output[i] = (high << 4) | low;
-        i = i + 1;
+        i         = i + 1;
     }
     ret true;
+}
+
+# the private exponent decodes into secret bytes
+#[oblivious]
+fun decode_hex_secret(text: *u8, text_len: usize, output: *^u8) bool {
+    var i: usize = 0;
+    for (i < text_len / 2) {
+        val high: ^u8 = nibble(text[i * 2]);
+        val low:  ^u8 = nibble(text[i * 2 + 1]);
+        output[i] = (high << 4) | low;
+        i         = i + 1;
+    }
+    ret true;
+}
+
+# the median of five samples of one operation, in nanoseconds, or -1
+fun median_of_five(op: fun(*RsaState) bool, state: *RsaState) i64 {
+    var samples: [5]i64;
+    var i:       usize = 0;
+    for (i < 5) {
+        val started: time.InstantClock = time.instant();
+        if (sel started.err) { ret -1; }
+        if (!op(state))      { ret -1; }
+        val took: time.Elapsed = time.elapsed(started.ok);
+        if (sel took.err) { ret -1; }
+        samples[i] = took.ok;
+        if (samples[i] <= 0) { ret -1; }
+        i = i + 1;
+    }
+    i = 1;
+    for (i < 5) {
+        val current:  i64   = samples[i];
+        var position: usize = i;
+        for (position > 0 && samples[position - 1] > current) {
+            samples[position] = samples[position - 1];
+            position          = position - 1;
+        }
+        samples[position] = current;
+        i                 = i + 1;
+    }
+    ret samples[2];
 }
 
 fun set_nist_p384_public(output: *u8) bool {
@@ -50,17 +93,18 @@ fun set_nist_p384_signature(output: *u8) bool {
 
 test "ecdsa p-384: median verification stays below 250 ms" {
     var public_key: [97]u8;
-    var encoded: [103]u8;
+    var encoded:    [103]u8;
     if (!set_nist_p384_public(?public_key[0]) ||
         !set_nist_p384_signature(?encoded[0])) { ret 1; }
-    val key: contracts.Bytes = contracts.Bytes{data: ?public_key[0], len: 97};
+    val key:     contracts.Bytes = contracts.Bytes{data: ?public_key[0], len: 97};
     val message: contracts.Bytes = contracts.Bytes{
-        data: "Example of ECDSA with P-384"::*u8, len: 27};
+        data: "Example of ECDSA with P-384"::*u8, len: 27
+    };
     val value: contracts.Bytes = contracts.Bytes{data: ?encoded[0], len: 103};
     if (signature.verify_ecdsa_p384_sha384(key, message, value) !=
         contracts.OK) { ret 2; }
     var samples: [5]i64;
-    var i: usize = 0;
+    var i:       usize = 0;
     for (i < 5) {
         val started: time.InstantClock = time.instant();
         if (sel started.err) { ret 3; }
@@ -74,15 +118,94 @@ test "ecdsa p-384: median verification stays below 250 ms" {
     }
     i = 1;
     for (i < 5) {
-        val current: i64 = samples[i];
+        val current:  i64   = samples[i];
         var position: usize = i;
         for (position > 0 && samples[position - 1] > current) {
             samples[position] = samples[position - 1];
-            position = position - 1;
+            position          = position - 1;
         }
         samples[position] = current;
-        i = i + 1;
+        i                 = i + 1;
     }
     if (samples[2] > 250000000) { ret 6; }
     ret 0;
+}
+
+# rsa-pss keys generated with openssl genrsa, e = 65537, the private exponent
+# left-padded to the modulus width as the signing contract requires
+val RSA_2048_MODULUS: str = "bd62a0dce9cf1711a3a6eb1e46716c6ac93a096b5f1560afd5a7f287b9d070155aed56d2545abb453685758de2b6685942240e1c9df6326a1bb8cea57882f00137d5a39860b4cf5875e24ebaeaa2b5ff963272f48c5b48fcb93a6fd6e52a8754d70e58c8ec0b685a388558e781830c8e8b35d4f66646afeeb979510307abd364496b2ab8ab3a625f1f1554d4caf7b5189942ad0dd1fa5c9799a5cf61d3fce10528449faefd8dfcd9283c78879ce51227ec8d1c512a519dd9e65186aafebaed73c1c90bbf48ec3081887029557cb4959a931483f3328d5fea0131025b86772575e6647908741569d11f1df03ed5ce9cf20615734877c8ef6c2ca40849a9ae8647";
+val RSA_2048_PRIVATE: str = "46ffe651dbbfdd24aa4746271bfea2c827f77f9786d693606847a5e797545ae8cea562e2c868198419ac1005a8e47c9b55ee01725e0ff217909c08b0c54cc56097879ae4e2007729714c6dfaaa4364dad47ac6590313a7f9c31172e34c17d5138bea5f83b7e690f11df673fd9ab2c02ee266c497b9812facde50ea7ba9d113970471b8db4115fb9bbbd7155fb05c708e772e27342ef2087ae7d57a83fe296ebefa2bc3c5194202197bd638bfef9f3b52e036db307307579dce4b8ffac4cf966e5f0e9805c314dc4b9356361fbe766f980fb5490d0bfde54600561d52dd146dbfdb93df51989a5bdf7434883fbd04ad6acef06b148e9e5ad338e87ec8b8c54725";
+val RSA_3072_MODULUS: str = "e40fe0b77bb83cdd7e137dda80494845ec57ebdac8aa40baaa42feacf18ac7906d33f22eb745428b8ddd56a92e2a47f4b6117a43202a4e2ee094d1dd9422bc12c658098f634afa5bbd3889eb83ab3d6622abfc1de427f179341d36744a0f6e16259fa34816e5f72765c05d5046cad4d997ee1eccc25f77d954a21d10d994fd12d15c85180d0ec96c8a8d8ae0a947f3612abe7e91073bb30c6866b77cd38f1578c75a1fee2d607ccee04a321844e9d7d8a12c8f4e85179f65626165030b625dd95dbd002a5697c8667539fa4328026a5ebe5bc9b9005a3d96ee320472efd8fe5cb271ca30cc50734113d46cb1450ca8bd33956fa8e054cb0379baf5195398bd4b91a4994b3d04a7a258b9174af5c65d88c1eee6cc892e10ac77bfc96bc211e0f45dd758187f838341fbf7635901a9d0185a2313e5b178a2c9b8472a0f35b4f8a97c94211e12d36745c20d6a36eba7c0e718383266cf75686d813b631f4fd592a29bbba7153fd7e6dd4e0c85b99805d83fd11043ee5533ccbb2af27006e47b17e3";
+val RSA_3072_PRIVATE: str = "6acc4cad5fd07d20340428b183d5cd748123031de74e631586d9ecad4c477300dd42b02cd44228d17553ab5b7a74ee51585982e9a04c6f646063108c34ecb72a0b9bfa8e1d2f656244900f762ca8aa0e043a89cbeda60edc755d20bd00598d71ed987e3c2a0cf2da8e39b0f900cdc73346848a03d51a23e3b05062501bb43b76ee77e713c639a075a5c476be9247515fb54693ba92aa90444537a4c15dc8e9832fc7b2a034bbb476a46dda5ba719e2ac5d7da27660b91939bf0260ed360d90687172984a01c5db78f3f1c18511dee6049332bc5a1d0da2ccb0493d428cf4249029052000efb3bdaf42acf6f430f9c1fff10149a06ba0ca42c57e0f57b3aca1710f8ff4c759e0eccd8db526b42c9bb156c072ceedd827f7714847cfce9858fe1bd257aa3496a90ccb4dd69f23d6702d4074dc9a2c3d015f67d79b51200068408c9ef04347811e923870b4c41de90c7572be785d0a626eaec6e33cc67e78d42c3b7614d18c66fe3e04b2b2a9ec2fabaead9348e7c95cf3897368de58c67d7b6da1";
+
+rec RsaState {
+    modulus:   [384]u8;
+    private:   [384]^u8;
+    exponent:  [3]u8;
+    salt:      [32]^u8;
+    message:   [32]u8;
+    signature: [384]u8;
+    len:       usize;
+}
+
+fun rsa_state(state: *RsaState, modulus_hex: str, private_hex: str, len: usize) bool {
+    if (!decode_hex(modulus_hex::*u8, len * 2, ?state.modulus[0]) ||
+        !decode_hex_secret(private_hex::*u8, len * 2, ?state.private[0])) { ret false; }
+    state.exponent[0] = 0x01;
+    state.exponent[1] = 0x00;
+    state.exponent[2] = 0x01;
+    var i: usize = 0;
+    for (i < 32) {
+        state.salt[i]    = i::u8;
+        state.message[i] = (i * 7)::u8;
+        i                = i + 1;
+    }
+    state.len = len;
+    ret true;
+}
+
+fun rsa_sign(state: *RsaState) bool {
+    val key: signature.RsaPrivateKey = signature.RsaPrivateKey{
+        modulus:          contracts.Bytes{data: ?state.modulus[0], len: state.len},
+        public_exponent:  contracts.Bytes{data: ?state.exponent[0], len: 3},
+        private_exponent: contracts.SecretBytes{data: ?state.private[0], len: state.len}
+    };
+    val operation: contracts.Operation = signature.sign_rsa_pss_sha256(key,
+        contracts.Bytes{data: ?state.message[0], len: 32},
+        contracts.SecretBytes{data: ?state.salt[0], len: 32},
+        contracts.Buffer{data: ?state.signature[0], capacity: 384});
+    ret operation.error == contracts.OK && operation.written == state.len;
+}
+
+fun rsa_verify(state: *RsaState) bool {
+    val key: signature.RsaPublicKey = signature.RsaPublicKey{
+        modulus:  contracts.Bytes{data: ?state.modulus[0], len: state.len},
+        exponent: contracts.Bytes{data: ?state.exponent[0], len: 3}
+    };
+    ret signature.verify_rsa_pss_sha256(key,
+        contracts.Bytes{data: ?state.message[0], len: 32},
+        contracts.Bytes{data: ?state.signature[0], len: state.len}) == contracts.OK;
+}
+
+# signing, then verifying the signature it produced, each a five-sample median
+fun rsa_budget(modulus_hex: str, private_hex: str, len: usize, sign_budget: i64,
+    verify_budget: i64) i32 {
+    var state: RsaState;
+    if (!rsa_state(?state, modulus_hex, private_hex, len)) { ret 1; }
+    val sign_ns: i64 = median_of_five(rsa_sign, ?state);
+    if (sign_ns < 0) { ret 2; }
+    val verify_ns: i64 = median_of_five(rsa_verify, ?state);
+    if (verify_ns < 0) { ret 3; }
+    ct.zeroize(?state.private[0], 384);
+    if (sign_ns > sign_budget)     { ret 4; }
+    if (verify_ns > verify_budget) { ret 5; }
+    ret 0;
+}
+
+test "rsa-pss 2048: median signing stays below 250 ms and verification below 25 ms" {
+    ret rsa_budget(RSA_2048_MODULUS, RSA_2048_PRIVATE, 256, 250000000, 25000000);
+}
+
+test "rsa-pss 3072: median signing stays below 500 ms and verification below 50 ms" {
+    ret rsa_budget(RSA_3072_MODULUS, RSA_3072_PRIVATE, 384, 500000000, 50000000);
 }

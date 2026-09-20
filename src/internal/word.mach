@@ -14,6 +14,20 @@ pub val HARDWARE: u8 = $mach.build.ct_mul(low, 64);
 # widening instruction for the low half and one for the high half
 pub val HARDWARE_WIDE: u8 = $mach.build.ct_mul(low, 128);
 
+# 1 where the sum of two limbs would carry
+#[oblivious]
+#[inline]
+pub fun carry_of(left: ^u64, right: ^u64, sum: ^u64) ^u64 {
+    ret ((left & right) | ((left | right) & ~sum)) >> 63;
+}
+
+# 1 where left - right - borrow would borrow
+#[oblivious]
+#[inline]
+pub fun borrow_of(left: ^u64, right: ^u64, difference: ^u64) ^u64 {
+    ret ((~left & right) | ((~left | right) & difference)) >> 63;
+}
+
 # low 64 bits of left * right, for right below 2^bits
 #[oblivious]
 #[inline]

@@ -25,10 +25,12 @@ differential	.	aes-128-gcm,aes-256-gcm	independent AES-GCM implementation	aes-gc
 differential	.	aes-128-gcm,aes-256-gcm	independent Python cryptography AES-GCM	aes-gcm: independent record-length differential vectors
 differential	.	chacha20-poly1305	independent RFC-compatible implementation	chacha20-poly1305: empty independent vector
 differential	.	chacha20-poly1305	independent RFC-compatible implementation	chacha20-poly1305: independent counter-carry differential vector
+differential	.	chacha20-poly1305	independent Python integer arithmetic	poly1305: carry edges match independent vectors over the padded layout
 differential	.	x25519	independent X25519 implementation	x25519: independent differential vector and private output overlap
 differential	.	rsa-pss-sha256,rsa-pss-sha384	independent OpenSSL vectors	rsa-pss: independent sha-256 and sha-384 vectors
 differential	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	independent OpenSSL vectors	rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs
 differential	.	ecdsa-p384-sha384	independent OpenSSL vector	ecdsa p-384: independent OpenSSL vector rejects tampering
+differential	.	rsa-pss-sha256	independent OpenSSL 2080-bit vector	rsa-pss: openssl 2080-bit vector exercises a half-filled top limb
 differential	.	p-256-ecdh,ecdsa-p256-sha256	independent Python integer arithmetic	p256 internal: field arithmetic matches independent vectors
 differential	.	ecdsa-p256-sha256	independent Python integer arithmetic	p256 internal: scalar arithmetic matches independent vectors
 differential	.	p-256-ecdh,ecdsa-p256-sha256	independent Python group law	p256 internal: windowed scalar multiplication matches independent vectors
@@ -61,6 +63,8 @@ invalid-input	.	key-containers	mach-crypto ownership contract	keys: allocation a
 invalid-input	.	key-containers	RFC 5480 and SEC 1 named-curve contract	keys: P-384 SPKI validates the named curve and every boundary
 invalid-input	.	key-containers	RFC 7468 and mach-crypto parser contract	keys: private PEM truncation fails before allocation at every boundary
 performance	test/performance	ecdsa-p384-sha384	250 ms median verification budget	ecdsa p-384: median verification stays below 250 ms
+performance	test/performance	rsa-pss-sha256	250 ms median signing and 25 ms verification budget, 2048-bit	rsa-pss 2048: median signing stays below 250 ms and verification below 25 ms
+performance	test/performance	rsa-pss-sha256	500 ms median signing and 50 ms verification budget, 3072-bit	rsa-pss 3072: median signing stays below 500 ms and verification below 50 ms
 zeroization	.	secret-storage	mach-crypto destruction contract	secret: partial allocation failure is wiped and cleanup ownership is retained
 zeroization	.	secret-storage	mach-crypto entropy contract	secret: entropy failure is distinct and wipes partial output
 zeroization	.	secret-storage	mach-crypto destruction contract	secret: failed cleanup rewipes retained ownership before retry

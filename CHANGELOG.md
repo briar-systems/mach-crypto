@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-20
+
+### Performance
+
+- RSA runs on 64-bit limbs: `crypto.internal.rsa` is a run-time-sized Montgomery ring of up to 64 limbs whose products are `word.multiply_wide`, so a 2048-bit multiply is 1024 hardware products instead of 4096 32-bit ones, squaring forms its cross products once, and r2 is derived by a handful of squarings from the modulus's top bit instead of 4096 modular doublings. Exponentiation uses fixed 4-bit windows with a masked table scan in place of square-and-multiply on every bit. Instructions per op on x86_64 with mach 5.9.0: RSA-PSS 2048 signing 1238M to 214M (13.5 ms), verification 74.8M to 5.0M (0.32 ms), 3072 signing 3789M to 661M (42 ms), verification 131M to 10.4M (0.66 ms). Key acceptance is unchanged: any four-byte-increment modulus from 256 to 512 bytes, including one that does not fill its top limb (#148, #83).
+- Poly1305 runs on three 44-bit limbs: a block is nine `word.multiply_wide` products and one carry chain instead of 25 low products over five 26-bit limbs, and the final reduction and pad addition work on 64-bit words. `process_block` is 310 instructions on x86_64 release against 516; a 1 KiB ChaCha20-Poly1305 seal drops from 185k to 161k instructions and 16 KiB from 2.76M to 2.39M, the rest being ChaCha20 (#149, #83).
+
+### Changed
+
+- Dependencies: requires mach-std 7.0.2, selected by `version = "^7.0"`, and `test/performance` pins `tag/v7.0.2`. std 7 changes `io.runtime.make`, the alignment honored by `allocator.page`, `allocator.testing` and `allocator.arena`, and the size of `data.toml.Value`; crypto imports none of those (its std surface is `std.runtime`, `std.crypto.ct`, `std.crypto.hash.sha`, `std.memory`, `std.io.error`, `std.chrono.time` and the `std.types.*` primitives), so nothing in std's migration guide applies. `mach = "^5.9"` is unchanged (#154).
+
+### Added
+
+- `assurance/algorithms.tsv` records the secret multiply path per algorithm in a `hardware_multiply` column (`word` through `crypto.internal.word`, `none` for algorithms with no secret multiply), `tools/assurance` rejects any other value, and `doc/assurance.md` describes it (#150, #83).
+- `test/performance` budgets RSA-PSS 2048 and 3072 signing and verification (250 ms and 25 ms, 500 ms and 50 ms medians) on OpenSSL-generated keys, and an OpenSSL 2080-bit PSS vector checks a modulus whose top 64-bit limb is half filled (#148, #83).
+- `word.carry_of` and `word.borrow_of` are the limb carry and borrow predicates both Montgomery rings share (#148, #83).
+- Poly1305 carry edges are checked against independent big-integer vectors over the AEAD's padded layout: a fully clamped `r` on all-ones blocks, `h` crossing `p` at the final reduction, the pad addition carrying between tag words, and aad with a partial final block (#149, #83).
+
 ## [0.19.0] - 2026-09-19
 
 ### Performance

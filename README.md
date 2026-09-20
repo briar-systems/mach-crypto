@@ -204,10 +204,10 @@ Plaintext is bounded to 274,877,906,880 bytes, or `2^32 - 1` payload blocks.
 Counter zero is reserved for the Poly1305 one-time key and payload counters run
 from one through `0xffffffff`. Additional-data and ciphertext byte lengths are
 encoded as the complete 64-bit RFC 8439 length fields. ChaCha20 uses fixed
-rotations and positions. Poly1305 uses fixed-position limb arithmetic without
-secret-dependent table accesses or hardware multiplication. Keys, stream
-state, one-time keys, accumulators, authentication tags, and stream blocks are
-explicitly zeroized.
+rotations and positions. Poly1305 runs on three 44-bit limbs, nine
+`crypto.internal.word` products and one carry chain per block, with no
+secret-dependent table access. Keys, stream state, one-time keys,
+accumulators, authentication tags, and stream blocks are explicitly zeroized.
 
 This module protects TLS records and QUIC packet payloads. QUIC header
 protection remains a separate primitive contract because it consumes a packet
@@ -299,6 +299,15 @@ exponent is canonical big-endian, odd, at least three, and less than the
 modulus. A private exponent is secret, left-zero-padded to exactly the modulus
 width, and is paired with its public exponent so signing can verify its own
 result before release.
+
+The arithmetic runs on 64-bit limbs in a Montgomery ring derived from the
+modulus per operation, with every limb product a `crypto.internal.word`
+product, so a target with the hardware multiply computes one instruction per
+limb pair. A modulus that does not fill its top limb, such as 2080 bits, runs
+on the same ring. Exponentiation uses fixed 4-bit windows: four squarings and
+one multiply per window, with the table entry read by a masked scan over all
+sixteen entries so no secret indexes memory, and the same path for public and
+private exponents.
 
 `signature.sign_rsa_pss_sha256` requires an exact 32-byte caller-provided
 secret salt. `signature.sign_rsa_pss_sha384` requires an exact 48-byte salt.
