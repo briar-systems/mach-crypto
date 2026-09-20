@@ -63,8 +63,14 @@ The layers run separately so one kind of evidence cannot stand in for another:
 `assurance/leakage.tsv` lists the leakage controls and the rejection each must
 produce. `assurance/tests.tsv` binds each focused test to its category, algorithm, and
 vector or contract source. `assurance/algorithms.tsv` is the algorithm and
-constant-time coverage inventory. `assurance/projects.tsv` is the complete
-build matrix. These files are release policy, not advisory documentation.
+constant-time coverage inventory; its `hardware_multiply` column is `word`
+when the algorithm's secret products go through `crypto.internal.word`
+(`word.multiply` and `word.multiply_wide`, the processor's multiply where
+`$mach.build.ct_mul` admits it as constant time and the bit-serial masked sum
+elsewhere) and `none` when the algorithm performs no secret multiply. GHASH
+in AES-GCM is bit-serial and does not use `word`. `assurance/projects.tsv` is
+the complete build matrix. These files are release policy, not advisory
+documentation.
 
 ## Machine-readable output
 
