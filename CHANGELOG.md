@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-20
+
 ### Performance
 
 - RSA runs on 64-bit limbs: `crypto.internal.rsa` is a run-time-sized Montgomery ring of up to 64 limbs whose products are `word.multiply_wide`, so a 2048-bit multiply is 1024 hardware products instead of 4096 32-bit ones, squaring forms its cross products once, and r2 is derived by a handful of squarings from the modulus's top bit instead of 4096 modular doublings. Exponentiation uses fixed 4-bit windows with a masked table scan in place of square-and-multiply on every bit. Instructions per op on x86_64 with mach 5.9.0: RSA-PSS 2048 signing 1238M to 214M (13.5 ms), verification 74.8M to 5.0M (0.32 ms), 3072 signing 3789M to 661M (42 ms), verification 131M to 10.4M (0.66 ms). Key acceptance is unchanged: any four-byte-increment modulus from 256 to 512 bytes, including one that does not fill its top limb (#148, #83).
