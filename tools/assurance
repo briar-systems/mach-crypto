@@ -344,9 +344,13 @@ run_leakage_negative_controls() {
 }
 
 record_positive_leakage_evidence() {
-    local algorithm ct source target profile log relative hash
-    while IFS=$'\t' read -r algorithm ct source; do
+    local algorithm ct source hardware target profile log relative hash
+    while IFS=$'\t' read -r algorithm ct source hardware; do
         [[ "$algorithm" == algorithm ]] && continue
+        case "$hardware" in
+            word|none) ;;
+            *) die "algorithms.tsv: $algorithm has hardware_multiply '$hardware', expected word or none" ;;
+        esac
         [[ "$ct" == yes ]] || continue
         for target in "${targets[@]}"; do
             for profile in "${profiles[@]}"; do

@@ -9,6 +9,7 @@
 
 ### Added
 
+- `assurance/algorithms.tsv` records the secret multiply path per algorithm in a `hardware_multiply` column (`word` through `crypto.internal.word`, `none` for algorithms with no secret multiply), `tools/assurance` rejects any other value, and `doc/assurance.md` describes it (#150, #83).
 - `test/performance` budgets RSA-PSS 2048 and 3072 signing and verification (250 ms and 25 ms, 500 ms and 50 ms medians) on OpenSSL-generated keys, and an OpenSSL 2080-bit PSS vector checks a modulus whose top 64-bit limb is half filled (#148, #83).
 - `word.carry_of` and `word.borrow_of` are the limb carry and borrow predicates both Montgomery rings share (#148, #83).
 - Poly1305 carry edges are checked against independent big-integer vectors over the AEAD's padded layout: a fully clamped `r` on all-ones blocks, `h` crossing `p` at the final reduction, the pad addition carrying between tag words, and aad with a partial final block (#149, #83).
