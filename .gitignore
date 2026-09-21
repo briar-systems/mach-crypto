@@ -3,5 +3,4 @@ test/*/dep/
 test/*/out/
 *.swp
 *~
-.wt/
 .mach-seed/
