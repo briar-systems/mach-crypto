@@ -516,10 +516,17 @@ test "aes-gcm: independent record-length differential vectors" {
         nonce[i] = (0x30 + i)::u8;
         i        = i + 1;
     }
+    # each key is expanded once and every record also runs through its context
+    var context128: aes_gcm.Context = aes_gcm.empty();
+    var context256: aes_gcm.Context = aes_gcm.empty();
+    if (aes_gcm.init(?context128, contracts.SecretBytes{data: ?key[0], len: 16}) != contracts.OK) { ret 5; }
+    if (aes_gcm.init(?context256, contracts.SecretBytes{data: ?key[0], len: 32}) != contracts.OK) { ret 5; }
     var index: usize = 0;
     for (index < GCM_CASES) {
-        val length:     usize = GCM_LENGTHS[index];
-        val key_length: usize = GCM_KEY_LENGTHS[index];
+        val length:     usize            = GCM_LENGTHS[index];
+        val key_length: usize            = GCM_KEY_LENGTHS[index];
+        var context:    *aes_gcm.Context = ?context128;
+        if (key_length == 32) { context = ?context256; }
         i = 0;
         for (i < length) {
             record_plaintext[i] = (i * 11 + 1)::u8;
@@ -544,8 +551,199 @@ test "aes-gcm: independent record-length differential vectors" {
             if (record_opened[i]:>u8 != (i * 11 + 1)::u8) { ret 4; }
             i = i + 1;
         }
+        result = aes_gcm.seal_with(context,
+            contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: (?aad[0]):~*u8, len: 5},
+            contracts.SecretBytes{data: ?record_plaintext[0], len: length},
+            contracts.Buffer{data: ?record_sealed[0], capacity: length + 16});
+        if (result.error != contracts.OK || result.written != length + 16) { ret 6; }
+        sha256.hash(?record_sealed[0], length + 16, ?digest[0]);
+        if (!public_equal(?digest[0], (?GCM_DIGESTS[index * 32]):~*u8, 32)) { ret 7; }
+        fill_secret(?record_opened[0], 0xA5, length);
+        result = aes_gcm.open_with(context,
+            contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: (?aad[0]):~*u8, len: 5},
+            contracts.Bytes{data: ?record_sealed[0], len: length + 16},
+            contracts.SecretBuffer{data: ?record_opened[0], capacity: length});
+        if (result.error != contracts.OK || result.written != length) { ret 8; }
+        i = 0;
+        for (i < length) {
+            if (record_opened[i]:>u8 != (i * 11 + 1)::u8) { ret 9; }
+            i = i + 1;
+        }
         index = index + 1;
     }
+    if (aes_gcm.dnit(?context128) != contracts.OK || aes_gcm.dnit(?context256) != contracts.OK) { ret 10; }
+    ret 0;
+}
+
+test "aes-gcm: nist vectors seal and open through one keyed context" {
+    var key: [16]^u8 = [16]^u8{
+        0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
+        0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83, 0x08
+    };
+    val nonce: [12]u8 = [12]u8{
+        0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad,
+        0xde, 0xca, 0xf8, 0x88
+    };
+    val aad: [20]u8 = [20]u8{
+        0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef,
+        0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef,
+        0xab, 0xad, 0xda, 0xd2
+    };
+    var plaintext: [60]^u8 = [60]^u8{
+        0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5,
+        0xa5, 0x59, 0x09, 0xc5, 0xaf, 0xf5, 0x26, 0x9a,
+        0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7, 0xda,
+        0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72,
+        0x1c, 0x3c, 0x0c, 0x95, 0x95, 0x68, 0x09, 0x53,
+        0x2f, 0xcf, 0x0e, 0x24, 0x49, 0xa6, 0xb5, 0x25,
+        0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+        0xba, 0x63, 0x7b, 0x39
+    };
+    val expected: [76]u8 = [76]u8{
+        0x42, 0x83, 0x1e, 0xc2, 0x21, 0x77, 0x74, 0x24,
+        0x4b, 0x72, 0x21, 0xb7, 0x84, 0xd0, 0xd4, 0x9c,
+        0xe3, 0xaa, 0x21, 0x2f, 0x2c, 0x02, 0xa4, 0xe0,
+        0x35, 0xc1, 0x7e, 0x23, 0x29, 0xac, 0xa1, 0x2e,
+        0x21, 0xd5, 0x14, 0xb2, 0x54, 0x66, 0x93, 0x1c,
+        0x7d, 0x8f, 0x6a, 0x5a, 0xac, 0x84, 0xaa, 0x05,
+        0x1b, 0xa3, 0x0b, 0x39, 0x6a, 0x0a, 0xac, 0x97,
+        0x3d, 0x58, 0xe0, 0x91, 0x5b, 0xc9, 0x4f, 0xbc,
+        0x32, 0x21, 0xa5, 0xdb, 0x94, 0xfa, 0xe9, 0x5a,
+        0xe7, 0x12, 0x1a, 0x47
+    };
+    var context: aes_gcm.Context = aes_gcm.empty();
+    if (aes_gcm.init(?context, contracts.SecretBytes{data: ?key[0], len: 16}) != contracts.OK) { ret 1; }
+    # the key is consumed by init, so overwriting it changes nothing
+    fill_secret(?key[0], 0xA5, 16);
+    var output: [76]u8;
+    var opened: [60]^u8;
+    var round:  usize = 0;
+    for (round < 3) {
+        var result: contracts.Operation = aes_gcm.seal_with(?context,
+            contracts.Bytes{data: (?nonce[0]):~*u8, len: 12},
+            contracts.Bytes{data: (?aad[0]):~*u8, len: 20},
+            contracts.SecretBytes{data: ?plaintext[0], len: 60},
+            contracts.Buffer{data: ?output[0], capacity: 76});
+        if (result.error != contracts.OK || result.written != 76 ||
+            !public_equal(?output[0], (?expected[0]):~*u8, 76)) { ret 2; }
+        fill_secret(?opened[0], 0, 60);
+        result = aes_gcm.open_with(?context,
+            contracts.Bytes{data: (?nonce[0]):~*u8, len: 12},
+            contracts.Bytes{data: (?aad[0]):~*u8, len: 20},
+            contracts.Bytes{data: ?output[0], len: 76},
+            contracts.SecretBuffer{data: ?opened[0], capacity: 60});
+        if (result.error != contracts.OK || result.written != 60 ||
+            !secrets_equal(?opened[0], ?plaintext[0], 60)) { ret 3; }
+        round = round + 1;
+    }
+    if (aes_gcm.dnit(?context) != contracts.OK) { ret 4; }
+
+    var key256:     [32]^u8;
+    var zero_nonce: [12]u8;
+    fill_secret(?key256[0], 0, 32);
+    var i: usize = 0;
+    for (i < 12) {
+        zero_nonce[i] = 0;
+        i             = i + 1;
+    }
+    var block: [16]^u8;
+    fill_secret(?block[0], 0, 16);
+    val expected256: [32]u8 = [32]u8{
+        0xce, 0xa7, 0x40, 0x3d, 0x4d, 0x60, 0x6b, 0x6e,
+        0x07, 0x4e, 0xc5, 0xd3, 0xba, 0xf3, 0x9d, 0x18,
+        0xd0, 0xd1, 0xc8, 0xa7, 0x99, 0x99, 0x6b, 0xf0,
+        0x26, 0x5b, 0x98, 0xb5, 0xd4, 0x8a, 0xb9, 0x19
+    };
+    val empty256: [16]u8 = [16]u8{
+        0x53, 0x0f, 0x8a, 0xfb, 0xc7, 0x45, 0x36, 0xb9,
+        0xa9, 0x63, 0xb4, 0xf1, 0xc4, 0xcb, 0x73, 0x8b
+    };
+    if (aes_gcm.init(?context, contracts.SecretBytes{data: ?key256[0], len: 32}) != contracts.OK) { ret 5; }
+    var sealed: [32]u8;
+    var result: contracts.Operation = aes_gcm.seal_with(?context,
+        contracts.Bytes{data: ?zero_nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: nil, len: 0}, contracts.Buffer{data: ?sealed[0], capacity: 32});
+    if (result.error != contracts.OK || result.written != 16 ||
+        !public_equal(?sealed[0], (?empty256[0]):~*u8, 16)) { ret 6; }
+    result = aes_gcm.seal_with(?context,
+        contracts.Bytes{data: ?zero_nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+        contracts.SecretBytes{data: ?block[0], len: 16}, contracts.Buffer{data: ?sealed[0], capacity: 32});
+    if (result.error != contracts.OK || result.written != 32 ||
+        !public_equal(?sealed[0], (?expected256[0]):~*u8, 32)) { ret 7; }
+    if (aes_gcm.dnit(?context) != contracts.OK) { ret 8; }
+    ret 0;
+}
+
+test "aes-gcm: the context refuses use outside init and dnit, which zeroizes it" {
+    var key: [32]^u8;
+    fill_secret(?key[0], 3, 32);
+    var nonce:  [12]u8;
+    var sealed: [32]u8;
+    var opened: [16]^u8;
+    var i:      usize = 0;
+    for (i < 12) {
+        nonce[i] = i::u8;
+        i        = i + 1;
+    }
+    i = 0;
+    for (i < 32) {
+        sealed[i] = 0xA5;
+        i         = i + 1;
+    }
+    fill_secret(?opened[0], 0xA5, 16);
+    val no_aad:  contracts.Bytes        = contracts.Bytes{data: nil, len: 0};
+    val no_text: contracts.SecretBytes  = contracts.SecretBytes{data: nil, len: 0};
+    val nonce12: contracts.Bytes        = contracts.Bytes{data: ?nonce[0], len: 12};
+    val output:  contracts.Buffer       = contracts.Buffer{data: ?sealed[0], capacity: 32};
+    val input:   contracts.Bytes        = contracts.Bytes{data: ?sealed[0], len: 32};
+    val plain:   contracts.SecretBuffer = contracts.SecretBuffer{data: ?opened[0], capacity: 16};
+
+    if (aes_gcm.init(nil, contracts.SecretBytes{data: ?key[0], len: 16}) != contracts.INVALID_INPUT) { ret 1; }
+    if (aes_gcm.seal_with(nil, nonce12, no_aad, no_text, output).error != contracts.INVALID_INPUT)   { ret 2; }
+    if (aes_gcm.open_with(nil, nonce12, no_aad, input, plain).error != contracts.INVALID_INPUT)      { ret 3; }
+    if (aes_gcm.dnit(nil) != contracts.INVALID_INPUT)                                                { ret 4; }
+
+    var context: aes_gcm.Context     = aes_gcm.empty();
+    var result:  contracts.Operation = aes_gcm.seal_with(?context, nonce12, no_aad, no_text, output);
+    if (result.error != contracts.INVALID_STATE || result.written != 0) { ret 5; }
+    result = aes_gcm.open_with(?context, nonce12, no_aad, input, plain);
+    if (result.error != contracts.INVALID_STATE || result.written != 0)                                 { ret 6; }
+    if (aes_gcm.init(?context, contracts.SecretBytes{data: ?key[0], len: 24}) != contracts.INVALID_KEY) { ret 7; }
+    if (context.state != aes_gcm.EMPTY)                                                                 { ret 8; }
+    if (aes_gcm.init(?context, contracts.SecretBytes{data: nil, len: 32}) != contracts.INVALID_INPUT)   { ret 9; }
+    if (context.state != aes_gcm.EMPTY)                                                                 { ret 10; }
+    if (!public_filled(?sealed[0], 0xA5, 32) || !secret_filled(?opened[0], 0xA5, 16))                   { ret 11; }
+
+    if (aes_gcm.init(?context, contracts.SecretBytes{data: ?key[0], len: 32}) != contracts.OK)            { ret 12; }
+    if (aes_gcm.init(?context, contracts.SecretBytes{data: ?key[0], len: 32}) != contracts.INVALID_STATE) { ret 13; }
+    result = aes_gcm.seal_with(?context, contracts.Bytes{data: ?nonce[0], len: 11}, no_aad, no_text, output);
+    if (result.error != contracts.INVALID_INPUT || !public_filled(?sealed[0], 0xA5, 32)) { ret 14; }
+    result = aes_gcm.seal_with(?context, nonce12, no_aad, no_text,
+        contracts.Buffer{data: ?sealed[0], capacity: 15});
+    if (result.error != contracts.OUTPUT_TOO_SMALL || !public_filled(?sealed[0], 0xA5, 32)) { ret 15; }
+
+    # a record that fails authentication clears output and leaves the context usable
+    result = aes_gcm.open_with(?context, nonce12, no_aad, input, plain);
+    if (result.error != contracts.AUTH_FAILED || !secret_filled(?opened[0], 0, 16)) { ret 16; }
+    fill_secret(?opened[0], 0x3C, 16);
+    result = aes_gcm.seal_with(?context, nonce12, no_aad,
+        contracts.SecretBytes{data: ?opened[0], len: 16}, output);
+    if (result.error != contracts.OK || result.written != 32) { ret 17; }
+    fill_secret(?opened[0], 0, 16);
+    result = aes_gcm.open_with(?context, nonce12, no_aad, input, plain);
+    if (result.error != contracts.OK || !secret_filled(?opened[0], 0x3C, 16)) { ret 18; }
+
+    val planes: *^u8 = (?context.cipher.software.round_planes[0]):~*^u8;
+    val hash:   *^u8 = (?context.hash.software.h[0]):~*^u8;
+    if (secret_filled(planes, 0, 960) || secret_filled(hash, 0, 16))   { ret 19; }
+    if (aes_gcm.dnit(?context) != contracts.OK)                        { ret 20; }
+    if (!secret_filled(planes, 0, 960) || !secret_filled(hash, 0, 16)) { ret 24; }
+    if (aes_gcm.dnit(?context) != contracts.OK)                        { ret 25; }
+    result = aes_gcm.open_with(?context, nonce12, no_aad, input, plain);
+    if (result.error != contracts.INVALID_STATE || !secret_filled(?opened[0], 0x3C, 16)) { ret 21; }
+    context.state = 9;
+    if (aes_gcm.dnit(?context) != contracts.INVALID_STATE) { ret 22; }
+    if (context.state != aes_gcm.EMPTY)                    { ret 23; }
     ret 0;
 }
 

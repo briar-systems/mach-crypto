@@ -9,6 +9,7 @@ fwd crypto.hash;
 fwd crypto.hmac;
 fwd crypto.hkdf;
 fwd crypto.aead;
+fwd crypto.cipher;
 fwd crypto.group;
 fwd crypto.signature;
 fwd crypto.encoding;
