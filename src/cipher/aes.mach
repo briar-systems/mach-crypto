@@ -1,0 +1,90 @@
+# the aes-128 and aes-256 block cipher under one expanded key
+#
+# a Context holds the key schedule, expanded once by `init`, and
+# `encrypt_block` runs any number of blocks against it. this is the raw
+# forward cipher, for constructions such as quic header protection that need
+# one block of keystream; record protection belongs to `crypto.aead`. the
+# context is welded, since every key-derived field is secret-typed, and `dnit`
+# zeroizes it.
+
+use crypto.contracts;
+use core: crypto.internal.aes;
+use std.crypto.ct;
+use std.types.bool.bool;
+use std.types.size.usize;
+
+pub val BLOCK_SIZE:      usize = 16;
+pub val AES128_KEY_SIZE: usize = 16;
+pub val AES256_KEY_SIZE: usize = 32;
+
+pub def State: u8;
+
+pub val EMPTY:  State = 0;
+pub val ACTIVE: State = 1;
+
+# one expanded key
+#
+# callers treat the record as opaque, construct it with `empty`, and never
+# copy it directly.
+pub rec Context {
+    cipher: core.Context;
+    state:  State;
+}
+
+# an empty context holds no key, so a use before init is refused
+pub fun empty() Context {
+    var context: Context;
+    core.destroy(?context.cipher);
+    context.state = EMPTY;
+    ret context;
+}
+
+# expand a 16-byte or 32-byte key into an empty context
+#
+# the key may be released or overwritten once this returns. a failure leaves
+# the context empty.
+#[oblivious]
+pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
+    if (context == nil)         { ret contracts.INVALID_INPUT; }
+    if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
+    ct.begin();
+    val expanded: contracts.Error = core.init(?context.cipher, key);
+    if (expanded != contracts.OK) {
+        core.destroy(?context.cipher);
+        ct.end();
+        ret expanded;
+    }
+    context.state = ACTIVE;
+    ct.end();
+    ret contracts.OK;
+}
+
+# encrypt one 16-byte block
+#
+# input must be exactly one block and output must hold one. they may be the
+# same storage, since the block is read completely before it is written.
+#[oblivious]
+pub fun encrypt_block(context: *Context, input: contracts.SecretBytes,
+    output: contracts.SecretBuffer) contracts.Error {
+    if (context == nil)                               { ret contracts.INVALID_INPUT; }
+    if (context.state != ACTIVE)                      { ret contracts.INVALID_STATE; }
+    if (input.len != BLOCK_SIZE || input.data == nil) { ret contracts.INVALID_INPUT; }
+    if (output.capacity < BLOCK_SIZE)                 { ret contracts.OUTPUT_TOO_SMALL; }
+    if (output.data == nil)                           { ret contracts.INVALID_INPUT; }
+    ct.begin();
+    core.encrypt(?context.cipher, input.data, output.data);
+    ct.end();
+    ret contracts.OK;
+}
+
+# zeroize the context and return it to empty
+#
+# idempotent. a context in an unknown state is still wiped and reported.
+pub fun dnit(context: *Context) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    val valid: bool = context.state == EMPTY || context.state == ACTIVE;
+    core.destroy(?context.cipher);
+    context.state = EMPTY;
+    if (!valid) { ret contracts.INVALID_STATE; }
+    ret contracts.OK;
+}
