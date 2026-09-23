@@ -13,6 +13,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
+- `crypto.cipher.aes` provides the AES-128 and AES-256 block cipher under one
+  expanded key.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
 - `crypto.group.x25519` provides X25519 key agreement.
 - `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
@@ -166,6 +168,25 @@ pseudorandom key snapshots, and expansion blocks are explicitly zeroized.
 
 ## AES-GCM
 
+`aead.aes_gcm.Context` holds one key expanded once: the AES key schedule and
+the GHASH key. Construct it with `aes_gcm.empty()`, install a 16-byte or
+32-byte secret key with `aes_gcm.init`, then call `seal_with` and `open_with`
+for any number of records. Neither ever expands the key again. `aes_gcm.dnit`
+zeroizes every key-derived field and returns the context to empty. It is
+idempotent. `init` on a context that is not empty, and `seal_with` or
+`open_with` on one that is, return `INVALID_STATE` without writing. The key
+may be released or overwritten once `init` returns. A failed `init` leaves
+the context empty. Every key-derived field is secret-typed, so the context is
+secret-welded like the key. It is move-only by contract and must not be
+copied directly.
+
+`seal_with` and `open_with` take the arguments and keep the contracts of
+`seal` and `open` below, with the context in place of the key. `aes_gcm.seal`
+and `aes_gcm.open` are the one-shot form. Each call expands the key into a
+temporary context, runs `seal_with` or `open_with`, and wipes it. A caller that
+protects more than one record under a key, as TLS and QUIC do, holds a
+`Context` instead.
+
 `aead.aes_gcm.seal` accepts a 16-byte or 32-byte secret key, an exact 12-byte
 public nonce, public additional authenticated data, secret plaintext, and
 caller-owned public output. It writes ciphertext followed by the complete
@@ -185,6 +206,26 @@ is representable in GCM's 64-bit length field. The implementation uses an
 algebraic AES S-box and fixed-position GHASH multiplication rather than memory
 lookups indexed by secret values. Expanded keys, cipher state, hash products,
 authentication tags, and stream blocks are explicitly zeroized.
+
+AES and GHASH each run behind an internal backend seam (`crypto.internal.aes`
+and `crypto.internal.ghash`). A context records the member chosen when its key
+is installed, and every later call runs that member. The bitsliced software
+member is portable and constant time, and it is the only member in this
+revision. Hardware members for AES-NI with PCLMULQDQ and ARMv8 AES with PMULL
+will be added behind the same contexts, with no change to this API, once the
+compiler can encode those instructions.
+
+## AES block cipher
+
+`cipher.aes.Context` holds one AES-128 or AES-256 key schedule. Construct it
+with `aes.empty()`, expand the key once with `aes.init`, then call
+`aes.encrypt_block` for any number of 16-byte blocks. Input must be exactly
+one block, output must hold one, and they may be the same storage.
+`aes.dnit` zeroizes the schedule. The lifecycle, the `INVALID_STATE` rules and
+the welding are the same as for the AES-GCM context. This is the raw forward
+cipher for constructions such as QUIC header protection, which derives a
+five-byte mask from one encrypted packet sample. Record protection belongs to
+`crypto.aead`.
 
 ## ChaCha20-Poly1305
 
@@ -210,8 +251,9 @@ secret-dependent table access. Keys, stream state, one-time keys,
 accumulators, authentication tags, and stream blocks are explicitly zeroized.
 
 This module protects TLS records and QUIC packet payloads. QUIC header
-protection remains a separate primitive contract because it consumes a packet
-sample to generate a five-byte mask rather than an AEAD nonce and payload.
+protection is a separate primitive contract because it consumes a packet
+sample to generate a five-byte mask rather than an AEAD nonce and payload. For
+the AES suites that primitive is `cipher.aes`.
 
 ## X25519
 
@@ -337,12 +379,13 @@ signatures are explicitly zeroized. `signature.algorithm_status` returns
 ## Status
 
 The repository combines callable primitives with contracts for algorithms that
-are still being built. AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305, X25519,
+are still being built. AES-128-GCM, AES-256-GCM, the AES-128 and AES-256
+block cipher, ChaCha20-Poly1305, X25519,
 P-256 ECDH, ECDSA P-256 with SHA-256, ECDSA P-384 verification with SHA-384,
 Ed25519, RSA-PSS and RSA PKCS#1 v1.5 with SHA-256 and SHA-384, HMAC-SHA-256,
 HMAC-SHA-384, HKDF-Extract, HKDF-Expand, incremental SHA-256 and SHA-384,
 strict DER and PEM, and TLS key containers are callable in this revision. Their
-tests include NIST,
+tests include NIST FIPS 197, NIST SP 800-38A, NIST SP 800-38D, other NIST,
 RFC 4231, RFC 5869, RFC 6979, RFC 7468, RFC 7748, RFC 8017, RFC 8032, RFC 8410,
 RFC 8439, SEC 1, and independent OpenSSL vectors. They cover
 strict-encoding and tamper cases, counter and output
