@@ -1,0 +1,86 @@
+# portable ghash, one fixed-shape bit-serial multiply per block
+#
+# this is the portable member behind crypto.internal.ghash. the field element
+# is two big-endian 64-bit words, the high word first, as gcm writes it.
+
+use std.crypto.ct;
+use std.types.size.usize;
+
+# the hash subkey h
+pub rec Key {
+    h: [2]^u64;
+}
+
+#[oblivious]
+fun read_secret_u64_be(input: *^u8, offset: usize) ^u64 {
+    var value: ^u64  = 0;
+    var i:     usize = 0;
+    for (i < 8) {
+        value = (value << 8) | input[offset + i]::^u64;
+        i     = i + 1;
+    }
+    ret value;
+}
+
+# install the 16-byte subkey, e(k, 0^128)
+#[oblivious]
+pub fun expand(key: *Key, subkey: *^u8) {
+    key.h[0] = read_secret_u64_be(subkey, 0);
+    key.h[1] = read_secret_u64_be(subkey, 8);
+}
+
+pub fun wipe(key: *Key) {
+    ct.zeroize((?key.h[0]):~*^u8, 16);
+}
+
+# multiply the accumulator by h in gf(2^128) one bit at a time
+#[oblivious]
+fun multiply(key: *Key, accumulator: *^u64) {
+    var product_high:  ^u64 = 0;
+    var product_low:   ^u64 = 0;
+    var multiple_high: ^u64 = key.h[0];
+    var multiple_low:  ^u64 = key.h[1];
+    val value_high:    ^u64 = accumulator[0];
+    val value_low:     ^u64 = accumulator[1];
+    var bit:           u64  = 0;
+    for (bit < 128) {
+        var selected: ^u64 = 0;
+        if (bit < 64) { selected = (value_high >> (63 - bit)) & 1; }
+        or            { selected = (value_low >> (127 - bit)) & 1; }
+        val mask: ^u64 = 0 - selected;
+        product_high = product_high ^ (multiple_high & mask);
+        product_low  = product_low ^ (multiple_low & mask);
+        val reduce: ^u64 = 0 - (multiple_low & 1);
+        multiple_low  = (multiple_low >> 1) | (multiple_high << 63);
+        multiple_high = (multiple_high >> 1) ^ (0xE100000000000000 & reduce);
+        bit           = bit + 1;
+    }
+    accumulator[0] = product_high;
+    accumulator[1] = product_low;
+    product_high   = 0;
+    product_low    = 0;
+    multiple_high  = 0;
+    multiple_low   = 0;
+}
+
+fun read_u64_be(input: *u8, offset: usize) u64 {
+    var value: u64   = 0;
+    var i:     usize = 0;
+    for (i < 8) {
+        value = (value << 8) | input[offset + i]::u64;
+        i     = i + 1;
+    }
+    ret value;
+}
+
+# absorb `blocks` whole 16-byte blocks of public data
+#[oblivious]
+pub fun absorb(key: *Key, accumulator: *^u64, data: *u8, blocks: usize) {
+    var block: usize = 0;
+    for (block < blocks) {
+        accumulator[0] = accumulator[0] ^ read_u64_be(data, block * 16);
+        accumulator[1] = accumulator[1] ^ read_u64_be(data, block * 16 + 8);
+        multiply(key, accumulator);
+        block = block + 1;
+    }
+}

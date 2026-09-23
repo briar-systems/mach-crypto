@@ -8,6 +8,7 @@ official-vector	.	hkdf-sha-256	RFC 5869	hkdf: rfc 5869 sha-256 case one
 official-vector	.	aes-128-gcm	NIST SP 800-38D	aes-gcm: nist empty and single-block aes-128 vectors
 official-vector	.	aes-256-gcm	NIST SP 800-38D	aes-gcm: nist empty and single-block aes-256 vectors
 official-vector	.	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	aes-gcm: nist aad and partial-block vector seals and opens
+official-vector	.	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	aes-gcm: nist vectors seal and open through one keyed context
 official-vector	.	chacha20-poly1305	RFC 8439	chacha20-poly1305: rfc 8439 aead vector seals and opens
 official-vector	.	p-256-ecdh	NIST CAVP KAS-ECC	p256: nist cavp p-256 cdh count zero
 official-vector	.	x25519	RFC 7748	x25519: rfc 7748 alice and bob exchange
@@ -49,6 +50,7 @@ invalid-input	.	sha-256,sha-384	mach-crypto bounded transcript contract	hash: va
 invalid-input	.	hmac-sha-256,hmac-sha-384	mach-crypto bounded output contract	hmac: output overlap and failures have defined behavior
 invalid-input	.	hkdf-sha-256,hkdf-sha-384	RFC 5869 and mach-crypto bounded output contract	hkdf: limits, capacities, and invalid inputs do not write
 invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto AEAD contract	aes-gcm: validation and capacity failures leave output unchanged
+invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	aes-gcm: the context refuses use outside init and dnit, which zeroizes it
 invalid-input	.	chacha20-poly1305	RFC 8439 and mach-crypto AEAD contract	chacha20-poly1305: malformed and bounded failures do not write
 invalid-input	.	p-256-ecdh	SEC 1 and mach-crypto agreement contract	p256: invalid scalars and sec1 points preserve output
 invalid-input	.	x25519	RFC 7748 and mach-crypto agreement contract	x25519: low-order inputs reject without changing output
@@ -76,6 +78,7 @@ zeroization	.	secret-storage	mach-crypto typed destruction contract	secret array
 zeroization	.	secret-storage	mach-std typed operating-system boundary	secret array: native allocator owns deeply secret records
 zeroization	.	sha-256,sha-384	mach-crypto transcript lifecycle contract	hash: snapshot continues and final consumes only after success
 zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto authenticated release contract	aes-gcm: authentication failures clear output before release
+zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	aes-gcm: the context refuses use outside init and dnit, which zeroizes it
 zeroization	.	chacha20-poly1305	mach-crypto authenticated release contract	chacha20-poly1305: authentication failures clear output before release
 zeroization	.	key-containers	mach-crypto secret ownership contract	keys: PEM round trips once-owned private DER and borrowed public DER
 zeroization	.	key-containers	mach-crypto secret ownership contract	keys: allocation and cleanup failures retain exact ownership

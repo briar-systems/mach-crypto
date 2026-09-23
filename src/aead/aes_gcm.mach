@@ -1,7 +1,14 @@
 # aes-gcm authenticated encryption
+#
+# a Context holds one key expanded once: the aes schedule and the ghash key.
+# `seal_with` and `open_with` run many records against it and never expand
+# the key again. `seal` and `open` are the one-shot form over a temporary
+# context. the context is welded, since every key-derived field is
+# secret-typed, and `dnit` zeroizes it.
 
 use crypto.contracts;
 use core: crypto.internal.aes;
+use crypto.internal.ghash;
 use std.crypto.ct;
 use std.types.bool.bool;
 use std.types.size.usize;
@@ -14,6 +21,10 @@ pub val TAG_SIZE:        usize = 16;
 pub val MAX_PLAINTEXT_SIZE: usize = 68719476704;
 pub val MAX_AAD_SIZE:       usize = 2305843009213693951;
 
+# keystream blocks produced per aes call, at most core.PARALLEL_BLOCKS
+val STREAM_BLOCKS: usize = 4;
+val STREAM_SIZE:   usize = 64;
+
 # seal writes ciphertext followed by the complete tag
 pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
     contracts.SecretBytes, contracts.Buffer) contracts.Operation;
@@ -21,6 +32,21 @@ pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
 # open authenticates the complete input before releasing secret plaintext
 pub def OpenFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
     contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
+
+pub def State: u8;
+
+pub val EMPTY:  State = 0;
+pub val ACTIVE: State = 1;
+
+# one expanded key
+#
+# callers treat the record as opaque, construct it with `empty`, and never
+# copy it directly. `dnit` zeroizes every key-derived field.
+pub rec Context {
+    cipher: core.Context;
+    hash:   ghash.Key;
+    state:  State;
+}
 
 fun failed(error: contracts.Error) contracts.Operation {
     ret contracts.Operation{error: error, written: 0};
@@ -30,108 +56,61 @@ fun valid_key(key: contracts.SecretBytes) bool {
     ret key.len == AES128_KEY_SIZE || key.len == AES256_KEY_SIZE;
 }
 
-# ghash state as big-endian 64-bit words, the key first and the accumulator second
-rec Hash {
-    key:         [2]^u64;
-    accumulator: [2]^u64;
+fun wipe(context: *Context) {
+    core.destroy(?context.cipher);
+    ghash.destroy(?context.hash);
+    context.state = EMPTY;
 }
 
+# an empty context holds no key, so a use before init is refused
+pub fun empty() Context {
+    var context: Context;
+    wipe(?context);
+    ret context;
+}
+
+# expand the key into an empty context
+#
+# the key may be released or overwritten once this returns. a failure leaves
+# the context empty.
 #[oblivious]
-fun read_u64_be(input: *^u8, offset: usize) ^u64 {
-    var value: ^u64  = 0;
-    var i:     usize = 0;
-    for (i < 8) {
-        value = (value << 8) | input[offset + i]::^u64;
-        i     = i + 1;
+pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
+    if (context == nil)         { ret contracts.INVALID_INPUT; }
+    if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
+    if (!valid_key(key))        { ret contracts.INVALID_KEY; }
+    if (key.data == nil)        { ret contracts.INVALID_INPUT; }
+
+    ct.begin();
+    val expanded: contracts.Error = core.init(?context.cipher, key);
+    if (expanded != contracts.OK) {
+        wipe(context);
+        ct.end();
+        ret expanded;
     }
-    ret value;
-}
-
-#[oblivious]
-fun write_secret_u64_be(output: *^u8, offset: usize, value: ^u64) {
-    var i: usize = 0;
-    for (i < 8) {
-        output[offset + i] = (value >> ((7 - i) * 8)::u64)::^u8;
-        i                  = i + 1;
+    var subkey: [16]^u8;
+    ct.zeroize(?subkey[0], 16);
+    core.encrypt(?context.cipher, ?subkey[0], ?subkey[0]);
+    val hashed: contracts.Error = ghash.init(?context.hash, ?subkey[0], ghash.preferred());
+    ct.zeroize(?subkey[0], 16);
+    if (hashed != contracts.OK) {
+        wipe(context);
+        ct.end();
+        ret hashed;
     }
+    context.state = ACTIVE;
+    ct.end();
+    ret contracts.OK;
 }
 
-# multiply the accumulator by the hash key in gf(2^128) one bit at a time
-#[oblivious]
-fun multiply_hash(state: *Hash) {
-    var product_high:  ^u64 = 0;
-    var product_low:   ^u64 = 0;
-    var multiple_high: ^u64 = state.key[0];
-    var multiple_low:  ^u64 = state.key[1];
-    val value_high:    ^u64 = state.accumulator[0];
-    val value_low:     ^u64 = state.accumulator[1];
-    var bit:           u64  = 0;
-    for (bit < 128) {
-        var selected: ^u64 = 0;
-        if (bit < 64) { selected = (value_high >> (63 - bit)) & 1; }
-        or            { selected = (value_low >> (127 - bit)) & 1; }
-        val mask: ^u64 = 0 - selected;
-        product_high = product_high ^ (multiple_high & mask);
-        product_low  = product_low ^ (multiple_low & mask);
-        val reduce: ^u64 = 0 - (multiple_low & 1);
-        multiple_low  = (multiple_low >> 1) | (multiple_high << 63);
-        multiple_high = (multiple_high >> 1) ^ (0xE100000000000000 & reduce);
-        bit           = bit + 1;
-    }
-    state.accumulator[0] = product_high;
-    state.accumulator[1] = product_low;
-    product_high         = 0;
-    product_low          = 0;
-    multiple_high        = 0;
-    multiple_low         = 0;
-}
-
-#[oblivious]
-fun hash_block(state: *Hash, block: *^u8) {
-    state.accumulator[0] = state.accumulator[0] ^ read_u64_be(block, 0);
-    state.accumulator[1] = state.accumulator[1] ^ read_u64_be(block, 8);
-    multiply_hash(state);
-}
-
-fun hash_public(state: *Hash, data: *u8, len: usize) {
-    var block:  [16]^u8;
-    var offset: usize = 0;
-    for (offset < len) {
-        ct.zeroize(?block[0], 16);
-        var take: usize = len - offset;
-        if (take > 16) { take = 16; }
-        var i: usize = 0;
-        for (i < take) {
-            block[i] = data[offset + i];
-            i        = i + 1;
-        }
-        hash_block(state, ?block[0]);
-        offset = offset + take;
-    }
-    ct.zeroize(?block[0], 16);
-}
-
-#[oblivious]
-fun hash_lengths(state: *Hash, aad_len: usize, text_len: usize) {
-    state.accumulator[0] = state.accumulator[0] ^ (aad_len::u64 * 8);
-    state.accumulator[1] = state.accumulator[1] ^ (text_len::u64 * 8);
-    multiply_hash(state);
-}
-
-#[oblivious]
-fun init_hash(state: *Hash, context: *core.Context) {
-    var zero: [16]^u8;
-    ct.zeroize(?zero[0], 16);
-    core.encrypt(context, ?zero[0], ?zero[0]);
-    state.key[0]         = read_u64_be(?zero[0], 0);
-    state.key[1]         = read_u64_be(?zero[0], 8);
-    state.accumulator[0] = 0;
-    state.accumulator[1] = 0;
-    ct.zeroize(?zero[0], 16);
-}
-
-fun destroy_hash(state: *Hash) {
-    ct.zeroize((?state.key[0]):~*^u8, 32);
+# zeroize the context and return it to empty
+#
+# idempotent. a context in an unknown state is still wiped and reported.
+pub fun dnit(context: *Context) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    val valid: bool = context.state == EMPTY || context.state == ACTIVE;
+    wipe(context);
+    if (!valid) { ret contracts.INVALID_STATE; }
+    ret contracts.OK;
 }
 
 fun make_counter(nonce: contracts.Bytes, counter: *^u8) {
@@ -151,7 +130,7 @@ fun set_counter(counter: *^u8, value: u32) {
     counter[15] = value::u8;
 }
 
-# keystream for up to four blocks from consecutive counters starting at `first`
+# keystream for up to STREAM_BLOCKS blocks from consecutive counters starting at `first`
 #[oblivious]
 fun keystream(context: *core.Context, counter: *^u8, first: u32, blocks: usize,
     stream: *^u8) {
@@ -169,12 +148,11 @@ fun keystream(context: *core.Context, counter: *^u8, first: u32, blocks: usize,
 }
 
 #[oblivious]
-fun finish_tag(context: *core.Context, counter: *^u8, state: *Hash, tag: *^u8) {
+fun finish_tag(context: *Context, counter: *^u8, state: *ghash.State, tag: *^u8) {
     var encrypted_counter: [16]^u8;
     ct.zeroize(?encrypted_counter[0], 16);
-    core.encrypt(context, counter, ?encrypted_counter[0]);
-    write_secret_u64_be(tag, 0, state.accumulator[0]);
-    write_secret_u64_be(tag, 8, state.accumulator[1]);
+    core.encrypt(?context.cipher, counter, ?encrypted_counter[0]);
+    ghash.finish(state, tag);
     var i: usize = 0;
     for (i < TAG_SIZE) {
         tag[i] = encrypted_counter[i] ^ tag[i];
@@ -183,23 +161,16 @@ fun finish_tag(context: *core.Context, counter: *^u8, state: *Hash, tag: *^u8) {
     ct.zeroize(?encrypted_counter[0], 16);
 }
 
-fun wipe_common(context: *core.Context, state: *Hash, counter: *^u8, tag: *^u8) {
-    core.destroy(context);
-    destroy_hash(state);
-    ct.zeroize(counter, 16);
-    ct.zeroize(tag, 16);
-}
-
-# encrypt and authenticate one tls or quic record payload
+# encrypt and authenticate one tls or quic record payload under the context
 #
 # nonce must be exactly 12 bytes. output capacity must cover plaintext plus the
 # 16-byte tag. aad and nonce may overlap output because both are consumed before
 # the first output write. secret and public buffers cannot alias by contract.
 #[oblivious]
-pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
+pub fun seal_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Bytes,
     plaintext: contracts.SecretBytes, output: contracts.Buffer) contracts.Operation {
-    if (!valid_key(key))                              { ret failed(contracts.INVALID_KEY); }
-    if (key.data == nil)                              { ret failed(contracts.INVALID_INPUT); }
+    if (context == nil)                               { ret failed(contracts.INVALID_INPUT); }
+    if (context.state != ACTIVE)                      { ret failed(contracts.INVALID_STATE); }
     if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
     if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
     if (plaintext.len != 0 && plaintext.data == nil)  { ret failed(contracts.INVALID_INPUT); }
@@ -211,29 +182,22 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     if (output.data == nil)         { ret failed(contracts.INVALID_INPUT); }
 
     ct.begin();
-    var context:     core.Context;
-    val initialized: contracts.Error = core.init(?context, key);
-    if (initialized != contracts.OK) {
-        ct.end();
-        ret failed(initialized);
-    }
-    var state:   Hash;
+    var state:   ghash.State;
     var counter: [16]^u8;
     var tag:     [16]^u8;
-    ct.zeroize(?counter[0], 16);
     ct.zeroize(?tag[0], 16);
-    init_hash(?state, ?context);
+    ghash.start(?state);
     make_counter(nonce, ?counter[0]);
-    hash_public(?state, aad.data, aad.len);
+    ghash.update(?context.hash, ?state, aad.data, aad.len);
 
     var stream:        [64]^u8;
     var offset:        usize = 0;
     var counter_value: u32   = 2;
     for (offset < plaintext.len) {
         var take: usize = plaintext.len - offset;
-        if (take > 64) { take = 64; }
+        if (take > STREAM_SIZE) { take = STREAM_SIZE; }
         val blocks: usize = (take + 15) / 16;
-        keystream(?context, ?counter[0], counter_value, blocks, ?stream[0]);
+        keystream(?context.cipher, ?counter[0], counter_value, blocks, ?stream[0]);
         var i: usize = 0;
         for (i < take) {
             output.data[offset + i] = (plaintext.data[offset + i] ^ stream[i]):>u8;
@@ -243,32 +207,33 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
         if (offset < plaintext.len) { counter_value = counter_value + blocks::u32; }
     }
     ct.zeroize(?stream[0], 64);
-    hash_public(?state, output.data, plaintext.len);
+    ghash.update(?context.hash, ?state, output.data, plaintext.len);
 
-    hash_lengths(?state, aad.len, plaintext.len);
+    ghash.lengths(?context.hash, ?state, aad.len, plaintext.len);
     set_counter(?counter[0], 1);
-    finish_tag(?context, ?counter[0], ?state, ?tag[0]);
+    finish_tag(context, ?counter[0], ?state, ?tag[0]);
     var i: usize = 0;
     for (i < TAG_SIZE) {
         output.data[plaintext.len + i] = tag[i]:>u8;
         i                              = i + 1;
     }
-    wipe_common(?context, ?state, ?counter[0], ?tag[0]);
+    ghash.wipe(?state);
+    ct.zeroize(?counter[0], 16);
+    ct.zeroize(?tag[0], 16);
     ct.end();
     ret contracts.Operation{error: contracts.OK, written: required};
 }
 
-# authenticate and decrypt one tls or quic record payload
+# authenticate and decrypt one tls or quic record payload under the context
 #
 # input is ciphertext followed by a complete 16-byte tag. authentication occurs
 # before any decryption. authentication failure writes no plaintext and clears
-# exactly the ciphertext-length prefix of output. successful output may overlap
-# the secret key because the expanded key schedule is snapshotted first.
+# exactly the ciphertext-length prefix of output.
 #[oblivious]
-pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
+pub fun open_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Bytes,
     input: contracts.Bytes, output: contracts.SecretBuffer) contracts.Operation {
-    if (!valid_key(key))                              { ret failed(contracts.INVALID_KEY); }
-    if (key.data == nil)                              { ret failed(contracts.INVALID_INPUT); }
+    if (context == nil)                               { ret failed(contracts.INVALID_INPUT); }
+    if (context.state != ACTIVE)                      { ret failed(contracts.INVALID_STATE); }
     if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
     if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
     if (input.len < TAG_SIZE || input.data == nil)    { ret failed(contracts.INVALID_INPUT); }
@@ -280,26 +245,20 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     if (ciphertext_len != 0 && output.data == nil) { ret failed(contracts.INVALID_INPUT); }
 
     ct.begin();
-    var context:     core.Context;
-    val initialized: contracts.Error = core.init(?context, key);
-    if (initialized != contracts.OK) {
-        ct.end();
-        ret failed(initialized);
-    }
-    var state:    Hash;
+    var state:    ghash.State;
     var counter:  [16]^u8;
     var expected: [16]^u8;
     var provided: [16]^u8;
-    ct.zeroize(?counter[0], 16);
     ct.zeroize(?expected[0], 16);
     ct.zeroize(?provided[0], 16);
-    init_hash(?state, ?context);
+    ghash.start(?state);
     make_counter(nonce, ?counter[0]);
-    hash_public(?state, aad.data, aad.len);
-    hash_public(?state, input.data, ciphertext_len);
-    hash_lengths(?state, aad.len, ciphertext_len);
+    ghash.update(?context.hash, ?state, aad.data, aad.len);
+    ghash.update(?context.hash, ?state, input.data, ciphertext_len);
+    ghash.lengths(?context.hash, ?state, aad.len, ciphertext_len);
     set_counter(?counter[0], 1);
-    finish_tag(?context, ?counter[0], ?state, ?expected[0]);
+    finish_tag(context, ?counter[0], ?state, ?expected[0]);
+    ghash.wipe(?state);
     var i: usize = 0;
     for (i < TAG_SIZE) {
         provided[i] = input.data[ciphertext_len + i];
@@ -307,23 +266,22 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     }
     val authenticated: ^u8 = ct.eq_bytes(?expected[0], ?provided[0], TAG_SIZE);
     ct.zeroize(?provided[0], 16);
+    ct.zeroize(?expected[0], 16);
     if (authenticated:>u8 != 1) {
         ct.zeroize(output.data, ciphertext_len);
-        wipe_common(?context, ?state, ?counter[0], ?expected[0]);
+        ct.zeroize(?counter[0], 16);
         ct.end();
         ret failed(contracts.AUTH_FAILED);
     }
-    destroy_hash(?state);
-    ct.zeroize(?expected[0], 16);
 
     var stream:        [64]^u8;
     var offset:        usize = 0;
     var counter_value: u32   = 2;
     for (offset < ciphertext_len) {
         var take: usize = ciphertext_len - offset;
-        if (take > 64) { take = 64; }
+        if (take > STREAM_SIZE) { take = STREAM_SIZE; }
         val blocks: usize = (take + 15) / 16;
-        keystream(?context, ?counter[0], counter_value, blocks, ?stream[0]);
+        keystream(?context.cipher, ?counter[0], counter_value, blocks, ?stream[0]);
         i = 0;
         for (i < take) {
             output.data[offset + i] = input.data[offset + i] ^ stream[i];
@@ -333,15 +291,47 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
         if (offset < ciphertext_len) { counter_value = counter_value + blocks::u32; }
     }
     ct.zeroize(?stream[0], 64);
-    core.destroy(?context);
     ct.zeroize(?counter[0], 16);
     ct.end();
     ret contracts.Operation{error: contracts.OK, written: ciphertext_len};
+}
+
+# encrypt and authenticate one record under a key expanded for this call only
+#
+# the same contract as `seal_with`. a caller sealing more than one record under
+# a key holds a Context instead, since this expands the key on every call.
+#[oblivious]
+pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
+    plaintext: contracts.SecretBytes, output: contracts.Buffer) contracts.Operation {
+    var context:     Context         = empty();
+    val initialized: contracts.Error = init(?context, key);
+    if (initialized != contracts.OK) { ret failed(initialized); }
+    val result: contracts.Operation = seal_with(?context, nonce, aad, plaintext, output);
+    dnit(?context);
+    ret result;
+}
+
+# authenticate and decrypt one record under a key expanded for this call only
+#
+# the same contract as `open_with`. successful output may overlap the secret
+# key because the key is fully expanded before any output is written.
+#[oblivious]
+pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
+    input: contracts.Bytes, output: contracts.SecretBuffer) contracts.Operation {
+    var context:     Context         = empty();
+    val initialized: contracts.Error = init(?context, key);
+    if (initialized != contracts.OK) { ret failed(initialized); }
+    val result: contracts.Operation = open_with(?context, nonce, aad, input, output);
+    dnit(?context);
+    ret result;
 }
 
 test "aes-gcm: tls and quic dimensions are fixed" {
     if (AES128_KEY_SIZE != 16 || AES256_KEY_SIZE != 32) { ret 1; }
     if (NONCE_SIZE != 12 || TAG_SIZE != 16)             { ret 1; }
     if (MAX_PLAINTEXT_SIZE != 68719476704)              { ret 1; }
+
+    # the keystream buffer fits one call of the widest aes backend
+    if (STREAM_BLOCKS > core.PARALLEL_BLOCKS || STREAM_SIZE != STREAM_BLOCKS * 16) { ret 2; }
     ret 0;
 }
