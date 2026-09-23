@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Performance
+
+- AES-GCM and the AES block cipher take a keyed context, so a key is expanded once rather than on every seal, open or block. `aes_gcm.init` expands the AES schedule and the GHASH key into an `aes_gcm.Context`, `seal_with` and `open_with` run any number of records against it, and `dnit` zeroizes it. test/benchmark was run as a release build (x86_64, mach 5.10.0, AMD Ryzen 7 5800X3D, three runs with nothing else on the machine). Each figure is the median of five 400-call batches, and the ranges span the three runs. An AES-128-GCM record through a context costs 4.34 to 4.37 µs at 64 B, against 9.68 to 9.76 µs one-shot on dev. At 1200 B it costs 52.0 to 52.4 µs against 58.3 to 58.8 µs, for both seal and open. An AES-128 block through `cipher.aes` costs 1.0 µs, against 5.2 µs for the per-packet `init`, `encrypt` and `destroy` that QUIC header protection runs today. The one-shot `seal` and `open` now wrap a temporary context. At 64 B they cost 10.3 to 10.4 µs, against 9.7 µs on dev (see #160 for where the difference goes). At 1200 B they are unchanged within noise (#158).
+
+### Added
+
+- `crypto.cipher.aes`, the AES-128 and AES-256 block cipher under a keyed context: `empty`, `init`, `encrypt_block`, `dnit`. It is the primitive for QUIC header protection (#158).
+- `aes_gcm.Context` with `empty`, `init`, `seal_with`, `open_with` and `dnit`. `seal` and `open` keep their signatures and contracts (#158).
+- `crypto.internal.aes` and `crypto.internal.ghash` are backend seams. A context records the member chosen when its key is installed. The bitsliced AES and bit-serial GHASH are the portable members, and the hardware members come with #159 without an API change (#158).
+- `test/benchmark` prints the per-record seal, open and block cost, one-shot against a context, at 64 B and 1200 B. CI builds it (#158).
+
 ## [0.20.0] - 2026-09-20
 
 ### Performance
