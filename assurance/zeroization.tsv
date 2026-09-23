@@ -6,7 +6,7 @@ x25519	crypto/group/x25519	yes
 sha-256,sha-384	crypto/hash	no
 hkdf-sha-256,hkdf-sha-384	crypto/hkdf	yes
 hmac-sha-256,hmac-sha-384	crypto/hmac	yes
-aes-128-gcm,aes-256-gcm	crypto/internal/aes	yes
+aes-128-gcm,aes-256-gcm	crypto/internal/aes/software	yes
 chacha20-poly1305	crypto/internal/chacha20	yes
 ed25519	crypto/internal/ed25519	yes
 hmac-sha-256,hmac-sha-384	crypto/internal/hmac	yes
