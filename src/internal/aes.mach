@@ -69,7 +69,7 @@ pub fun init_backend(context: *Context, key: contracts.SecretBytes,
     }
     if (key.data == nil)     { ret contracts.INVALID_INPUT; }
     if (!available(backend)) { ret contracts.UNSUPPORTED; }
-    software.expand(?context.software, key.data, key.len);
+    software.expand(?context.software, key);
     context.backend = backend;
     context.active  = true;
     ret contracts.OK;
