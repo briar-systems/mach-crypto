@@ -33,10 +33,12 @@ jobs:
       dit: required
       # the leakage controls are judged per target by tools/assurance from
       # assurance/leakage.tsv (refused, or admitted in hardware), so they are only resolved here
+      # test/benchmark is a bin with no tests, built so it cannot rot
       subprojects: >-
         [{"path": "test/leakage-negative", "test": false},
          {"path": "test/leakage-index", "test": false},
-         {"path": "test/multiply-negative", "test": false}]
+         {"path": "test/multiply-negative", "test": false},
+         {"path": "test/benchmark", "build": true, "test": false}]
 
   # the release evidence gate the README documents. it resolves every project,
   # runs the suite and the release-only performance budget, builds six targets

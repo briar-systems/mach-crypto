@@ -1,0 +1,196 @@
+# per-record aes-gcm and aes block cost, one-shot against a keyed context
+#
+# prints one line per operation: the median over five batches of the
+# nanoseconds one call takes. a one-shot call expands the key every time, a
+# context call runs against a key expanded once. build release and run on an
+# idle machine: `mach build . && out/linux-x86_64/release/bin/benchmark`.
+# an optional first argument is the calls per batch.
+
+use crypto.aead.aes_gcm;
+use crypto.cipher.aes;
+use crypto.contracts;
+use std.chrono.time;
+use std.print;
+use std.runtime;
+use std.text.parse;
+use std.types.bool.bool;
+use std.types.bool.false;
+use std.types.bool.true;
+use std.types.result.res;
+use std.types.size.usize;
+use std.types.string.str;
+
+val BATCHES:       usize = 5;
+val DEFAULT_CALLS: i64   = 400;
+
+rec Bench {
+    key:       [16]^u8;
+    nonce:     [12]u8;
+    aad:       [13]u8;
+    plaintext: [1200]^u8;
+    sealed:    [1216]u8;
+    opened:    [1200]^u8;
+    sample:    [16]^u8;
+    mask:      [16]^u8;
+    len:       usize;
+    gcm:       aes_gcm.Context;
+    block:     aes.Context;
+}
+
+var bench: Bench;
+
+fun key_bytes(b: *Bench) contracts.SecretBytes {
+    ret contracts.SecretBytes{data: ?b.key[0], len: 16};
+}
+
+fun nonce_bytes(b: *Bench) contracts.Bytes {
+    ret contracts.Bytes{data: ?b.nonce[0], len: 12};
+}
+
+fun aad_bytes(b: *Bench) contracts.Bytes {
+    ret contracts.Bytes{data: ?b.aad[0], len: 13};
+}
+
+fun seal_once(b: *Bench) bool {
+    val result: contracts.Operation = aes_gcm.seal(key_bytes(b), nonce_bytes(b), aad_bytes(b),
+        contracts.SecretBytes{data: ?b.plaintext[0], len: b.len},
+        contracts.Buffer{data: ?b.sealed[0], capacity: b.len + 16});
+    ret result.error == contracts.OK;
+}
+
+fun open_once(b: *Bench) bool {
+    val result: contracts.Operation = aes_gcm.open(key_bytes(b), nonce_bytes(b), aad_bytes(b),
+        contracts.Bytes{data: ?b.sealed[0], len: b.len + 16},
+        contracts.SecretBuffer{data: ?b.opened[0], capacity: b.len});
+    ret result.error == contracts.OK;
+}
+
+fun seal_context(b: *Bench) bool {
+    val result: contracts.Operation = aes_gcm.seal_with(?b.gcm, nonce_bytes(b), aad_bytes(b),
+        contracts.SecretBytes{data: ?b.plaintext[0], len: b.len},
+        contracts.Buffer{data: ?b.sealed[0], capacity: b.len + 16});
+    ret result.error == contracts.OK;
+}
+
+fun open_context(b: *Bench) bool {
+    val result: contracts.Operation = aes_gcm.open_with(?b.gcm, nonce_bytes(b), aad_bytes(b),
+        contracts.Bytes{data: ?b.sealed[0], len: b.len + 16},
+        contracts.SecretBuffer{data: ?b.opened[0], capacity: b.len});
+    ret result.error == contracts.OK;
+}
+
+# quic header protection's mask as it is built today, a key expansion per packet
+fun mask_once(b: *Bench) bool {
+    var context: aes.Context = aes.empty();
+    if (aes.init(?context, key_bytes(b)) != contracts.OK) { ret false; }
+    val error: contracts.Error = aes.encrypt_block(?context,
+        contracts.SecretBytes{data: ?b.sample[0], len: 16},
+        contracts.SecretBuffer{data: ?b.mask[0], capacity: 16});
+    aes.dnit(?context);
+    ret error == contracts.OK;
+}
+
+fun mask_context(b: *Bench) bool {
+    ret aes.encrypt_block(?b.block, contracts.SecretBytes{data: ?b.sample[0], len: 16},
+        contracts.SecretBuffer{data: ?b.mask[0], capacity: 16}) == contracts.OK;
+}
+
+# the median over BATCHES batches of the nanoseconds one call takes, or -1
+fun median(op: fun(*Bench) bool, calls: i64) i64 {
+    var samples: [5]i64;
+    var batch:   usize = 0;
+    for (batch < BATCHES) {
+        val started: time.InstantClock = time.instant();
+        if (sel started.err) { ret -1; }
+        var call: i64 = 0;
+        for (call < calls) {
+            if (!op(?bench)) { ret -1; }
+            call = call + 1;
+        }
+        val took: time.Elapsed = time.elapsed(started.ok);
+        if (sel took.err) { ret -1; }
+        samples[batch] = took.ok / calls;
+        batch          = batch + 1;
+    }
+    var i: usize = 1;
+    for (i < BATCHES) {
+        val current:  i64   = samples[i];
+        var position: usize = i;
+        for (position > 0 && samples[position - 1] > current) {
+            samples[position] = samples[position - 1];
+            position          = position - 1;
+        }
+        samples[position] = current;
+        i                 = i + 1;
+    }
+    ret samples[2];
+}
+
+fun report(name: str, op: fun(*Bench) bool, calls: i64) bool {
+    # one warm batch before the timed ones
+    var call: i64 = 0;
+    for (call < calls) {
+        if (!op(?bench)) { ret false; }
+        call = call + 1;
+    }
+    val ns: i64 = median(op, calls);
+    if (ns < 0) { ret false; }
+    print.printlnf("{} {} B: {} ns", name, bench.len, ns);
+    ret true;
+}
+
+fun calls_from_args(argc: i64, argv: **u8) i64 {
+    if (argc < 2) { ret DEFAULT_CALLS; }
+    val parsed: res[i64, parse.ParseError] = parse.parse_i64(argv[1]::str, 10);
+    if (sel parsed.err) { ret DEFAULT_CALLS; }
+    val calls: i64 = parsed.ok;
+    if (calls < 1) { ret DEFAULT_CALLS; }
+    ret calls;
+}
+
+#[symbol("main")]
+fun main(argc: i64, argv: **u8) i64 {
+    val calls: i64   = calls_from_args(argc, argv);
+    var i:     usize = 0;
+    for (i < 16) {
+        bench.key[i]    = (i * 13 + 1)::u8;
+        bench.sample[i] = (i * 7 + 5)::u8;
+        i               = i + 1;
+    }
+    i = 0;
+    for (i < 12) {
+        bench.nonce[i] = (0x30 + i)::u8;
+        i              = i + 1;
+    }
+    i = 0;
+    for (i < 13) {
+        bench.aad[i] = (0x40 + i)::u8;
+        i            = i + 1;
+    }
+    i = 0;
+    for (i < 1200) {
+        bench.plaintext[i] = (i * 11 + 1)::u8;
+        i                  = i + 1;
+    }
+    bench.gcm   = aes_gcm.empty();
+    bench.block = aes.empty();
+    if (aes_gcm.init(?bench.gcm, key_bytes(?bench)) != contracts.OK) { ret 1; }
+    if (aes.init(?bench.block, key_bytes(?bench)) != contracts.OK)   { ret 1; }
+
+    val lengths: [2]usize = [2]usize{64, 1200};
+    var index:   usize    = 0;
+    for (index < 2) {
+        bench.len = lengths[index];
+        if (!report("aes-128-gcm seal one-shot", seal_once, calls))    { ret 2; }
+        if (!report("aes-128-gcm seal context ", seal_context, calls)) { ret 2; }
+        if (!report("aes-128-gcm open one-shot", open_once, calls))    { ret 2; }
+        if (!report("aes-128-gcm open context ", open_context, calls)) { ret 2; }
+        index = index + 1;
+    }
+    bench.len = 16;
+    if (!report("aes-128 block one-shot", mask_once, calls))    { ret 2; }
+    if (!report("aes-128 block context ", mask_context, calls)) { ret 2; }
+    aes_gcm.dnit(?bench.gcm);
+    aes.dnit(?bench.block);
+    ret 0;
+}
