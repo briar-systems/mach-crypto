@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-23
+
+### Changed
+
+- Dependencies: a pin bump to mach-std 8.0.0, selected by `version = "^8.0"`, and mach 5.12.0 (`mach = "^5.12"`). `test/performance` and `test/benchmark` pin `tag/v8.0.0`. Dependency resolution is flat, so a consumer of this release must move to std 8 with it. std 8 adds the typed secret view and grows `buffers.SecretSource`. crypto uses neither, so no source changes here. Rebuild anything that links std rather than recompiling against the new sources, as std's release notes say (#164).
+- The test modules under `src/test` run under `mach test . --lib tests`. mach 5.12 tests only the selected artifact's closure (briar-systems/mach#3813), so `mach test .` alone now collects the 34 tests the library reaches and not the other 100. The test-only `[artifact.tests]` reaches the library and every test module, and collects all 134. `[artifact.crypto]` is marked `default = true`, so `mach build .` and `--all-targets` still build the library alone. `tools/assurance` tests a project through its tests artifact when it declares one, and `tools/test-selection` fails when a test under `src` is not collected on some target. CI runs it on the primary leg (#164).
+
 ## [0.21.0] - 2026-09-23
 
 ### Performance
