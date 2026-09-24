@@ -164,15 +164,27 @@ record_result() {
         >> "$results"
 }
 
+# a project that declares a tests artifact is tested through it, since mach
+# tests only the selected artifact's closure and the library does not reach
+# the test modules
+test_selection() {
+    local project=$1
+    if grep -qx '\[artifact\.tests\]' "$root/$project/mach.toml"; then
+        printf '%s\n' --lib tests
+    fi
+}
+
 run_functional_tests() {
     local project algorithm profile log relative hash
+    local -a selection
     while IFS=$'\t' read -r project algorithm; do
         [[ "$project" == project ]] && continue
+        mapfile -t selection < <(test_selection "$project")
         for profile in "${profiles[@]}"; do
             relative="logs/tests/functional/${algorithm}-${profile}.ndjson"
             log="$stage/$relative"
             mkdir -p "$(dirname -- "$log")"
-            if ! (cd "$root" && mach test "$project" --profile "$profile" --format json) > "$log" 2>&1; then
+            if ! (cd "$root" && mach test "$project" "${selection[@]}" --profile "$profile" --format json) > "$log" 2>&1; then
                 report_failed_tests "$log"
                 die "functional test failed for $project $profile"
             fi
@@ -186,10 +198,12 @@ run_functional_tests() {
 
 run_independent_tests() {
     local category project algorithm source filter profile log relative hash index
+    local -a selection
     index=0
     while IFS=$'\t' read -r category project algorithm source filter; do
         [[ "$category" == category ]] && continue
         index=$((index + 1))
+        mapfile -t selection < <(test_selection "$project")
         for profile in "${profiles[@]}"; do
             if [[ "$category" == performance && "$profile" != release ]]; then
                 continue
@@ -197,7 +211,7 @@ run_independent_tests() {
             printf -v relative 'logs/tests/%s/%03d-%s.ndjson' "$category" "$index" "$profile"
             log="$stage/$relative"
             mkdir -p "$(dirname -- "$log")"
-            if ! (cd "$root" && mach test "$project" --profile "$profile" \
+            if ! (cd "$root" && mach test "$project" "${selection[@]}" --profile "$profile" \
                 --filter "$filter" --format json) > "$log" 2>&1; then
                 report_failed_tests "$log"
                 die "$category test failed for $project $profile: $filter"

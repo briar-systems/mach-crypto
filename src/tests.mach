@@ -1,0 +1,15 @@
+# the library and every test module it does not reach
+# `mach test . --lib tests` runs all of crypto's tests
+
+use std.runtime;
+
+use crypto.lib;
+
+use aead_tests:      crypto.test.aead;
+use cipher_tests:    crypto.test.cipher;
+use encoding_tests:  crypto.test.encoding;
+use group_tests:     crypto.test.group;
+use hash_tests:      crypto.test.hash;
+use mac_tests:       crypto.test.mac;
+use secret_tests:    crypto.test.secret;
+use signature_tests: crypto.test.signature;
