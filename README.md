@@ -420,10 +420,15 @@ are separate fields. Independent review is currently `NOT_RECORDED`.
 Dependencies are pinned Git tags. Build output uses Mach's default `out/`
 directory inside this repository.
 
+`mach test .` runs only the tests the library reaches. `mach test . --lib tests`
+runs every test, through `src/tests.mach`. A new test module goes there, and
+`tools/test-selection` fails until it does.
+
 ```sh
 mach dep pull .
 mach build .
-mach test .
+mach test . --lib tests
+tools/test-selection
 tools/assurance run
 tools/assurance verify
 ```

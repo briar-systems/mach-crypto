@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+# fails unless `mach test . --lib tests` collects every test declared under src,
+# on every manifest target. mach tests only the selected artifact's closure
+# (briar-systems/mach#3813), so a test module that src/tests.mach does not reach
+# would otherwise stop running without a sound
+
+set -euo pipefail
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+mach=${1:-mach}
+mkdir -p "$root/out"
+scratch=$(mktemp -d "$root/out/test-selection.XXXXXX")
+trap 'rm -rf -- "$scratch"' EXIT
+
+cd "$root"
+
+# every declaration as path:line, the form `mach test --list` ends each line with
+grep -rnE --include='*.mach' '^[[:space:]]*test "' src |
+    awk -F: '{ print $1 ":" $2 }' | sort > "$scratch/declared"
+declared=$(wc -l < "$scratch/declared")
+[[ "$declared" -gt 0 ]] || { echo "test-selection: no tests declared under src" >&2; exit 1; }
+
+status=0
+while IFS= read -r target; do
+    if ! "$mach" test . --lib tests --target "$target" --list > "$scratch/listed" 2> "$scratch/error"; then
+        cat "$scratch/error" >&2
+        echo "test-selection: listing failed on $target" >&2
+        exit 1
+    fi
+    awk '{ print $NF }' "$scratch/listed" | sort > "$scratch/collected"
+    missing=$(comm -23 "$scratch/declared" "$scratch/collected")
+    if [[ -n "$missing" ]]; then
+        printf 'test-selection: %s: declared tests that `mach test . --lib tests` does not collect:\n%s\n' \
+            "$target" "$missing" >&2
+        status=1
+    else
+        echo "test-selection: $target: $declared of $declared collected"
+    fi
+done < <(sed -n 's/^\[target\.\(.*\)\]$/\1/p' mach.toml)
+
+[[ "$status" == 0 ]] || echo "test-selection: reach the missing modules from src/tests.mach" >&2
+exit "$status"
