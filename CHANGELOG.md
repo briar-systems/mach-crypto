@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-23
+
 ### Changed
 
 - Dependencies: a pin bump to mach-std 8.0.0, selected by `version = "^8.0"`, and mach 5.12.0 (`mach = "^5.12"`). `test/performance` and `test/benchmark` pin `tag/v8.0.0`. Dependency resolution is flat, so a consumer of this release must move to std 8 with it. std 8 adds the typed secret view and grows `buffers.SecretSource`. crypto uses neither, so no source changes here. Rebuild anything that links std rather than recompiling against the new sources, as std's release notes say (#164).
