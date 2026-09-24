@@ -28,6 +28,8 @@ jobs:
     uses: briar-systems/.github/.github/workflows/mach-lib.yml@main
     with:
       heavy: ${{ inputs.heavy }}
+      # crypto needs mach 5.12, so it seeds v5.12.0 until the family pin moves (briar-systems/.github#103)
+      mach-version: v5.12.0
       # every test binary links a DIT-admitted secret multiply on aarch64, so a
       # runner without FEAT_DIT runs the tests under qemu-aarch64 -cpu max
       dit: required
@@ -51,6 +53,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: briar-systems/.github/.github/actions/seed-mach@main
+        with:
+          tag: v5.12.0
       - name: ripgrep
         run: |
           sudo apt-get update
