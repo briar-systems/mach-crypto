@@ -6,8 +6,9 @@
 # carry aes without carry-less multiply.
 #
 # the contract every member holds:
-# - its key is a field of Key with secret-typed words, and it may hold any
-#   precomputation of h (a hardware member keeps powers of h)
+# - its key is a case of Keys with secret-typed words, and it may hold any
+#   precomputation of h (a hardware member keeps powers of h). the cases share
+#   storage, since a key runs one member
 # - `absorb` takes whole 16-byte blocks of public data, any number of them, so
 #   a member may aggregate several blocks per reduction
 # - the accumulator is the canonical field element, two big-endian 64-bit
@@ -15,7 +16,8 @@
 # - every operation is constant time: no branch or address depends on h or on
 #   the accumulator
 # - `wipe` zeroizes the whole key
-# `destroy` wipes every member's key, not only the active one.
+# `destroy` wipes every member's key, which covers the whole storage whichever
+# member held it.
 #
 # software is the portable member and runs everywhere. hardware is pclmulqdq
 # on x86_64 and pmull on aarch64, available where crypto.internal.extensions
@@ -38,10 +40,15 @@ pub val NONE:     Backend = 0;
 pub val SOFTWARE: Backend = 1;
 pub val HARDWARE: Backend = 2;
 
-pub rec Key {
+# the key of whichever member the hash runs
+pub uni Keys {
     software: software.Key;
     hardware: hardware.Key;
-    backend:  Backend;
+}
+
+pub rec Key {
+    member:  Keys;
+    backend: Backend;
 }
 
 # the running hash of one record
@@ -63,8 +70,8 @@ pub fun preferred() Backend {
 }
 
 pub fun destroy(key: *Key) {
-    software.wipe(?key.software);
-    hardware.wipe(?key.hardware);
+    software.wipe(?key.member.software);
+    hardware.wipe(?key.member.hardware);
     key.backend = NONE;
 }
 
@@ -73,8 +80,8 @@ pub fun destroy(key: *Key) {
 pub fun init(key: *Key, subkey: *^u8, backend: Backend) contracts.Error {
     destroy(key);
     if (!available(backend)) { ret contracts.UNSUPPORTED; }
-    if (backend == HARDWARE) { hardware.expand(?key.hardware, subkey); }
-    or                       { software.expand(?key.software, subkey); }
+    if (backend == HARDWARE) { hardware.expand(?key.member.hardware, subkey); }
+    or                       { software.expand(?key.member.software, subkey); }
     key.backend = backend;
     ret contracts.OK;
 }
@@ -88,10 +95,10 @@ pub fun start(state: *State) {
 #[oblivious]
 fun absorb(key: *Key, state: *State, data: *u8, blocks: usize) {
     if (key.backend == HARDWARE) {
-        hardware.absorb(?key.hardware, ?state.accumulator[0], data, blocks);
+        hardware.absorb(?key.member.hardware, ?state.accumulator[0], data, blocks);
         ret;
     }
-    software.absorb(?key.software, ?state.accumulator[0], data, blocks);
+    software.absorb(?key.member.software, ?state.accumulator[0], data, blocks);
 }
 
 # hash public bytes, zero-padding a final partial block

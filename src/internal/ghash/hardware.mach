@@ -39,10 +39,9 @@ pub val BLOCK_SIZE: usize = 16;
 # blocks sharing one reduction
 val AGGREGATE: usize = 4;
 
-# h^4, h^3, h^2 and h, each times x^-1, as the low and then the high word,
-# followed by the same four with their words exchanged
+# h^4, h^3, h^2 and h, each times x^-1, as the low and then the high word
 pub rec Key {
-    powers: [16]^u64;
+    powers: [8]^u64;
 }
 
 # whether this host can run the member
@@ -51,7 +50,7 @@ pub fun available() bool {
 }
 
 pub fun wipe(key: *Key) {
-    ct.zeroize((?key.powers[0]):~*^u8, 128);
+    ct.zeroize((?key.powers[0]):~*^u8, 64);
 }
 
 # reduce a 256-bit product, three 128-bit partial sums of low, middle and
@@ -335,6 +334,12 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
         }
     }
 
+    #[oblivious]
+    fun multiply(staged: *^u64, powers: *^u64, swapped: *^u64, product: *^u64, count: usize) {
+        if (count == AGGREGATE) { multiply4(staged, powers, swapped, product); }
+        or                      { multiply1(staged, powers, swapped, product); }
+    }
+
     fun read_u64_be(input: *u8, offset: usize) u64 {
         ret bits.byte_swap(@((?input[offset]):~*u64));
     }
@@ -356,14 +361,21 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
         }
         staged[0] = staged[0] ^ accumulator[1];
         staged[1] = staged[1] ^ accumulator[0];
-        if (count == AGGREGATE) {
-            multiply4(?staged[0], ?key.powers[0], ?key.powers[8], ?product[0]);
+        # pmull and pmull2 multiply like lanes, so the cross products take the
+        # powers with their words exchanged, which the lane moves missing from
+        # the assembler's vocabulary would otherwise make in the kernel
+        var swapped: [8]^u64;
+        val first:   usize = (AGGREGATE - count) * 2;
+        var word:    usize = first;
+        for (word < 8) {
+            swapped[word]     = key.powers[word + 1];
+            swapped[word + 1] = key.powers[word];
+            word              = word + 2;
         }
-        or {
-            multiply1(?staged[0], ?key.powers[6], ?key.powers[14], ?product[0]);
-        }
+        multiply(?staged[0], ?key.powers[first], ?swapped[first], ?product[0], count);
         reduce(?product[0], accumulator);
         ct.zeroize((?staged[0]):~*^u8, 64);
+        ct.zeroize((?swapped[0]):~*^u8, 64);
         ct.zeroize((?product[0]):~*^u8, 48);
     }
 }
@@ -382,22 +394,18 @@ pub fun expand(key: *Key, subkey: *^u8) {
     val carry: ^u64 = 0 - (high >> 63);
     # h * x^-1: one bit left, and x^-1 = x^127 + x^6 + x + 1 when a bit leaves
     var power: [2]^u64;
-    power[0]       = ((high << 1) | (low >> 63)) ^ (0xC200000000000000 & carry);
-    power[1]       = (low << 1) ^ (1 & carry);
-    key.powers[6]  = power[1];
-    key.powers[7]  = power[0];
-    key.powers[14] = power[0];
-    key.powers[15] = power[1];
+    power[0]      = ((high << 1) | (low >> 63)) ^ (0xC200000000000000 & carry);
+    power[1]      = (low << 1) ^ (1 & carry);
+    key.powers[6] = power[1];
+    key.powers[7] = power[0];
     var zero:     [16]u8;
     var exponent: usize = 2;
     for (exponent <= AGGREGATE) {
         absorb_group(key, ?power[0], ?zero[0], 1);
         val slot: usize = (AGGREGATE - exponent) * 2;
-        key.powers[slot]         = power[1];
-        key.powers[slot + 1]     = power[0];
-        key.powers[8 + slot]     = power[0];
-        key.powers[8 + slot + 1] = power[1];
-        exponent                 = exponent + 1;
+        key.powers[slot]     = power[1];
+        key.powers[slot + 1] = power[0];
+        exponent             = exponent + 1;
     }
     ct.zeroize((?power[0]):~*^u8, 16);
 }

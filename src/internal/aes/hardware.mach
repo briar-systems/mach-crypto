@@ -25,9 +25,11 @@ pub val BLOCK_SIZE:      usize = 16;
 pub val PARALLEL_BLOCKS: usize = 8;
 
 # the round keys in byte order, round 0 first
+#
+# the round count is the dispatcher's, so the schedule is secret storage alone
+# and shares a context's storage with the software member's
 pub rec Schedule {
     round_keys: [240]^u8;
-    rounds:     usize;
 }
 
 # whether this host can run the member
@@ -37,13 +39,13 @@ pub fun available() bool {
 
 pub fun wipe(schedule: *Schedule) {
     ct.zeroize(?schedule.round_keys[0], 240);
-    schedule.rounds = 0;
 }
 
-# expand a key whose length the dispatcher has already checked
+# expand a key whose length the dispatcher has already checked, and return its
+# round count
 #[oblivious]
-pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) {
-    schedule.rounds = software.expand_round_keys(?schedule.round_keys[0], key, substitute_word);
+pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) usize {
+    ret software.expand_round_keys(?schedule.round_keys[0], key, substitute_word);
 }
 
 # the s-box on one key-schedule word, through one hardware round
@@ -1888,9 +1890,10 @@ $if (extensions.ROWS && ($mach.build.arch == $mach.arch.x86_64
     || $mach.build.arch == $mach.arch.aarch64)) {
     # encrypt `count` blocks, 1, 2, 4 or 8, with the kernel of that width
     #[oblivious]
-    fun encrypt_width(schedule: *Schedule, input: *^u8, output: *^u8, count: usize) {
+    fun encrypt_width(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8,
+        count: usize) {
         val keys: *^u8 = ?schedule.round_keys[0];
-        if (schedule.rounds == 10) {
+        if (rounds == 10) {
             if (count == 8) { encrypt8_128(keys, input, output); }
             or (count == 4) { encrypt4_128(keys, input, output); }
             or (count == 2) { encrypt2_128(keys, input, output); }
@@ -1910,12 +1913,14 @@ $if (extensions.ROWS && ($mach.build.arch == $mach.arch.x86_64
     # through the kernel of that width. input and output may be the same
     # storage, since every kernel loads its blocks before it stores any.
     #[oblivious]
-    pub fun encrypt_blocks(schedule: *Schedule, input: *^u8, output: *^u8, count: usize) {
+    pub fun encrypt_blocks(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8,
+        count: usize) {
         var done:  usize = 0;
         var width: usize = PARALLEL_BLOCKS;
         for (width > 0) {
             if ((count - done) >= width) {
-                encrypt_width(schedule, ?input[done * BLOCK_SIZE], ?output[done * BLOCK_SIZE], width);
+                encrypt_width(schedule, rounds, ?input[done * BLOCK_SIZE], ?output[done * BLOCK_SIZE],
+                    width);
                 done = done + width;
             }
             width = width / 2;
@@ -1929,5 +1934,6 @@ $or {
     fun substitute_columns(state: *^u8) {}
 
     #[oblivious]
-    pub fun encrypt_blocks(schedule: *Schedule, input: *^u8, output: *^u8, count: usize) {}
+    pub fun encrypt_blocks(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8,
+        count: usize) {}
 }

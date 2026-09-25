@@ -6,13 +6,16 @@
 # same one. the choice is a public fact of the host, never of the key.
 #
 # the contract every member holds:
-# - its schedule is a field of Context with secret-typed words, so the context
-#   stays welded and nothing derived from the key can be declassified
+# - its schedule is a case of Schedules with secret-typed words, so the context
+#   stays welded and nothing derived from the key can be declassified. the
+#   cases share storage, since a context runs one member, so a context is as
+#   large as the largest schedule and no larger
 # - `expand` writes only its own schedule and wipes its temporaries
 # - `encrypt_blocks` takes 1..PARALLEL_BLOCKS blocks, may run in place, and is
 #   constant time: no branch or address depends on key or data
 # - `wipe` zeroizes the whole schedule
-# `destroy` wipes every member's schedule, not only the active one.
+# `destroy` wipes every member's schedule, which covers the whole storage
+# whichever member held it.
 #
 # software is the portable member and runs everywhere. hardware is aes-ni on
 # x86_64 and the armv8 aes rounds on aarch64, available where
@@ -38,9 +41,15 @@ pub val NONE:     Backend = 0;
 pub val SOFTWARE: Backend = 1;
 pub val HARDWARE: Backend = 2;
 
-pub rec Context {
+# the schedule of whichever member the context runs
+pub uni Schedules {
     software: software.Schedule;
     hardware: hardware.Schedule;
+}
+
+pub rec Context {
+    schedule: Schedules;
+    rounds:   usize;
     backend:  Backend;
     active:   bool;
 }
@@ -60,8 +69,9 @@ pub fun preferred() Backend {
 
 pub fun destroy(context: *Context) {
     if (context == nil) { ret; }
-    software.wipe(?context.software);
-    hardware.wipe(?context.hardware);
+    software.wipe(?context.schedule.software);
+    hardware.wipe(?context.schedule.hardware);
+    context.rounds  = 0;
     context.backend = NONE;
     context.active  = false;
 }
@@ -77,8 +87,8 @@ pub fun init_backend(context: *Context, key: contracts.SecretBytes,
     }
     if (key.data == nil)     { ret contracts.INVALID_INPUT; }
     if (!available(backend)) { ret contracts.UNSUPPORTED; }
-    if (backend == HARDWARE) { hardware.expand(?context.hardware, key); }
-    or                       { software.expand(?context.software, key); }
+    if (backend == HARDWARE) { context.rounds = hardware.expand(?context.schedule.hardware, key); }
+    or                       { context.rounds = software.expand(?context.schedule.software, key); }
     context.backend = backend;
     context.active  = true;
     ret contracts.OK;
@@ -95,7 +105,7 @@ pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
 #[oblivious]
 pub fun encrypt_blocks(context: *Context, input: *^u8, output: *^u8, count: usize) {
     if (context.backend == HARDWARE) {
-        hardware.encrypt_blocks(?context.hardware, input, output, count);
+        hardware.encrypt_blocks(?context.schedule.hardware, context.rounds, input, output, count);
         ret;
     }
     # the software member takes four blocks per pass
@@ -103,8 +113,8 @@ pub fun encrypt_blocks(context: *Context, input: *^u8, output: *^u8, count: usiz
     for (done < count) {
         var take: usize = count - done;
         if (take > software.PARALLEL_BLOCKS) { take = software.PARALLEL_BLOCKS; }
-        software.encrypt_blocks(?context.software, ?input[done * BLOCK_SIZE],
-            ?output[done * BLOCK_SIZE], take);
+        software.encrypt_blocks(?context.schedule.software, context.rounds,
+            ?input[done * BLOCK_SIZE], ?output[done * BLOCK_SIZE], take);
         done = done + take;
     }
 }

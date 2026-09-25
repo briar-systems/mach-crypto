@@ -198,8 +198,8 @@ test "aes: the context refuses use outside init and dnit, which zeroizes it" {
     if (!secret_filled(?output[0], 0xA5, 16)) { ret 16; }
 
     # the active member holds the key, and dnit clears every member
-    val planes: *^u8 = (?context.cipher.software.round_planes[0]):~*^u8;
-    val rounds: *^u8 = ?context.cipher.hardware.round_keys[0];
+    val planes: *^u8 = (?context.cipher.schedule.software.round_planes[0]):~*^u8;
+    val rounds: *^u8 = ?context.cipher.schedule.hardware.round_keys[0];
     if (secret_filled(planes, 0, 960) && secret_filled(rounds, 0, 240)) { ret 23; }
     if (aes.dnit(?context) != contracts.OK)                             { ret 17; }
     if (!secret_filled(planes, 0, 960) || !secret_filled(rounds, 0, 240) ||
