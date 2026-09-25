@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Performance
+
+- AES-GCM and the AES block cipher run on hardware where the processor has it: AES-NI and PCLMULQDQ on x86_64, and the ARMv8 AES rounds and PMULL on aarch64. `init` picks the members once per context from `std.system.cpu.features()`, or from the build target's selection without a probe, and the bitsliced AES and bit-serial GHASH stay the portable members. The kernels are fixed instruction streams under `#[oblivious]` and `#[extensions(...)]`, and GHASH aggregates four blocks per reduction in the bit-reflected form of Intel's carry-less multiply white paper. test/benchmark, release build on x86_64 (AMD Ryzen 7 5800X3D, mach 5.12.2, three runs under the exclusive lock, each figure the median of five 400-call batches): an AES-128-GCM record through a context costs 0.34 to 0.35 µs at 64 B and 1.20 to 1.23 µs at 1200 B, against 4.64 to 4.67 µs and 57.1 to 57.5 µs on the software path before this change. An AES-128 block through `cipher.aes` costs 17 ns against 1.02 to 1.04 µs, and a one-shot `seal` at 64 B 1.25 µs against 8.9 µs. Forced onto the software members the same binary costs 4.59 to 4.69 µs and 54.8 to 54.9 µs (#159).
+
+### Changed
+
+- The members of each seam share one context's key storage, so an `aes_gcm.Context` grows from 1,008 to 1,056 bytes (the hardware GHASH key keeps four powers of H) and a `cipher.aes.Context` stays 984. An AEAD and a header protection context still fit half of a 4 KiB chunk, which mach-quic relies on, and a test pins that (#159).
+- Dependencies: builds against mach-std dev for the `aes`, `pclmul` and `pmull` fields of `std.system.cpu.Features` (mach-std#893), until std 8.2.0 is tagged. The hardware members need mach 5.12.2 (briar-systems/mach#3835). `mach = "^5.12"` is unchanged, since an older compiler builds the software members alone. CI seeds v5.12.2 (#159).
+
 ## [0.22.1] - 2026-09-25
 
 ### Changed
