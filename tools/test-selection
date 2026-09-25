@@ -2,7 +2,7 @@
 
 # fails unless `mach test . --lib tests` collects every test declared under src,
 # on every manifest target. mach tests only the selected artifact's closure
-# (briar-systems/mach#3813), so a test module that src/tests.mach does not reach
+# (briar-systems/mach#3813), so a test module that src/lib/tests.mach does not reach
 # would otherwise stop running without a sound
 
 set -euo pipefail
@@ -39,5 +39,5 @@ while IFS= read -r target; do
     fi
 done < <(sed -n 's/^\[target\.\(.*\)\]$/\1/p' mach.toml)
 
-[[ "$status" == 0 ]] || echo "test-selection: reach the missing modules from src/tests.mach" >&2
+[[ "$status" == 0 ]] || echo "test-selection: reach the missing modules from src/lib/tests.mach" >&2
 exit "$status"

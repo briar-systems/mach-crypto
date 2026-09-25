@@ -25,7 +25,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.vectors` defines a common test vector contract.
 - `crypto.assurance` publishes the validation state of this package.
 
-`crypto.lib` re-exports these modules for consumers that prefer one import.
+`use crypto;` binds `crypto.lib.crypto`, which re-exports these modules for
+consumers that prefer one import.
 
 ## Secret ownership
 
@@ -421,8 +422,8 @@ Dependencies are pinned Git tags. Build output uses Mach's default `out/`
 directory inside this repository.
 
 `mach test .` runs only the tests the library reaches. `mach test . --lib tests`
-runs every test, through `src/tests.mach`. A new test module goes there, and
-`tools/test-selection` fails until it does.
+runs every test, through `src/lib/tests.mach`. A new test module goes there,
+and `tools/test-selection` fails until it does.
 
 ```sh
 mach dep pull .
