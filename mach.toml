@@ -63,7 +63,7 @@ need = []
 
 [dep.std]
 git = "https://github.com/briar-systems/mach-std"
-version = "^8.0"
+ref = "commit/88ee09dc43df54dfa51f3a715238f196b329f28c"
 
 # test-only: the library and every test module, run with `mach test . --lib tests`
 [artifact.tests]
