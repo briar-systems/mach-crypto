@@ -17,14 +17,17 @@
 # - `wipe` zeroizes the whole key
 # `destroy` wipes every member's key, not only the active one.
 #
-# software is the portable member and the only one today. a hardware member
-# (pclmulqdq, pmull) adds a Backend value, a key field, and a run-time feature
-# check in `available`.
+# software is the portable member and runs everywhere. hardware is pclmulqdq
+# on x86_64 and pmull on aarch64, available where crypto.internal.extensions
+# says the host has them, and `preferred` picks it there.
 
 use crypto.contracts;
+use crypto.internal.ghash.hardware;
 use crypto.internal.ghash.software;
 use std.crypto.ct;
 use std.types.bool.bool;
+use std.types.bool.false;
+use std.types.bool.true;
 use std.types.size.usize;
 
 pub val BLOCK_SIZE: usize = 16;
@@ -33,9 +36,11 @@ pub def Backend: u8;
 
 pub val NONE:     Backend = 0;
 pub val SOFTWARE: Backend = 1;
+pub val HARDWARE: Backend = 2;
 
 pub rec Key {
     software: software.Key;
+    hardware: hardware.Key;
     backend:  Backend;
 }
 
@@ -46,16 +51,20 @@ pub rec State {
 
 # whether this host can run the backend
 pub fun available(backend: Backend) bool {
-    ret backend == SOFTWARE;
+    if (backend == SOFTWARE) { ret true; }
+    if (backend == HARDWARE) { ret hardware.available(); }
+    ret false;
 }
 
 # the fastest backend this host can run
 pub fun preferred() Backend {
+    if (hardware.available()) { ret HARDWARE; }
     ret SOFTWARE;
 }
 
 pub fun destroy(key: *Key) {
     software.wipe(?key.software);
+    hardware.wipe(?key.hardware);
     key.backend = NONE;
 }
 
@@ -64,7 +73,8 @@ pub fun destroy(key: *Key) {
 pub fun init(key: *Key, subkey: *^u8, backend: Backend) contracts.Error {
     destroy(key);
     if (!available(backend)) { ret contracts.UNSUPPORTED; }
-    software.expand(?key.software, subkey);
+    if (backend == HARDWARE) { hardware.expand(?key.hardware, subkey); }
+    or                       { software.expand(?key.software, subkey); }
     key.backend = backend;
     ret contracts.OK;
 }
@@ -77,6 +87,10 @@ pub fun start(state: *State) {
 
 #[oblivious]
 fun absorb(key: *Key, state: *State, data: *u8, blocks: usize) {
+    if (key.backend == HARDWARE) {
+        hardware.absorb(?key.hardware, ?state.accumulator[0], data, blocks);
+        ret;
+    }
     software.absorb(?key.software, ?state.accumulator[0], data, blocks);
 }
 

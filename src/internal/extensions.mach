@@ -1,0 +1,62 @@
+# the aes and carry-less multiply extensions the hardware members run on
+#
+# this is the one place that knows whether the compiler can emit them and
+# whether the running processor has them. the compiler learned the rows in
+# mach 5.12.2 (briar-systems/mach#3835), so on an older compiler every answer
+# is false and only the software members exist, the gate mach-std#932 uses.
+#
+# an extension the build target selects is required by the binary, so it is
+# reported present without a probe. otherwise std.system.cpu.features() asks
+# the processor once and caches the answer. the answer is a public fact of
+# the host, never of a key.
+
+use std.types.bool.bool;
+use std.types.bool.false;
+use std.types.bool.true;
+
+# whether the compiler has the aes, pclmul and pmull rows
+pub val ROWS: bool = $mach.version.major > 5
+    || ($mach.version.major == 5 && ($mach.version.minor > 12
+    || ($mach.version.minor == 12 && $mach.version.patch >= 2)));
+
+$if (ROWS && $mach.build.arch == $mach.arch.x86_64) {
+    use std.system.cpu;
+    use isa: std.system.cpu.features;
+
+    # aes-ni: aesenc and aesenclast
+    pub fun aes() bool {
+        if (isa.SELECTED_AES) { ret true; }
+        ret cpu.features().aes;
+    }
+
+    # pclmulqdq
+    pub fun carryless() bool {
+        if (isa.SELECTED_PCLMUL) { ret true; }
+        ret cpu.features().pclmul;
+    }
+}
+$or (ROWS && $mach.build.arch == $mach.arch.aarch64) {
+    use std.system.cpu;
+    use isa: std.system.cpu.features;
+
+    # armv8 aes: aese and aesmc
+    pub fun aes() bool {
+        if (isa.SELECTED_AES) { ret true; }
+        ret cpu.features().aes;
+    }
+
+    # 64-bit pmull and pmull2
+    pub fun carryless() bool {
+        if (isa.SELECTED_PMULL) { ret true; }
+        ret cpu.features().pmull;
+    }
+}
+$or {
+    pub fun aes() bool {
+        ret false;
+    }
+
+    pub fun carryless() bool {
+        ret false;
+    }
+}

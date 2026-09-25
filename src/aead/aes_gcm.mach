@@ -22,8 +22,8 @@ pub val MAX_PLAINTEXT_SIZE: usize = 68719476704;
 pub val MAX_AAD_SIZE:       usize = 2305843009213693951;
 
 # keystream blocks produced per aes call, at most core.PARALLEL_BLOCKS
-val STREAM_BLOCKS: usize = 4;
-val STREAM_SIZE:   usize = 64;
+val STREAM_BLOCKS: usize = 8;
+val STREAM_SIZE:   usize = 128;
 
 # seal writes ciphertext followed by the complete tag
 pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
@@ -72,16 +72,24 @@ pub fun empty() Context {
 # expand the key into an empty context
 #
 # the key may be released or overwritten once this returns. a failure leaves
-# the context empty.
+# the context empty. the aes and ghash members are the fastest this host
+# runs, chosen here once for the context's life.
 #[oblivious]
 pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
+    ret init_backends(context, key, core.preferred(), ghash.preferred());
+}
+
+# expand the key with named members, which tests use to force one
+#[oblivious]
+fun init_backends(context: *Context, key: contracts.SecretBytes, cipher: core.Backend,
+    hash: ghash.Backend) contracts.Error {
     if (context == nil)         { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
     if (!valid_key(key))        { ret contracts.INVALID_KEY; }
     if (key.data == nil)        { ret contracts.INVALID_INPUT; }
 
     ct.begin();
-    val expanded: contracts.Error = core.init(?context.cipher, key);
+    val expanded: contracts.Error = core.init_backend(?context.cipher, key, cipher);
     if (expanded != contracts.OK) {
         wipe(context);
         ct.end();
@@ -90,7 +98,7 @@ pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
     var subkey: [16]^u8;
     ct.zeroize(?subkey[0], 16);
     core.encrypt(?context.cipher, ?subkey[0], ?subkey[0]);
-    val hashed: contracts.Error = ghash.init(?context.hash, ?subkey[0], ghash.preferred());
+    val hashed: contracts.Error = ghash.init(?context.hash, ?subkey[0], hash);
     ct.zeroize(?subkey[0], 16);
     if (hashed != contracts.OK) {
         wipe(context);
@@ -130,21 +138,77 @@ fun set_counter(counter: *^u8, value: u32) {
     counter[15] = value::u8;
 }
 
+# the counter blocks of one record: the nonce in every one of STREAM_BLOCKS
+# slots, whose last four bytes `keystream` sets per chunk
+fun start_counters(counter: *^u8, counters: *^u8) {
+    var block: usize = 0;
+    for (block < STREAM_BLOCKS) {
+        var i: usize = 0;
+        for (i < 12) {
+            counters[block * 16 + i] = counter[i];
+            i                        = i + 1;
+        }
+        block = block + 1;
+    }
+}
+
 # keystream for up to STREAM_BLOCKS blocks from consecutive counters starting at `first`
 #[oblivious]
-fun keystream(context: *core.Context, counter: *^u8, first: u32, blocks: usize,
+fun keystream(context: *core.Context, counters: *^u8, first: u32, blocks: usize,
     stream: *^u8) {
     var block: usize = 0;
     for (block < blocks) {
-        var i: usize = 0;
-        for (i < 12) {
-            stream[block * 16 + i] = counter[i];
-            i                      = i + 1;
-        }
-        set_counter(?stream[block * 16], first + block::u32);
+        set_counter(?counters[block * 16], first + block::u32);
         block = block + 1;
     }
-    core.encrypt_blocks(context, stream, stream, blocks);
+    core.encrypt_blocks(context, counters, stream, blocks);
+}
+
+# ciphertext = plaintext ^ keystream, released as public output
+#
+# on x86_64 and aarch64 a word is loaded and stored whatever its alignment, so
+# the whole words go eight bytes at a time and the tail a byte at a time.
+#[oblivious]
+fun xor_seal(output: *u8, plaintext: *^u8, stream: *^u8, len: usize) {
+    var i: usize = 0;
+    $if ($mach.build.arch == $mach.arch.x86_64 || $mach.build.arch == $mach.arch.aarch64) {
+        val words: usize = len / 8;
+        val out:   *u64  = output:~*u64;
+        val text:  *^u64 = plaintext:~*^u64;
+        val key:   *^u64 = stream:~*^u64;
+        var word:  usize = 0;
+        for (word < words) {
+            out[word] = (text[word] ^ key[word]):>u64;
+            word      = word + 1;
+        }
+        i = words * 8;
+    }
+    for (i < len) {
+        output[i] = (plaintext[i] ^ stream[i]):>u8;
+        i         = i + 1;
+    }
+}
+
+# plaintext = ciphertext ^ keystream, into secret output
+#[oblivious]
+fun xor_open(output: *^u8, ciphertext: *u8, stream: *^u8, len: usize) {
+    var i: usize = 0;
+    $if ($mach.build.arch == $mach.arch.x86_64 || $mach.build.arch == $mach.arch.aarch64) {
+        val words: usize = len / 8;
+        val out:   *^u64 = output:~*^u64;
+        val text:  *u64  = ciphertext:~*u64;
+        val key:   *^u64 = stream:~*^u64;
+        var word:  usize = 0;
+        for (word < words) {
+            out[word] = text[word] ^ key[word];
+            word      = word + 1;
+        }
+        i = words * 8;
+    }
+    for (i < len) {
+        output[i] = ciphertext[i] ^ stream[i];
+        i         = i + 1;
+    }
 }
 
 #[oblivious]
@@ -190,23 +254,22 @@ pub fun seal_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Byte
     make_counter(nonce, ?counter[0]);
     ghash.update(?context.hash, ?state, aad.data, aad.len);
 
-    var stream:        [64]^u8;
+    var counters:      [128]^u8;
+    var stream:        [128]^u8;
     var offset:        usize = 0;
     var counter_value: u32   = 2;
+    start_counters(?counter[0], ?counters[0]);
     for (offset < plaintext.len) {
         var take: usize = plaintext.len - offset;
         if (take > STREAM_SIZE) { take = STREAM_SIZE; }
         val blocks: usize = (take + 15) / 16;
-        keystream(?context.cipher, ?counter[0], counter_value, blocks, ?stream[0]);
-        var i: usize = 0;
-        for (i < take) {
-            output.data[offset + i] = (plaintext.data[offset + i] ^ stream[i]):>u8;
-            i                       = i + 1;
-        }
+        keystream(?context.cipher, ?counters[0], counter_value, blocks, ?stream[0]);
+        xor_seal(?output.data[offset], ?plaintext.data[offset], ?stream[0], take);
         offset = offset + take;
         if (offset < plaintext.len) { counter_value = counter_value + blocks::u32; }
     }
-    ct.zeroize(?stream[0], 64);
+    ct.zeroize(?counters[0], 128);
+    ct.zeroize(?stream[0], 128);
     ghash.update(?context.hash, ?state, output.data, plaintext.len);
 
     ghash.lengths(?context.hash, ?state, aad.len, plaintext.len);
@@ -274,23 +337,22 @@ pub fun open_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Byte
         ret failed(contracts.AUTH_FAILED);
     }
 
-    var stream:        [64]^u8;
+    var counters:      [128]^u8;
+    var stream:        [128]^u8;
     var offset:        usize = 0;
     var counter_value: u32   = 2;
+    start_counters(?counter[0], ?counters[0]);
     for (offset < ciphertext_len) {
         var take: usize = ciphertext_len - offset;
         if (take > STREAM_SIZE) { take = STREAM_SIZE; }
         val blocks: usize = (take + 15) / 16;
-        keystream(?context.cipher, ?counter[0], counter_value, blocks, ?stream[0]);
-        i = 0;
-        for (i < take) {
-            output.data[offset + i] = input.data[offset + i] ^ stream[i];
-            i                       = i + 1;
-        }
+        keystream(?context.cipher, ?counters[0], counter_value, blocks, ?stream[0]);
+        xor_open(?output.data[offset], ?input.data[offset], ?stream[0], take);
         offset = offset + take;
         if (offset < ciphertext_len) { counter_value = counter_value + blocks::u32; }
     }
-    ct.zeroize(?stream[0], 64);
+    ct.zeroize(?counters[0], 128);
+    ct.zeroize(?stream[0], 128);
     ct.zeroize(?counter[0], 16);
     ct.end();
     ret contracts.Operation{error: contracts.OK, written: ciphertext_len};

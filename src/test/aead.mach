@@ -733,12 +733,18 @@ test "aes-gcm: the context refuses use outside init and dnit, which zeroizes it"
     result = aes_gcm.open_with(?context, nonce12, no_aad, input, plain);
     if (result.error != contracts.OK || !secret_filled(?opened[0], 0x3C, 16)) { ret 18; }
 
-    val planes: *^u8 = (?context.cipher.software.round_planes[0]):~*^u8;
-    val hash:   *^u8 = (?context.hash.software.h[0]):~*^u8;
-    if (secret_filled(planes, 0, 960) || secret_filled(hash, 0, 16))   { ret 19; }
-    if (aes_gcm.dnit(?context) != contracts.OK)                        { ret 20; }
-    if (!secret_filled(planes, 0, 960) || !secret_filled(hash, 0, 16)) { ret 24; }
-    if (aes_gcm.dnit(?context) != contracts.OK)                        { ret 25; }
+    # the active members hold the key, and dnit clears every member
+    val planes:       *^u8 = (?context.cipher.software.round_planes[0]):~*^u8;
+    val rounds:       *^u8 = ?context.cipher.hardware.round_keys[0];
+    val hash:         *^u8 = (?context.hash.software.h[0]):~*^u8;
+    val powers:       *^u8 = (?context.hash.hardware.powers[0]):~*^u8;
+    val cipher_keyed: bool = !secret_filled(planes, 0, 960) || !secret_filled(rounds, 0, 240);
+    val hash_keyed:   bool = !secret_filled(hash, 0, 16) || !secret_filled(powers, 0, 128);
+    if (!cipher_keyed || !hash_keyed)           { ret 19; }
+    if (aes_gcm.dnit(?context) != contracts.OK) { ret 20; }
+    if (!secret_filled(planes, 0, 960) || !secret_filled(rounds, 0, 240) ||
+        !secret_filled(hash, 0, 16) || !secret_filled(powers, 0, 128)) { ret 24; }
+    if (aes_gcm.dnit(?context) != contracts.OK) { ret 25; }
     result = aes_gcm.open_with(?context, nonce12, no_aad, input, plain);
     if (result.error != contracts.INVALID_STATE || !secret_filled(?opened[0], 0x3C, 16)) { ret 21; }
     context.state = 9;

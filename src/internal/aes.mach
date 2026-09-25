@@ -14,11 +14,13 @@
 # - `wipe` zeroizes the whole schedule
 # `destroy` wipes every member's schedule, not only the active one.
 #
-# software is the portable member and the only one today. a hardware member
-# (aes-ni, armv8 aes) adds a Backend value, a schedule field, and a run-time
-# feature check in `available`, and nothing above this module changes.
+# software is the portable member and runs everywhere. hardware is aes-ni on
+# x86_64 and the armv8 aes rounds on aarch64, available where
+# crypto.internal.extensions says the host has them. `preferred` picks it
+# there, so a context chooses once, at init, and keeps that choice.
 
 use crypto.contracts;
+use crypto.internal.aes.hardware;
 use crypto.internal.aes.software;
 use std.types.bool.bool;
 use std.types.bool.false;
@@ -28,32 +30,38 @@ use std.types.size.usize;
 pub val BLOCK_SIZE:      usize = 16;
 pub val AES128_KEY_SIZE: usize = 16;
 pub val AES256_KEY_SIZE: usize = 32;
-pub val PARALLEL_BLOCKS: usize = software.PARALLEL_BLOCKS;
+pub val PARALLEL_BLOCKS: usize = hardware.PARALLEL_BLOCKS;
 
 pub def Backend: u8;
 
 pub val NONE:     Backend = 0;
 pub val SOFTWARE: Backend = 1;
+pub val HARDWARE: Backend = 2;
 
 pub rec Context {
     software: software.Schedule;
+    hardware: hardware.Schedule;
     backend:  Backend;
     active:   bool;
 }
 
 # whether this host can run the backend
 pub fun available(backend: Backend) bool {
-    ret backend == SOFTWARE;
+    if (backend == SOFTWARE) { ret true; }
+    if (backend == HARDWARE) { ret hardware.available(); }
+    ret false;
 }
 
 # the fastest backend this host can run
 pub fun preferred() Backend {
+    if (hardware.available()) { ret HARDWARE; }
     ret SOFTWARE;
 }
 
 pub fun destroy(context: *Context) {
     if (context == nil) { ret; }
     software.wipe(?context.software);
+    hardware.wipe(?context.hardware);
     context.backend = NONE;
     context.active  = false;
 }
@@ -69,7 +77,8 @@ pub fun init_backend(context: *Context, key: contracts.SecretBytes,
     }
     if (key.data == nil)     { ret contracts.INVALID_INPUT; }
     if (!available(backend)) { ret contracts.UNSUPPORTED; }
-    software.expand(?context.software, key);
+    if (backend == HARDWARE) { hardware.expand(?context.hardware, key); }
+    or                       { software.expand(?context.software, key); }
     context.backend = backend;
     context.active  = true;
     ret contracts.OK;
@@ -85,7 +94,19 @@ pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
 # input and output may be the same storage.
 #[oblivious]
 pub fun encrypt_blocks(context: *Context, input: *^u8, output: *^u8, count: usize) {
-    software.encrypt_blocks(?context.software, input, output, count);
+    if (context.backend == HARDWARE) {
+        hardware.encrypt_blocks(?context.hardware, input, output, count);
+        ret;
+    }
+    # the software member takes four blocks per pass
+    var done: usize = 0;
+    for (done < count) {
+        var take: usize = count - done;
+        if (take > software.PARALLEL_BLOCKS) { take = software.PARALLEL_BLOCKS; }
+        software.encrypt_blocks(?context.software, ?input[done * BLOCK_SIZE],
+            ?output[done * BLOCK_SIZE], take);
+        done = done + take;
+    }
 }
 
 #[oblivious]
