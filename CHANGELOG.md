@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-09-25
+
 ### Changed
 
 - The library entry moved from `src/lib.mach` to `src/lib/crypto.mach` and the tests entry from `src/tests.mach` to `src/lib/tests.mach`, the family layout for artifact entries (briar-systems/.github#107). A bare `use crypto;` still binds the library entry, and every other module path is unchanged. The entry module itself is now `crypto.lib.crypto`, so an import that named `crypto.lib` directly names that path or uses `use crypto;` instead (#169).
