@@ -397,3 +397,374 @@ test "aes-gcm: tls and quic dimensions are fixed" {
     if (STREAM_BLOCKS > core.PARALLEL_BLOCKS || STREAM_SIZE != STREAM_BLOCKS * 16) { ret 2; }
     ret 0;
 }
+
+# the gcm specification's test cases 1 to 4 and 13 to 16 (McGrew and Viega,
+# "The Galois/Counter Mode of Operation", revised 2005), the 96-bit-iv ones,
+# and the first tag-only record with aad from NIST's gcmEncryptExtIV128
+# (PTlen 0, AADlen 128, count 0)
+val ZEROS_16: [16]u8 = [16]u8{
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+val ZEROS_12: [12]u8 = [12]u8{
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00
+};
+
+val TC1_SEALED: [16]u8 = [16]u8{
+    0x58, 0xe2, 0xfc, 0xce, 0xfa, 0x7e, 0x30, 0x61,
+    0x36, 0x7f, 0x1d, 0x57, 0xa4, 0xe7, 0x45, 0x5a
+};
+
+val TC2_SEALED: [32]u8 = [32]u8{
+    0x03, 0x88, 0xda, 0xce, 0x60, 0xb6, 0xa3, 0x92,
+    0xf3, 0x28, 0xc2, 0xb9, 0x71, 0xb2, 0xfe, 0x78,
+    0xab, 0x6e, 0x47, 0xd4, 0x2c, 0xec, 0x13, 0xbd,
+    0xf5, 0x3a, 0x67, 0xb2, 0x12, 0x57, 0xbd, 0xdf
+};
+
+val TC3_KEY: [16]u8 = [16]u8{
+    0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
+    0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83, 0x08
+};
+
+val TC3_NONCE: [12]u8 = [12]u8{
+    0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad,
+    0xde, 0xca, 0xf8, 0x88
+};
+
+val TC3_PLAINTEXT: [64]u8 = [64]u8{
+    0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5,
+    0xa5, 0x59, 0x09, 0xc5, 0xaf, 0xf5, 0x26, 0x9a,
+    0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7, 0xda,
+    0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72,
+    0x1c, 0x3c, 0x0c, 0x95, 0x95, 0x68, 0x09, 0x53,
+    0x2f, 0xcf, 0x0e, 0x24, 0x49, 0xa6, 0xb5, 0x25,
+    0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+    0xba, 0x63, 0x7b, 0x39, 0x1a, 0xaf, 0xd2, 0x55
+};
+
+val TC3_SEALED: [80]u8 = [80]u8{
+    0x42, 0x83, 0x1e, 0xc2, 0x21, 0x77, 0x74, 0x24,
+    0x4b, 0x72, 0x21, 0xb7, 0x84, 0xd0, 0xd4, 0x9c,
+    0xe3, 0xaa, 0x21, 0x2f, 0x2c, 0x02, 0xa4, 0xe0,
+    0x35, 0xc1, 0x7e, 0x23, 0x29, 0xac, 0xa1, 0x2e,
+    0x21, 0xd5, 0x14, 0xb2, 0x54, 0x66, 0x93, 0x1c,
+    0x7d, 0x8f, 0x6a, 0x5a, 0xac, 0x84, 0xaa, 0x05,
+    0x1b, 0xa3, 0x0b, 0x39, 0x6a, 0x0a, 0xac, 0x97,
+    0x3d, 0x58, 0xe0, 0x91, 0x47, 0x3f, 0x59, 0x85,
+    0x4d, 0x5c, 0x2a, 0xf3, 0x27, 0xcd, 0x64, 0xa6,
+    0x2c, 0xf3, 0x5a, 0xbd, 0x2b, 0xa6, 0xfa, 0xb4
+};
+
+val TC4_PLAINTEXT: [60]u8 = [60]u8{
+    0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5,
+    0xa5, 0x59, 0x09, 0xc5, 0xaf, 0xf5, 0x26, 0x9a,
+    0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7, 0xda,
+    0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72,
+    0x1c, 0x3c, 0x0c, 0x95, 0x95, 0x68, 0x09, 0x53,
+    0x2f, 0xcf, 0x0e, 0x24, 0x49, 0xa6, 0xb5, 0x25,
+    0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+    0xba, 0x63, 0x7b, 0x39
+};
+
+val TC4_AAD: [20]u8 = [20]u8{
+    0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef,
+    0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef,
+    0xab, 0xad, 0xda, 0xd2
+};
+
+val TC4_SEALED: [76]u8 = [76]u8{
+    0x42, 0x83, 0x1e, 0xc2, 0x21, 0x77, 0x74, 0x24,
+    0x4b, 0x72, 0x21, 0xb7, 0x84, 0xd0, 0xd4, 0x9c,
+    0xe3, 0xaa, 0x21, 0x2f, 0x2c, 0x02, 0xa4, 0xe0,
+    0x35, 0xc1, 0x7e, 0x23, 0x29, 0xac, 0xa1, 0x2e,
+    0x21, 0xd5, 0x14, 0xb2, 0x54, 0x66, 0x93, 0x1c,
+    0x7d, 0x8f, 0x6a, 0x5a, 0xac, 0x84, 0xaa, 0x05,
+    0x1b, 0xa3, 0x0b, 0x39, 0x6a, 0x0a, 0xac, 0x97,
+    0x3d, 0x58, 0xe0, 0x91, 0x5b, 0xc9, 0x4f, 0xbc,
+    0x32, 0x21, 0xa5, 0xdb, 0x94, 0xfa, 0xe9, 0x5a,
+    0xe7, 0x12, 0x1a, 0x47
+};
+
+val ZEROS_32: [32]u8 = [32]u8{
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+val TC13_SEALED: [16]u8 = [16]u8{
+    0x53, 0x0f, 0x8a, 0xfb, 0xc7, 0x45, 0x36, 0xb9,
+    0xa9, 0x63, 0xb4, 0xf1, 0xc4, 0xcb, 0x73, 0x8b
+};
+
+val TC14_SEALED: [32]u8 = [32]u8{
+    0xce, 0xa7, 0x40, 0x3d, 0x4d, 0x60, 0x6b, 0x6e,
+    0x07, 0x4e, 0xc5, 0xd3, 0xba, 0xf3, 0x9d, 0x18,
+    0xd0, 0xd1, 0xc8, 0xa7, 0x99, 0x99, 0x6b, 0xf0,
+    0x26, 0x5b, 0x98, 0xb5, 0xd4, 0x8a, 0xb9, 0x19
+};
+
+val TC15_KEY: [32]u8 = [32]u8{
+    0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
+    0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83, 0x08,
+    0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
+    0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83, 0x08
+};
+
+val TC15_SEALED: [80]u8 = [80]u8{
+    0x52, 0x2d, 0xc1, 0xf0, 0x99, 0x56, 0x7d, 0x07,
+    0xf4, 0x7f, 0x37, 0xa3, 0x2a, 0x84, 0x42, 0x7d,
+    0x64, 0x3a, 0x8c, 0xdc, 0xbf, 0xe5, 0xc0, 0xc9,
+    0x75, 0x98, 0xa2, 0xbd, 0x25, 0x55, 0xd1, 0xaa,
+    0x8c, 0xb0, 0x8e, 0x48, 0x59, 0x0d, 0xbb, 0x3d,
+    0xa7, 0xb0, 0x8b, 0x10, 0x56, 0x82, 0x88, 0x38,
+    0xc5, 0xf6, 0x1e, 0x63, 0x93, 0xba, 0x7a, 0x0a,
+    0xbc, 0xc9, 0xf6, 0x62, 0x89, 0x80, 0x15, 0xad,
+    0xb0, 0x94, 0xda, 0xc5, 0xd9, 0x34, 0x71, 0xbd,
+    0xec, 0x1a, 0x50, 0x22, 0x70, 0xe3, 0xcc, 0x6c
+};
+
+val TC16_SEALED: [76]u8 = [76]u8{
+    0x52, 0x2d, 0xc1, 0xf0, 0x99, 0x56, 0x7d, 0x07,
+    0xf4, 0x7f, 0x37, 0xa3, 0x2a, 0x84, 0x42, 0x7d,
+    0x64, 0x3a, 0x8c, 0xdc, 0xbf, 0xe5, 0xc0, 0xc9,
+    0x75, 0x98, 0xa2, 0xbd, 0x25, 0x55, 0xd1, 0xaa,
+    0x8c, 0xb0, 0x8e, 0x48, 0x59, 0x0d, 0xbb, 0x3d,
+    0xa7, 0xb0, 0x8b, 0x10, 0x56, 0x82, 0x88, 0x38,
+    0xc5, 0xf6, 0x1e, 0x63, 0x93, 0xba, 0x7a, 0x0a,
+    0xbc, 0xc9, 0xf6, 0x62, 0x76, 0xfc, 0x6e, 0xce,
+    0x0f, 0x4e, 0x17, 0x68, 0xcd, 0xdf, 0x88, 0x53,
+    0xbb, 0x2d, 0x55, 0x1b
+};
+
+val AAD_KEY: [16]u8 = [16]u8{
+    0x77, 0xbe, 0x63, 0x70, 0x89, 0x71, 0xc4, 0xe2,
+    0x40, 0xd1, 0xcb, 0x79, 0xe8, 0xd7, 0x7f, 0xeb
+};
+
+val AAD_NONCE: [12]u8 = [12]u8{
+    0xe0, 0xe0, 0x0f, 0x19, 0xfe, 0xd7, 0xba, 0x01,
+    0x36, 0xa7, 0x97, 0xf3
+};
+
+val AAD_AAD: [16]u8 = [16]u8{
+    0x7a, 0x43, 0xec, 0x1d, 0x9c, 0x0a, 0x5a, 0x78,
+    0xa0, 0xb1, 0x65, 0x33, 0xa6, 0x21, 0x3c, 0xab
+};
+
+val AAD_SEALED: [16]u8 = [16]u8{
+    0x20, 0x9f, 0xcc, 0x8d, 0x36, 0x75, 0xed, 0x93,
+    0x8e, 0x9c, 0x71, 0x66, 0x70, 0x9d, 0xd9, 0x46
+};
+
+# seal and open one vector through a context on the named members
+#
+# returns 0 when the sealed record and the opened plaintext both match, and
+# a record with one tag bit flipped is refused.
+fun check_vector(cipher: core.Backend, hash: ghash.Backend, key: *u8, key_len: usize,
+    nonce: *u8, aad: *u8, aad_len: usize, plaintext: *u8, text_len: usize, sealed: *u8) u32 {
+    var secret_key:  [32]^u8;
+    var secret_text: [64]^u8;
+    var opened:      [64]^u8;
+    var output:      [80]u8;
+    var i:           usize = 0;
+    for (i < key_len) {
+        secret_key[i] = key[i];
+        i             = i + 1;
+    }
+    i = 0;
+    for (i < text_len) {
+        secret_text[i] = plaintext[i];
+        i              = i + 1;
+    }
+    var context: Context = empty();
+    if (init_backends(?context, contracts.SecretBytes{data: ?secret_key[0], len: key_len}, cipher,
+        hash) != contracts.OK) { ret 1; }
+    if (context.cipher.backend != cipher || context.hash.backend != hash) { ret 1; }
+    val nonce12: contracts.Bytes     = contracts.Bytes{data: nonce, len: NONCE_SIZE};
+    val header:  contracts.Bytes     = contracts.Bytes{data: aad, len: aad_len};
+    val size:    usize               = text_len + TAG_SIZE;
+    var result:  contracts.Operation = seal_with(?context, nonce12, header,
+        contracts.SecretBytes{data: ?secret_text[0], len: text_len},
+        contracts.Buffer{data: ?output[0], capacity: 80});
+    if (result.error != contracts.OK || result.written != size) { ret 1; }
+    i = 0;
+    for (i < size) {
+        if (output[i] != sealed[i]) { ret 1; }
+        i = i + 1;
+    }
+    result = open_with(?context, nonce12, header, contracts.Bytes{data: sealed, len: size},
+        contracts.SecretBuffer{data: ?opened[0], capacity: 64});
+    if (result.error != contracts.OK || result.written != text_len) { ret 1; }
+    i = 0;
+    for (i < text_len) {
+        if (opened[i]:>u8 != plaintext[i]) { ret 1; }
+        i = i + 1;
+    }
+    output[text_len] = output[text_len] ^ 1;
+    result           = open_with(?context, nonce12, header, contracts.Bytes{data: ?output[0], len: size},
+        contracts.SecretBuffer{data: ?opened[0], capacity: 64});
+    if (result.error != contracts.AUTH_FAILED) { ret 1; }
+    dnit(?context);
+    ret 0;
+}
+
+# 0 when every vector passes on the named members
+fun check_vectors(cipher: core.Backend, hash: ghash.Backend) u32 {
+    var failures: u32 = 0;
+    failures = failures + check_vector(cipher, hash, ?ZEROS_16[0], 16, ?ZEROS_12[0], nil, 0, nil, 0, ?TC1_SEALED[0]);
+    failures = failures + check_vector(cipher, hash, ?ZEROS_16[0], 16, ?ZEROS_12[0], nil, 0, ?ZEROS_16[0], 16, ?TC2_SEALED[0]);
+    failures = failures + check_vector(cipher, hash, ?TC3_KEY[0], 16, ?TC3_NONCE[0], nil, 0, ?TC3_PLAINTEXT[0], 64, ?TC3_SEALED[0]);
+    failures = failures + check_vector(cipher, hash, ?TC3_KEY[0], 16, ?TC3_NONCE[0], ?TC4_AAD[0], 20, ?TC4_PLAINTEXT[0], 60, ?TC4_SEALED[0]);
+    failures = failures + check_vector(cipher, hash, ?ZEROS_32[0], 32, ?ZEROS_12[0], nil, 0, nil, 0, ?TC13_SEALED[0]);
+    failures = failures + check_vector(cipher, hash, ?ZEROS_32[0], 32, ?ZEROS_12[0], nil, 0, ?ZEROS_16[0], 16, ?TC14_SEALED[0]);
+    failures = failures + check_vector(cipher, hash, ?TC15_KEY[0], 32, ?TC3_NONCE[0], nil, 0, ?TC3_PLAINTEXT[0], 64, ?TC15_SEALED[0]);
+    failures = failures + check_vector(cipher, hash, ?TC15_KEY[0], 32, ?TC3_NONCE[0], ?TC4_AAD[0], 20, ?TC4_PLAINTEXT[0], 60, ?TC16_SEALED[0]);
+    failures = failures + check_vector(cipher, hash, ?AAD_KEY[0], 16, ?AAD_NONCE[0], ?AAD_AAD[0], 16, nil, 0, ?AAD_SEALED[0]);
+    ret failures;
+}
+
+val CIPHER_MEMBERS: [2]core.Backend  = [2]core.Backend{core.SOFTWARE, core.HARDWARE};
+val HASH_MEMBERS:   [2]ghash.Backend = [2]ghash.Backend{ghash.SOFTWARE, ghash.HARDWARE};
+
+test "aes-gcm: gcm spec vectors on every aes and ghash member this host runs" {
+    var c: usize = 0;
+    for (c < 2) {
+        var h: usize = 0;
+        for (h < 2) {
+            val cipher: core.Backend  = CIPHER_MEMBERS[c];
+            val hash:   ghash.Backend = HASH_MEMBERS[h];
+            if (core.available(cipher) && ghash.available(hash)) {
+                if (check_vectors(cipher, hash) != 0) { ret (1 + c * 2 + h)::i32; }
+            }
+            or {
+                # a member the host lacks is refused, never run
+                var key:     [16]^u8;
+                var context: Context = empty();
+                if (init_backends(?context, contracts.SecretBytes{data: ?key[0], len: 16}, cipher,
+                    hash) != contracts.UNSUPPORTED) { ret 10; }
+                if (context.state != EMPTY) { ret 11; }
+            }
+            h = h + 1;
+        }
+        c = c + 1;
+    }
+    ret 0;
+}
+
+test "aes-gcm: a context runs the fastest members this host has" {
+    var key:     [16]^u8;
+    var context: Context = empty();
+    if (init(?context, contracts.SecretBytes{data: ?key[0], len: 16}) != contracts.OK) { ret 1; }
+    if (context.cipher.backend != core.preferred() || context.hash.backend != ghash.preferred()) {
+        ret 2;
+    }
+    if (core.available(core.HARDWARE) != (core.preferred() == core.HARDWARE))     { ret 3; }
+    if (ghash.available(ghash.HARDWARE) != (ghash.preferred() == ghash.HARDWARE)) { ret 4; }
+    dnit(?context);
+    ret 0;
+}
+
+# splitmix64, a fixed stream so a failure reproduces
+fun next_random(state: *u64) u64 {
+    @state = @state + 0x9E3779B97F4A7C15;
+    var z: u64 = @state;
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EB;
+    ret z ^ (z >> 31);
+}
+
+fun fill_random(state: *u64, output: *u8, len: usize) {
+    var i: usize = 0;
+    for (i < len) {
+        output[i] = next_random(state)::u8;
+        i         = i + 1;
+    }
+}
+
+var differential_plaintext: [4096]^u8;
+var differential_hardware:  [4112]u8;
+var differential_software:  [4112]u8;
+var differential_opened:    [4096]^u8;
+
+# every record length from 0 to 300 bytes, then 1200 and 4096
+fun differential_length(index: usize) usize {
+    if (index <= 300) { ret index; }
+    if (index == 301) { ret 1200; }
+    ret 4096;
+}
+
+test "aes-gcm: hardware and software members agree over random keys, nonces and records" {
+    if (!core.available(core.HARDWARE) || !ghash.available(ghash.HARDWARE)) { ret 0; }
+    var state: u64   = 159;
+    var index: usize = 0;
+    for (index <= 302) {
+        val text_len: usize = differential_length(index);
+        var key_len:  usize = AES128_KEY_SIZE;
+        if ((index & 1) == 1) { key_len = AES256_KEY_SIZE; }
+        var key:    [32]u8;
+        var secret: [32]^u8;
+        var nonce:  [12]u8;
+        var aad:    [48]u8;
+        fill_random(?state, ?key[0], 32);
+        fill_random(?state, ?nonce[0], 12);
+        fill_random(?state, ?aad[0], 48);
+        val aad_len: usize = (next_random(?state) % 49)::usize;
+        var i:       usize = 0;
+        for (i < 32) {
+            secret[i] = key[i];
+            i         = i + 1;
+        }
+        i = 0;
+        for (i < text_len) {
+            differential_plaintext[i] = next_random(?state)::u8;
+            i                         = i + 1;
+        }
+        val secret_key: contracts.SecretBytes = contracts.SecretBytes{data: ?secret[0], len: key_len};
+        var hardware:   Context               = empty();
+        var software:   Context               = empty();
+        if (init_backends(?hardware, secret_key, core.HARDWARE, ghash.HARDWARE) != contracts.OK) { ret 1; }
+        if (init_backends(?software, secret_key, core.SOFTWARE, ghash.SOFTWARE) != contracts.OK) { ret 1; }
+        val nonce12:   contracts.Bytes       = contracts.Bytes{data: ?nonce[0], len: NONCE_SIZE};
+        val header:    contracts.Bytes       = contracts.Bytes{data: ?aad[0], len: aad_len};
+        val plaintext: contracts.SecretBytes = contracts.SecretBytes{data: ?differential_plaintext[0], len: text_len};
+        val size:      usize                 = text_len + TAG_SIZE;
+        var result:    contracts.Operation   = seal_with(?hardware, nonce12, header, plaintext,
+            contracts.Buffer{data: ?differential_hardware[0], capacity: 4112});
+        if (result.error != contracts.OK || result.written != size) { ret 2; }
+        result = seal_with(?software, nonce12, header, plaintext,
+            contracts.Buffer{data: ?differential_software[0], capacity: 4112});
+        if (result.error != contracts.OK || result.written != size) { ret 3; }
+        i = 0;
+        for (i < size) {
+            if (differential_hardware[i] != differential_software[i]) { ret 4; }
+            i = i + 1;
+        }
+        # each member opens the other's record
+        result = open_with(?software, nonce12, header,
+            contracts.Bytes{data: ?differential_hardware[0], len: size},
+            contracts.SecretBuffer{data: ?differential_opened[0], capacity: 4096});
+        if (result.error != contracts.OK || result.written != text_len) { ret 5; }
+        i = 0;
+        for (i < text_len) {
+            if (differential_opened[i]:>u8 != differential_plaintext[i]:>u8) { ret 6; }
+            i = i + 1;
+        }
+        result = open_with(?hardware, nonce12, header,
+            contracts.Bytes{data: ?differential_software[0], len: size},
+            contracts.SecretBuffer{data: ?differential_opened[0], capacity: 4096});
+        if (result.error != contracts.OK || result.written != text_len) { ret 7; }
+        i = 0;
+        for (i < text_len) {
+            if (differential_opened[i]:>u8 != differential_plaintext[i]:>u8) { ret 8; }
+            i = i + 1;
+        }
+        dnit(?hardware);
+        dnit(?software);
+        index = index + 1;
+    }
+    ret 0;
+}
