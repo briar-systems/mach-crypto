@@ -3,7 +3,7 @@
 
 use std.runtime;
 
-use crypto.lib;
+use crypto.lib.crypto;
 
 use aead_tests:      crypto.test.aead;
 use cipher_tests:    crypto.test.cipher;
