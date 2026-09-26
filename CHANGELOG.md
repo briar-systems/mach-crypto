@@ -9,7 +9,7 @@
 ### Changed
 
 - The members of each seam share one context's key storage, so an `aes_gcm.Context` grows from 1,008 to 1,056 bytes (the hardware GHASH key keeps four powers of H) and a `cipher.aes.Context` stays 984. An AEAD and a header protection context still fit half of a 4 KiB chunk, which mach-quic relies on, and a test pins that (#159).
-- Dependencies: builds against mach-std dev for the `aes`, `pclmul` and `pmull` fields of `std.system.cpu.Features` (mach-std#893), until std 8.2.0 is tagged. The hardware members need mach 5.12.2 (briar-systems/mach#3835). `mach = "^5.12"` is unchanged, since an older compiler builds the software members alone. CI seeds v5.12.2 (#159).
+- Dependencies: requires mach-std 8.2.0, selected by `version = "^8.2"`, for the `aes`, `pclmul` and `pmull` fields of `std.system.cpu.Features` (mach-std#893). `test/performance` and `test/benchmark` pin `tag/v8.2.0`. The hardware members need mach 5.12.2 (briar-systems/mach#3835). `mach = "^5.12"` is unchanged, since an older compiler builds the software members alone. CI seeds v5.12.2 (#159).
 
 ## [0.22.1] - 2026-09-25
 
