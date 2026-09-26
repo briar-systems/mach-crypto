@@ -684,7 +684,7 @@ pub fun verify_sha384(public_key: contracts.Bytes, message: contracts.Bytes,
     ret result;
 }
 
-test "p384 internal: constants are the montgomery forms of the nist values" {
+test p384_internal__constants_are_the_montgomery_forms_of_the_nist_values {
     if (PRIME[0] != 0x00000000FFFFFFFF || ORDER[0] != 0xECEC196ACCC52973) { ret 1; }
     var x: UInt;
     var y: UInt;
@@ -697,7 +697,7 @@ test "p384 internal: constants are the montgomery forms of the nist values" {
     ret 0;
 }
 
-test "p384 internal: montgomery arithmetic matches small values" {
+test p384_internal__montgomery_arithmetic_matches_small_values {
     var one:    UInt;
     var two:    UInt;
     var three:  UInt;
@@ -735,7 +735,7 @@ test "p384 internal: montgomery arithmetic matches small values" {
     ret 0;
 }
 
-test "p384 internal: modular products match independent big integers" {
+test p384_internal__modular_products_match_independent_big_integers {
     val field_left: [6]u64 = [6]u64{
         0x8899AABBCCDDEEFF, 0x0011223344556677, 0x0123456789ABCDEF,
         0x899AABBCCDDEEFF0, 0x0112233445566778, 0x123456789ABCDEF0
@@ -784,7 +784,7 @@ test "p384 internal: modular products match independent big integers" {
     ret 0;
 }
 
-test "p384 internal: interleaved multiplication preserves each input" {
+test p384_internal__interleaved_multiplication_preserves_each_input {
     var zero:   UInt;
     var one:    UInt;
     var point:  Point;

@@ -91,7 +91,7 @@ fun set_nist_p384_signature(output: *u8) bool {
         206, output);
 }
 
-test "ecdsa p-384: median verification stays below 250 ms" {
+test ecdsa_p_384__median_verification_stays_below_250_ms {
     var public_key: [97]u8;
     var encoded:    [103]u8;
     if (!set_nist_p384_public(?public_key[0]) ||
@@ -202,10 +202,10 @@ fun rsa_budget(modulus_hex: str, private_hex: str, len: usize, sign_budget: i64,
     ret 0;
 }
 
-test "rsa-pss 2048: median signing stays below 250 ms and verification below 25 ms" {
+test rsa_pss_2048__median_signing_stays_below_250_ms_and_verification_below_25_ms {
     ret rsa_budget(RSA_2048_MODULUS, RSA_2048_PRIVATE, 256, 250000000, 25000000);
 }
 
-test "rsa-pss 3072: median signing stays below 500 ms and verification below 50 ms" {
+test rsa_pss_3072__median_signing_stays_below_500_ms_and_verification_below_50_ms {
     ret rsa_budget(RSA_3072_MODULUS, RSA_3072_PRIVATE, 384, 500000000, 50000000);
 }

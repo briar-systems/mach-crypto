@@ -1,92 +1,92 @@
 category	project	algorithm	vector_source	filter
-official-vector	.	sha-256,sha-384	NIST FIPS 180-4	hash: NIST empty and abc vectors preserve snapshots
-official-vector	.	sha-256,sha-384	NIST FIPS 180-4	hash: every split and byte fragment matches NIST multiblock vectors
-official-vector	.	sha-256,sha-384	NIST FIPS 180-4	hash: million-byte NIST vectors span repeated fragments
-official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	hmac: rfc 4231 sha-256 and sha-384 vectors
-official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	hmac: rfc 4231 multiblock message vectors
-official-vector	.	hkdf-sha-256	RFC 5869	hkdf: rfc 5869 sha-256 case one
-official-vector	.	aes-128-gcm	NIST SP 800-38D	aes-gcm: nist empty and single-block aes-128 vectors
-official-vector	.	aes-256-gcm	NIST SP 800-38D	aes-gcm: nist empty and single-block aes-256 vectors
-official-vector	.	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	aes-gcm: nist aad and partial-block vector seals and opens
-official-vector	.	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	aes-gcm: nist vectors seal and open through one keyed context
-official-vector	.	aes-128,aes-256	NIST FIPS 197 and SP 800-38A	aes: fips 197 and sp 800-38a blocks through one keyed context
-official-vector	.	aes-128,aes-256	NIST FIPS 197 and SP 800-38A	aes: fips 197 and sp 800-38a blocks on every member this host runs
-official-vector	.	aes-128-gcm,aes-256-gcm	GCM specification test cases 1-4 and 13-16 and NIST CAVP gcmEncryptExtIV128	aes-gcm: gcm spec vectors on every aes and ghash member this host runs
-official-vector	.	chacha20-poly1305	RFC 8439	chacha20-poly1305: rfc 8439 aead vector seals and opens
-official-vector	.	p-256-ecdh	NIST CAVP KAS-ECC	p256: nist cavp p-256 cdh count zero
-official-vector	.	x25519	RFC 7748	x25519: rfc 7748 alice and bob exchange
-official-vector	.	x25519	RFC 7748	x25519: rfc 7748 direct function vectors
-official-vector	.	x25519	RFC 7748	x25519: rfc 7748 one-thousand iteration vector
-official-vector	.	ecdsa-p256-sha256	RFC 6979	ecdsa p-256: rfc 6979 sha-256 sample
-official-vector	.	ecdsa-p384-sha384	NIST P-384 with SHA-384 example	ecdsa p-384: nist sha-384 verification vector
-official-vector	.	ed25519	RFC 8032	ed25519: rfc 8032 vectors
-official-vector	.	rsa-pss-sha256	NIST CAVP	rsa-pss: nist cavp sha256 verification
-official-vector	.	rsa-pss-sha384	NIST CAVP	rsa-pss: nist cavp sha384 verification
-official-vector	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	NIST CAVP	rsa-pkcs1: nist cavp sha-256 and sha-384 verification
-official-vector	.	key-containers	RFC 8410	keys: rfc 8410 Ed25519 and X25519 containers are exact and bounded
-differential	.	hkdf-sha-384	independent Python hashlib vector	hkdf: sha-384 extract and expand agree with independent vectors
-differential	.	aes-128-gcm,aes-256-gcm	independent AES-GCM implementation	aes-gcm: independent counter-carry differential vector
-differential	.	aes-128-gcm,aes-256-gcm	independent Python cryptography AES-GCM	aes-gcm: independent record-length differential vectors
-differential	.	aes-128-gcm,aes-256-gcm	mach-crypto software AES-GCM members	aes-gcm: hardware and software members agree over random keys, nonces and records
-differential	.	aes-128-gcm,aes-256-gcm	mach-crypto software GHASH member	ghash: hardware and software members agree over random keys, splits and lengths
-differential	.	aes-128,aes-256	mach-crypto software AES member	aes: hardware and software members agree over random keys and block counts
-differential	.	chacha20-poly1305	independent RFC-compatible implementation	chacha20-poly1305: empty independent vector
-differential	.	chacha20-poly1305	independent RFC-compatible implementation	chacha20-poly1305: independent counter-carry differential vector
-differential	.	chacha20-poly1305	independent Python integer arithmetic	poly1305: carry edges match independent vectors over the padded layout
-differential	.	x25519	independent X25519 implementation	x25519: independent differential vector and private output overlap
-differential	.	rsa-pss-sha256,rsa-pss-sha384	independent OpenSSL vectors	rsa-pss: independent sha-256 and sha-384 vectors
-differential	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	independent OpenSSL vectors	rsa-pkcs1: openssl sha-256 and sha-384 vectors preserve inputs
-differential	.	ecdsa-p384-sha384	independent OpenSSL vector	ecdsa p-384: independent OpenSSL vector rejects tampering
-differential	.	rsa-pss-sha256	independent OpenSSL 2080-bit vector	rsa-pss: openssl 2080-bit vector exercises a half-filled top limb
-differential	.	p-256-ecdh,ecdsa-p256-sha256	independent Python integer arithmetic	p256 internal: field arithmetic matches independent vectors
-differential	.	ecdsa-p256-sha256	independent Python integer arithmetic	p256 internal: scalar arithmetic matches independent vectors
-differential	.	p-256-ecdh,ecdsa-p256-sha256	independent Python group law	p256 internal: windowed scalar multiplication matches independent vectors
-differential	.	ed25519	independent Python group law	ed25519 internal: windowed scalar multiplication matches independent vectors across the scalar range
-differential	.	x25519,ed25519	independent Python integer arithmetic	x25519 internal: field arithmetic matches independent vectors
-differential	.	x25519,ed25519	bit-serial field reference	x25519 field: the selected multiply agrees with the serial reference
-differential	.	ed25519	independent Python integer arithmetic	mont: products and wide reductions match independent values mod the ed25519 order
-differential	.	ecdsa-p384-sha384	independent Python integer arithmetic	mont: six-limb products, squares and wide reductions match independent values
-differential	.	p-256-ecdh,ecdsa-p256-sha256,ed25519	loop-form montgomery reference	mont: the unrolled four-limb ring agrees with the loop form
-differential	.	x25519,ed25519,p-256-ecdh,ecdsa-p256-sha256,ecdsa-p384-sha384,chacha20-poly1305,rsa-pss-sha256,rsa-pss-sha384,rsa-pkcs1-sha256,rsa-pkcs1-sha384	bit-serial word reference	word: the selected multiply agrees with the serial reference
-differential	.	x25519	independent Python cryptography X25519	x25519: agreement matches independent vectors across private keys and coordinates
-differential	.	ecdsa-p384-sha384	independent Python big-integer products	p384 internal: modular products match independent big integers
-differential	.	p-256-ecdh	independent OpenSSL vectors	keys: independent P-256 SEC1, PKCS8, and SPKI vectors agree
-differential	.	key-containers	independent OpenSSL vectors	keys: OpenSSL RSA containers preserve exact public and private parts
-invalid-input	.	sha-256,sha-384	mach-crypto bounded transcript contract	hash: validation and overflow failures preserve state and output
-invalid-input	.	hmac-sha-256,hmac-sha-384	mach-crypto bounded output contract	hmac: output overlap and failures have defined behavior
-invalid-input	.	hkdf-sha-256,hkdf-sha-384	RFC 5869 and mach-crypto bounded output contract	hkdf: limits, capacities, and invalid inputs do not write
-invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto AEAD contract	aes-gcm: validation and capacity failures leave output unchanged
-invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	aes-gcm: the context refuses use outside init and dnit, which zeroizes it
-invalid-input	.	aes-128,aes-256	mach-crypto keyed context contract	aes: the context refuses use outside init and dnit, which zeroizes it
-invalid-input	.	chacha20-poly1305	RFC 8439 and mach-crypto AEAD contract	chacha20-poly1305: malformed and bounded failures do not write
-invalid-input	.	p-256-ecdh	SEC 1 and mach-crypto agreement contract	p256: invalid scalars and sec1 points preserve output
-invalid-input	.	x25519	RFC 7748 and mach-crypto agreement contract	x25519: low-order inputs reject without changing output
-invalid-input	.	x25519	mach-crypto bounded agreement contract	x25519: validation and capacity failures leave output unchanged
-invalid-input	.	ecdsa-p256-sha256	Wycheproof-style hostile corpus	ecdsa p-256: wycheproof-style tampering and strict der rejection
-invalid-input	.	ecdsa-p384-sha384	SEC 1 and strict DER verification contract	ecdsa p-384: scalars, strict DER, points, and nil inputs are bounded
-invalid-input	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	RFC 8017 hostile encodings	rsa-pkcs1: hostile padding and digestinfo encodings are rejected
-invalid-input	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	mach-crypto verification contract	rsa-pkcs1: validation and authentication errors are distinct
-invalid-input	.	der	ITU-T X.690 and mach-crypto parser contract	der: canonical lengths, values, depth, and transactions are strict
-invalid-input	.	pem	RFC 7468 and mach-crypto parser contract	pem: canonical base64, bounds, overlap, and every truncation are enforced
-invalid-input	.	key-containers	mach-crypto ownership contract	keys: allocation and cleanup failures retain exact ownership
-invalid-input	.	key-containers	RFC 5480 and SEC 1 named-curve contract	keys: P-384 SPKI validates the named curve and every boundary
-invalid-input	.	key-containers	RFC 7468 and mach-crypto parser contract	keys: private PEM truncation fails before allocation at every boundary
-performance	test/performance	ecdsa-p384-sha384	250 ms median verification budget	ecdsa p-384: median verification stays below 250 ms
-performance	test/performance	rsa-pss-sha256	250 ms median signing and 25 ms verification budget, 2048-bit	rsa-pss 2048: median signing stays below 250 ms and verification below 25 ms
-performance	test/performance	rsa-pss-sha256	500 ms median signing and 50 ms verification budget, 3072-bit	rsa-pss 3072: median signing stays below 500 ms and verification below 50 ms
-zeroization	.	secret-storage	mach-crypto destruction contract	secret: partial allocation failure is wiped and cleanup ownership is retained
-zeroization	.	secret-storage	mach-crypto entropy contract	secret: entropy failure is distinct and wipes partial output
-zeroization	.	secret-storage	mach-crypto destruction contract	secret: failed cleanup rewipes retained ownership before retry
-zeroization	.	secret-storage	mach-crypto destruction contract	secret: destruction failure rewipes retained storage and retries
-zeroization	.	secret-storage	mach-crypto typed ownership contract	secret array: allocation failure cleans transferred typed ownership
-zeroization	.	secret-storage	mach-crypto typed ownership contract	secret array: failed cleanup rewipes deeply secret ownership for retry
-zeroization	.	secret-storage	mach-crypto typed destruction contract	secret array: deallocation retries rewipe public values
-zeroization	.	secret-storage	mach-crypto typed destruction contract	secret array: deallocation retries rewipe direct secret values
-zeroization	.	secret-storage	mach-std typed operating-system boundary	secret array: native allocator owns deeply secret records
-zeroization	.	sha-256,sha-384	mach-crypto transcript lifecycle contract	hash: snapshot continues and final consumes only after success
-zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto authenticated release contract	aes-gcm: authentication failures clear output before release
-zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	aes-gcm: the context refuses use outside init and dnit, which zeroizes it
-zeroization	.	aes-128,aes-256	mach-crypto keyed context contract	aes: the context refuses use outside init and dnit, which zeroizes it
-zeroization	.	chacha20-poly1305	mach-crypto authenticated release contract	chacha20-poly1305: authentication failures clear output before release
-zeroization	.	key-containers	mach-crypto secret ownership contract	keys: PEM round trips once-owned private DER and borrowed public DER
-zeroization	.	key-containers	mach-crypto secret ownership contract	keys: allocation and cleanup failures retain exact ownership
+official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__nist_empty_and_abc_vectors_preserve_snapshots
+official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__every_split_and_byte_fragment_matches_nist_multiblock_vectors
+official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__million_byte_nist_vectors_span_repeated_fragments
+official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	crypto.test.mac#hmac__rfc_4231_sha_256_and_sha_384_vectors
+official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	crypto.test.mac#hmac__rfc_4231_multiblock_message_vectors
+official-vector	.	hkdf-sha-256	RFC 5869	crypto.test.mac#hkdf__rfc_5869_sha_256_case_one
+official-vector	.	aes-128-gcm	NIST SP 800-38D	crypto.test.aead#aes_gcm__nist_empty_and_single_block_aes_128_vectors
+official-vector	.	aes-256-gcm	NIST SP 800-38D	crypto.test.aead#aes_gcm__nist_empty_and_single_block_aes_256_vectors
+official-vector	.	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	crypto.test.aead#aes_gcm__nist_aad_and_partial_block_vector_seals_and_opens
+official-vector	.	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	crypto.test.aead#aes_gcm__nist_vectors_seal_and_open_through_one_keyed_context
+official-vector	.	aes-128,aes-256	NIST FIPS 197 and SP 800-38A	crypto.test.cipher#aes__fips_197_and_sp_800_38a_blocks_through_one_keyed_context
+official-vector	.	aes-128,aes-256	NIST FIPS 197 and SP 800-38A	crypto.internal.aes#aes__fips_197_and_sp_800_38a_blocks_on_every_member_this_host_runs
+official-vector	.	aes-128-gcm,aes-256-gcm	GCM specification test cases 1-4 and 13-16 and NIST CAVP gcmEncryptExtIV128	crypto.aead.aes_gcm#aes_gcm__gcm_spec_vectors_on_every_aes_and_ghash_member_this_host_runs
+official-vector	.	chacha20-poly1305	RFC 8439	crypto.test.aead#chacha20_poly1305__rfc_8439_aead_vector_seals_and_opens
+official-vector	.	p-256-ecdh	NIST CAVP KAS-ECC	crypto.test.group#p256__nist_cavp_p_256_cdh_count_zero
+official-vector	.	x25519	RFC 7748	crypto.test.group#x25519__rfc_7748_alice_and_bob_exchange
+official-vector	.	x25519	RFC 7748	crypto.test.group#x25519__rfc_7748_direct_function_vectors
+official-vector	.	x25519	RFC 7748	crypto.test.group#x25519__rfc_7748_one_thousand_iteration_vector
+official-vector	.	ecdsa-p256-sha256	RFC 6979	crypto.test.signature#ecdsa_p_256__rfc_6979_sha_256_sample
+official-vector	.	ecdsa-p384-sha384	NIST P-384 with SHA-384 example	crypto.test.signature#ecdsa_p_384__nist_sha_384_verification_vector
+official-vector	.	ed25519	RFC 8032	crypto.test.signature#ed25519__rfc_8032_vectors
+official-vector	.	rsa-pss-sha256	NIST CAVP	crypto.test.signature#rsa_pss__nist_cavp_sha256_verification
+official-vector	.	rsa-pss-sha384	NIST CAVP	crypto.test.signature#rsa_pss__nist_cavp_sha384_verification
+official-vector	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	NIST CAVP	crypto.test.signature#rsa_pkcs1__nist_cavp_sha_256_and_sha_384_verification
+official-vector	.	key-containers	RFC 8410	crypto.test.encoding#keys__rfc_8410_ed25519_and_x25519_containers_are_exact_and_bounded
+differential	.	hkdf-sha-384	independent Python hashlib vector	crypto.test.mac#hkdf__sha_384_extract_and_expand_agree_with_independent_vectors
+differential	.	aes-128-gcm,aes-256-gcm	independent AES-GCM implementation	crypto.test.aead#aes_gcm__independent_counter_carry_differential_vector
+differential	.	aes-128-gcm,aes-256-gcm	independent Python cryptography AES-GCM	crypto.test.aead#aes_gcm__independent_record_length_differential_vectors
+differential	.	aes-128-gcm,aes-256-gcm	mach-crypto software AES-GCM members	crypto.aead.aes_gcm#aes_gcm__hardware_and_software_members_agree_over_random_keys_nonces_and_records
+differential	.	aes-128-gcm,aes-256-gcm	mach-crypto software GHASH member	crypto.internal.ghash#ghash__hardware_and_software_members_agree_over_random_keys_splits_and_lengths
+differential	.	aes-128,aes-256	mach-crypto software AES member	crypto.internal.aes#aes__hardware_and_software_members_agree_over_random_keys_and_block_counts
+differential	.	chacha20-poly1305	independent RFC-compatible implementation	crypto.test.aead#chacha20_poly1305__empty_independent_vector
+differential	.	chacha20-poly1305	independent RFC-compatible implementation	crypto.test.aead#chacha20_poly1305__independent_counter_carry_differential_vector
+differential	.	chacha20-poly1305	independent Python integer arithmetic	crypto.internal.poly1305#poly1305__carry_edges_match_independent_vectors_over_the_padded_layout
+differential	.	x25519	independent X25519 implementation	crypto.test.group#x25519__independent_differential_vector_and_private_output_overlap
+differential	.	rsa-pss-sha256,rsa-pss-sha384	independent OpenSSL vectors	crypto.test.signature#rsa_pss__independent_sha_256_and_sha_384_vectors
+differential	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	independent OpenSSL vectors	crypto.test.signature#rsa_pkcs1__openssl_sha_256_and_sha_384_vectors_preserve_inputs
+differential	.	ecdsa-p384-sha384	independent OpenSSL vector	crypto.test.signature#ecdsa_p_384__independent_openssl_vector_rejects_tampering
+differential	.	rsa-pss-sha256	independent OpenSSL 2080-bit vector	crypto.test.signature#rsa_pss__openssl_2080_bit_vector_exercises_a_half_filled_top_limb
+differential	.	p-256-ecdh,ecdsa-p256-sha256	independent Python integer arithmetic	crypto.test.group#p256_internal__field_arithmetic_matches_independent_vectors
+differential	.	ecdsa-p256-sha256	independent Python integer arithmetic	crypto.test.group#p256_internal__scalar_arithmetic_matches_independent_vectors
+differential	.	p-256-ecdh,ecdsa-p256-sha256	independent Python group law	crypto.test.group#p256_internal__windowed_scalar_multiplication_matches_independent_vectors
+differential	.	ed25519	independent Python group law	crypto.test.group#ed25519_internal__windowed_scalar_multiplication_matches_independent_vectors_across_the_scalar_range
+differential	.	x25519,ed25519	independent Python integer arithmetic	crypto.test.group#x25519_internal__field_arithmetic_matches_independent_vectors
+differential	.	x25519,ed25519	bit-serial field reference	crypto.internal.x25519#x25519_field__the_selected_multiply_agrees_with_the_serial_reference
+differential	.	ed25519	independent Python integer arithmetic	crypto.internal.mont#mont__products_and_wide_reductions_match_independent_values_mod_the_ed25519_order
+differential	.	ecdsa-p384-sha384	independent Python integer arithmetic	crypto.internal.mont#mont__six_limb_products_squares_and_wide_reductions_match_independent_values
+differential	.	p-256-ecdh,ecdsa-p256-sha256,ed25519	loop-form montgomery reference	crypto.internal.mont#mont__the_unrolled_four_limb_ring_agrees_with_the_loop_form
+differential	.	x25519,ed25519,p-256-ecdh,ecdsa-p256-sha256,ecdsa-p384-sha384,chacha20-poly1305,rsa-pss-sha256,rsa-pss-sha384,rsa-pkcs1-sha256,rsa-pkcs1-sha384	bit-serial word reference	crypto.internal.word#word__the_selected_multiply_agrees_with_the_serial_reference
+differential	.	x25519	independent Python cryptography X25519	crypto.test.group#x25519__agreement_matches_independent_vectors_across_private_keys_and_coordinates
+differential	.	ecdsa-p384-sha384	independent Python big-integer products	crypto.internal.p384#p384_internal__modular_products_match_independent_big_integers
+differential	.	p-256-ecdh	independent OpenSSL vectors	crypto.test.encoding#keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree
+differential	.	key-containers	independent OpenSSL vectors	crypto.test.encoding#keys__openssl_rsa_containers_preserve_exact_public_and_private_parts
+invalid-input	.	sha-256,sha-384	mach-crypto bounded transcript contract	crypto.test.hash#hash__validation_and_overflow_failures_preserve_state_and_output
+invalid-input	.	hmac-sha-256,hmac-sha-384	mach-crypto bounded output contract	crypto.test.mac#hmac__output_overlap_and_failures_have_defined_behavior
+invalid-input	.	hkdf-sha-256,hkdf-sha-384	RFC 5869 and mach-crypto bounded output contract	crypto.test.mac#hkdf__limits_capacities_and_invalid_inputs_do_not_write
+invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto AEAD contract	crypto.test.aead#aes_gcm__validation_and_capacity_failures_leave_output_unchanged
+invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	crypto.test.aead#aes_gcm__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
+invalid-input	.	aes-128,aes-256	mach-crypto keyed context contract	crypto.test.cipher#aes__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
+invalid-input	.	chacha20-poly1305	RFC 8439 and mach-crypto AEAD contract	crypto.test.aead#chacha20_poly1305__malformed_and_bounded_failures_do_not_write
+invalid-input	.	p-256-ecdh	SEC 1 and mach-crypto agreement contract	crypto.test.group#p256__invalid_scalars_and_sec1_points_preserve_output
+invalid-input	.	x25519	RFC 7748 and mach-crypto agreement contract	crypto.test.group#x25519__low_order_inputs_reject_without_changing_output
+invalid-input	.	x25519	mach-crypto bounded agreement contract	crypto.test.group#x25519__validation_and_capacity_failures_leave_output_unchanged
+invalid-input	.	ecdsa-p256-sha256	Wycheproof-style hostile corpus	crypto.test.signature#ecdsa_p_256__wycheproof_style_tampering_and_strict_der_rejection
+invalid-input	.	ecdsa-p384-sha384	SEC 1 and strict DER verification contract	crypto.test.signature#ecdsa_p_384__scalars_strict_der_points_and_nil_inputs_are_bounded
+invalid-input	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	RFC 8017 hostile encodings	crypto.test.signature#rsa_pkcs1__hostile_padding_and_digestinfo_encodings_are_rejected
+invalid-input	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	mach-crypto verification contract	crypto.test.signature#rsa_pkcs1__validation_and_authentication_errors_are_distinct
+invalid-input	.	der	ITU-T X.690 and mach-crypto parser contract	crypto.test.encoding#der__canonical_lengths_values_depth_and_transactions_are_strict
+invalid-input	.	pem	RFC 7468 and mach-crypto parser contract	crypto.test.encoding#pem__canonical_base64_bounds_overlap_and_every_truncation_are_enforced
+invalid-input	.	key-containers	mach-crypto ownership contract	crypto.test.encoding#keys__allocation_and_cleanup_failures_retain_exact_ownership
+invalid-input	.	key-containers	RFC 5480 and SEC 1 named-curve contract	crypto.test.encoding#keys__p_384_spki_validates_the_named_curve_and_every_boundary
+invalid-input	.	key-containers	RFC 7468 and mach-crypto parser contract	crypto.test.encoding#keys__private_pem_truncation_fails_before_allocation_at_every_boundary
+performance	test/performance	ecdsa-p384-sha384	250 ms median verification budget	#ecdsa_p_384__median_verification_stays_below_250_ms
+performance	test/performance	rsa-pss-sha256	250 ms median signing and 25 ms verification budget, 2048-bit	#rsa_pss_2048__median_signing_stays_below_250_ms_and_verification_below_25_ms
+performance	test/performance	rsa-pss-sha256	500 ms median signing and 50 ms verification budget, 3072-bit	#rsa_pss_3072__median_signing_stays_below_500_ms_and_verification_below_50_ms
+zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret#secret__partial_allocation_failure_is_wiped_and_cleanup_ownership_is_retained
+zeroization	.	secret-storage	mach-crypto entropy contract	crypto.test.secret#secret__entropy_failure_is_distinct_and_wipes_partial_output
+zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret#secret__failed_cleanup_rewipes_retained_ownership_before_retry
+zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret#secret__destruction_failure_rewipes_retained_storage_and_retries
+zeroization	.	secret-storage	mach-crypto typed ownership contract	crypto.test.secret#secret_array__allocation_failure_cleans_transferred_typed_ownership
+zeroization	.	secret-storage	mach-crypto typed ownership contract	crypto.test.secret#secret_array__failed_cleanup_rewipes_deeply_secret_ownership_for_retry
+zeroization	.	secret-storage	mach-crypto typed destruction contract	crypto.test.secret#secret_array__deallocation_retries_rewipe_public_values
+zeroization	.	secret-storage	mach-crypto typed destruction contract	crypto.test.secret#secret_array__deallocation_retries_rewipe_direct_secret_values
+zeroization	.	secret-storage	mach-std typed operating-system boundary	crypto.test.secret#secret_array__native_allocator_owns_deeply_secret_records
+zeroization	.	sha-256,sha-384	mach-crypto transcript lifecycle contract	crypto.test.hash#hash__snapshot_continues_and_final_consumes_only_after_success
+zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto authenticated release contract	crypto.test.aead#aes_gcm__authentication_failures_clear_output_before_release
+zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	crypto.test.aead#aes_gcm__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
+zeroization	.	aes-128,aes-256	mach-crypto keyed context contract	crypto.test.cipher#aes__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
+zeroization	.	chacha20-poly1305	mach-crypto authenticated release contract	crypto.test.aead#chacha20_poly1305__authentication_failures_clear_output_before_release
+zeroization	.	key-containers	mach-crypto secret ownership contract	crypto.test.encoding#keys__pem_round_trips_once_owned_private_der_and_borrowed_public_der
+zeroization	.	key-containers	mach-crypto secret ownership contract	crypto.test.encoding#keys__allocation_and_cleanup_failures_retain_exact_ownership

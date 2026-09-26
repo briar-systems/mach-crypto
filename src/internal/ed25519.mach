@@ -639,13 +639,13 @@ pub fun point_decode(output: *Point, input: *u8) ^u8 {
     ret canonical & has_root & sign_valid;
 }
 
-test "ed25519 internal: order and basepoint constants are canonical" {
+test ed25519_internal__order_and_basepoint_constants_are_canonical {
     if (ORDER[0] != 0x5812631A5CF5D3ED || ORDER[3] != 0x1000000000000000) { ret 1; }
     if (BASE_Y[0] != 0x6666666666658)                                     { ret 2; }
     ret 0;
 }
 
-test "ed25519 internal: every comb table entry is digit * 16^window * B" {
+test ed25519_internal__every_comb_table_entry_is_digit_16_window_b {
     var two_d: field.Field;
     field_constant(?two_d, (?CURVE_2D[0]):~*u64);
     var base: Point;

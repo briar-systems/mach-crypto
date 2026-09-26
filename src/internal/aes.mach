@@ -278,7 +278,7 @@ fun check_member(backend: Backend) i32 {
     ret 0;
 }
 
-test "aes: fips 197 and sp 800-38a blocks on every member this host runs" {
+test aes__fips_197_and_sp_800_38a_blocks_on_every_member_this_host_runs {
     if (check_member(SOFTWARE) != 0) { ret 1; }
     if (available(HARDWARE)) {
         val failed: i32 = check_member(HARDWARE);
@@ -304,7 +304,7 @@ fun next_random(state: *u64) u64 {
     ret z ^ (z >> 31);
 }
 
-test "aes: hardware and software members agree over random keys and block counts" {
+test aes__hardware_and_software_members_agree_over_random_keys_and_block_counts {
     if (!available(HARDWARE)) { ret 0; }
     var state:    u64   = 197;
     var round:    usize = 0;

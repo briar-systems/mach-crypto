@@ -388,7 +388,7 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     ret result;
 }
 
-test "aes-gcm: tls and quic dimensions are fixed" {
+test aes_gcm__tls_and_quic_dimensions_are_fixed {
     if (AES128_KEY_SIZE != 16 || AES256_KEY_SIZE != 32) { ret 1; }
     if (NONCE_SIZE != 12 || TAG_SIZE != 16)             { ret 1; }
     if (MAX_PLAINTEXT_SIZE != 68719476704)              { ret 1; }
@@ -630,7 +630,7 @@ fun check_vectors(cipher: core.Backend, hash: ghash.Backend) u32 {
 val CIPHER_MEMBERS: [2]core.Backend  = [2]core.Backend{core.SOFTWARE, core.HARDWARE};
 val HASH_MEMBERS:   [2]ghash.Backend = [2]ghash.Backend{ghash.SOFTWARE, ghash.HARDWARE};
 
-test "aes-gcm: gcm spec vectors on every aes and ghash member this host runs" {
+test aes_gcm__gcm_spec_vectors_on_every_aes_and_ghash_member_this_host_runs {
     var c: usize = 0;
     for (c < 2) {
         var h: usize = 0;
@@ -655,7 +655,7 @@ test "aes-gcm: gcm spec vectors on every aes and ghash member this host runs" {
     ret 0;
 }
 
-test "aes-gcm: a context runs the fastest members this host has" {
+test aes_gcm__a_context_runs_the_fastest_members_this_host_has {
     var key:     [16]^u8;
     var context: Context = empty();
     if (init(?context, contracts.SecretBytes{data: ?key[0], len: 16}) != contracts.OK) { ret 1; }
@@ -697,7 +697,7 @@ fun differential_length(index: usize) usize {
     ret 4096;
 }
 
-test "aes-gcm: hardware and software members agree over random keys, nonces and records" {
+test aes_gcm__hardware_and_software_members_agree_over_random_keys_nonces_and_records {
     if (!core.available(core.HARDWARE) || !ghash.available(ghash.HARDWARE)) { ret 0; }
     var state: u64   = 159;
     var index: usize = 0;

@@ -189,7 +189,7 @@ pub fun destroy_sha384(context: *Sha384) contracts.Error {
     ret contracts.OK;
 }
 
-test "hash: transcript digest sizes match TLS hash algorithms" {
+test hash__transcript_digest_sizes_match_tls_hash_algorithms {
     if (SHA256_DIGEST_SIZE != 32 || SHA384_DIGEST_SIZE != 48) { ret 1; }
     ret 0;
 }

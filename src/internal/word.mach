@@ -89,7 +89,7 @@ pub fun serial_multiply_wide(left: ^u64, right: ^u64) ^u128 {
     ret product;
 }
 
-test "word: products match exact values at 32 and 29 bits" {
+test word__products_match_exact_values_at_32_and_29_bits {
     if (multiply(0, 0xFFFFFFFF, 32):>u64 != 0)                            { ret 1; }
     if (multiply(1, 0xFFFFFFFF, 32):>u64 != 0xFFFFFFFF)                   { ret 2; }
     if (multiply(0xFFFFFFFF, 0xFFFFFFFF, 32):>u64 != 0xFFFFFFFE00000001)  { ret 3; }
@@ -102,7 +102,7 @@ test "word: products match exact values at 32 and 29 bits" {
     ret 0;
 }
 
-test "word: wide products match exact values" {
+test word__wide_products_match_exact_values {
     val all: u64 = 0xFFFFFFFFFFFFFFFF;
     if (multiply_wide(0, all):>u128 != 0)                                        { ret 1; }
     if (multiply_wide(1, all):>u128 != all::u128)                                { ret 2; }
@@ -118,7 +118,7 @@ test "word: wide products match exact values" {
 # the primitive differential: the selected path against the serial reference on
 # edge words and a deterministic sweep. on a target without the hardware cell
 # both sides are the serial path and the test still runs
-test "word: the selected multiply agrees with the serial reference" {
+test word__the_selected_multiply_agrees_with_the_serial_reference {
     val edges: [12]u64 = [12]u64{
         0, 1, 2, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0x100000000, 0x100000001,
         0x8000000000000000, 0xFFFFFFFFFFFFFFFF, 0xAAAAAAAAAAAAAAAA, 0x5555555555555555

@@ -111,7 +111,7 @@ fun zero_sha384(context: *hash.Sha384) bool {
     ret true;
 }
 
-test "hash: NIST empty and abc vectors preserve snapshots" {
+test hash__nist_empty_and_abc_vectors_preserve_snapshots {
     var empty256: [32]u8;
     var abc256:   [32]u8;
     var empty384: [48]u8;
@@ -173,7 +173,7 @@ test "hash: NIST empty and abc vectors preserve snapshots" {
     ret 0;
 }
 
-test "hash: every split and byte fragment matches NIST multiblock vectors" {
+test hash__every_split_and_byte_fragment_matches_nist_multiblock_vectors {
     val message: *u8 =
         "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"::*u8;
     var expected256: [32]u8;
@@ -237,7 +237,7 @@ test "hash: every split and byte fragment matches NIST multiblock vectors" {
     ret 0;
 }
 
-test "hash: million-byte NIST vectors span repeated fragments" {
+test hash__million_byte_nist_vectors_span_repeated_fragments {
     var expected256: [32]u8;
     var expected384: [48]u8;
     if (!decode_hex(
@@ -276,7 +276,7 @@ test "hash: million-byte NIST vectors span repeated fragments" {
     ret 0;
 }
 
-test "hash: snapshot continues and final consumes only after success" {
+test hash__snapshot_continues_and_final_consumes_only_after_success {
     var abc256:    [32]u8;
     var abc384:    [48]u8;
     var abcdef256: [32]u8;
@@ -354,7 +354,7 @@ test "hash: snapshot continues and final consumes only after success" {
     ret 0;
 }
 
-test "hash: validation and overflow failures preserve state and output" {
+test hash__validation_and_overflow_failures_preserve_state_and_output {
     var sha256: hash.Sha256 = hash.empty_sha256();
     var sha384: hash.Sha384 = hash.empty_sha384();
     if (hash.init_sha256(?sha256) != contracts.OK ||

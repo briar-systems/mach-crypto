@@ -151,7 +151,7 @@ fun decode_secret_hex(text: *u8, text_len: usize, output: *^u8) bool {
     ret true;
 }
 
-test "der: canonical lengths, values, depth, and transactions are strict" {
+test der__canonical_lengths_values_depth_and_transactions_are_strict {
     var long_value: [131]u8;
     long_value[0] = der.OCTET_STRING;
     long_value[1] = 0x81;
@@ -244,7 +244,7 @@ test "der: canonical lengths, values, depth, and transactions are strict" {
     ret 0;
 }
 
-test "pem: canonical base64, bounds, overlap, and every truncation are enforced" {
+test pem__canonical_base64_bounds_overlap_and_every_truncation_are_enforced {
     val expected: *u8             = "-----BEGIN TEST-----\nTWFu\n-----END TEST-----\n"::*u8;
     var source:   [3]u8           = [3]u8{'M', 'a', 'n'};
     val label:    contracts.Bytes = contracts.Bytes{data: "TEST"::*u8, len: 4};
@@ -348,7 +348,7 @@ fun set_x25519_spki(output: *u8) bool {
         88, output);
 }
 
-test "keys: rfc 8410 Ed25519 and X25519 containers are exact and bounded" {
+test keys__rfc_8410_ed25519_and_x25519_containers_are_exact_and_bounded {
     var probe:   ProbeAllocator;
     var owner:   secret.Allocator = probe_make(?probe);
     var encoded: [48]^u8;
@@ -429,7 +429,7 @@ fun set_p256_spki(output: *u8) bool {
         182, output);
 }
 
-test "keys: independent P-256 SEC1, PKCS8, and SPKI vectors agree" {
+test keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree {
     var probe: ProbeAllocator;
     var owner: secret.Allocator = probe_make(?probe);
     var sec1:  [121]^u8;
@@ -498,7 +498,7 @@ fun set_p384_spki(output: *u8) bool {
         240, output);
 }
 
-test "keys: P-384 SPKI validates the named curve and every boundary" {
+test keys__p_384_spki_validates_the_named_curve_and_every_boundary {
     var spki: [121]u8;
     var key:  keys.PublicKey;
     if (!set_p384_spki(?spki[0]) ||
@@ -555,7 +555,7 @@ fun set_rsa_spki(output: *u8) bool {
         588, output);
 }
 
-test "keys: OpenSSL RSA containers preserve exact public and private parts" {
+test keys__openssl_rsa_containers_preserve_exact_public_and_private_parts {
     var probe: ProbeAllocator;
     var owner: secret.Allocator = probe_make(?probe);
     var pkcs8: [1217]^u8;
@@ -654,7 +654,7 @@ test "keys: OpenSSL RSA containers preserve exact public and private parts" {
     ret 0;
 }
 
-test "keys: PEM round trips once-owned private DER and borrowed public DER" {
+test keys__pem_round_trips_once_owned_private_der_and_borrowed_public_der {
     var probe:       ProbeAllocator;
     var owner:       secret.Allocator = probe_make(?probe);
     var private_der: [48]^u8;
@@ -745,7 +745,7 @@ test "keys: PEM round trips once-owned private DER and borrowed public DER" {
     ret 0;
 }
 
-test "keys: allocation and cleanup failures retain exact ownership" {
+test keys__allocation_and_cleanup_failures_retain_exact_ownership {
     var encoded: [48]^u8;
     if (!set_ed25519_pkcs8(?encoded[0])) { ret 1; }
     var probe: ProbeAllocator;
@@ -800,7 +800,7 @@ test "keys: allocation and cleanup failures retain exact ownership" {
     ret 0;
 }
 
-test "keys: private PEM truncation fails before allocation at every boundary" {
+test keys__private_pem_truncation_fails_before_allocation_at_every_boundary {
     var der_input: [48]^u8;
     if (!set_ed25519_pkcs8(?der_input[0])) { ret 1; }
     var pem_input: [128]^u8;

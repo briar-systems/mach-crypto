@@ -74,7 +74,7 @@ fun fill_secret(output: *^u8, value: u8, len: usize) {
     }
 }
 
-test "aes-gcm: nist empty and single-block aes-128 vectors" {
+test aes_gcm__nist_empty_and_single_block_aes_128_vectors {
     var key:   [16]^u8;
     var nonce: [12]u8;
     fill_secret(?key[0], 0, 16);
@@ -118,7 +118,7 @@ test "aes-gcm: nist empty and single-block aes-128 vectors" {
     ret 0;
 }
 
-test "aes-gcm: nist empty and single-block aes-256 vectors" {
+test aes_gcm__nist_empty_and_single_block_aes_256_vectors {
     var key:   [32]^u8;
     var nonce: [12]u8;
     fill_secret(?key[0], 0, 32);
@@ -148,7 +148,7 @@ test "aes-gcm: nist empty and single-block aes-256 vectors" {
     ret 0;
 }
 
-test "aes-gcm: nist aad and partial-block vector seals and opens" {
+test aes_gcm__nist_aad_and_partial_block_vector_seals_and_opens {
     var key: [16]^u8 = [16]^u8{
         0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
         0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83, 0x08
@@ -204,7 +204,7 @@ test "aes-gcm: nist aad and partial-block vector seals and opens" {
     ret 0;
 }
 
-test "aes-gcm: public input overlap and secret key overlap are safe" {
+test aes_gcm__public_input_overlap_and_secret_key_overlap_are_safe {
     var key: [16]^u8;
     fill_secret(?key[0], 0, 16);
     var nonce_output: [32]u8;
@@ -277,7 +277,7 @@ test "aes-gcm: public input overlap and secret key overlap are safe" {
     ret 0;
 }
 
-test "aes-gcm: authentication failures clear output before release" {
+test aes_gcm__authentication_failures_clear_output_before_release {
     var key: [16]^u8;
     fill_secret(?key[0], 0, 16);
     var nonce: [12]u8;
@@ -340,7 +340,7 @@ test "aes-gcm: authentication failures clear output before release" {
     ret 0;
 }
 
-test "aes-gcm: validation and capacity failures leave output unchanged" {
+test aes_gcm__validation_and_capacity_failures_leave_output_unchanged {
     var key: [32]^u8;
     fill_secret(?key[0], 0, 32);
     var nonce:         [12]u8;
@@ -400,7 +400,7 @@ test "aes-gcm: validation and capacity failures leave output unchanged" {
     ret 0;
 }
 
-test "aes-gcm: independent counter-carry differential vector" {
+test aes_gcm__independent_counter_carry_differential_vector {
     var key:   [32]^u8;
     var nonce: [12]u8;
     var aad:   [33]u8;
@@ -503,7 +503,7 @@ val GCM_DIGESTS:     [352]u8   = [352]u8{
     0xfa, 0x30, 0x6c, 0xf5, 0x14, 0xe8, 0xda, 0x8b
 };
 
-test "aes-gcm: independent record-length differential vectors" {
+test aes_gcm__independent_record_length_differential_vectors {
     var key:   [32]^u8;
     var nonce: [12]u8;
     val aad:   [5]u8 = [5]u8{0x17, 0x03, 0x03, 0x40, 0x11};
@@ -576,7 +576,7 @@ test "aes-gcm: independent record-length differential vectors" {
     ret 0;
 }
 
-test "aes-gcm: nist vectors seal and open through one keyed context" {
+test aes_gcm__nist_vectors_seal_and_open_through_one_keyed_context {
     var key: [16]^u8 = [16]^u8{
         0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
         0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83, 0x08
@@ -675,7 +675,7 @@ test "aes-gcm: nist vectors seal and open through one keyed context" {
     ret 0;
 }
 
-test "aes-gcm: the context refuses use outside init and dnit, which zeroizes it" {
+test aes_gcm__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it {
     var key: [32]^u8;
     fill_secret(?key[0], 3, 32);
     var nonce:  [12]u8;
@@ -754,7 +754,7 @@ test "aes-gcm: the context refuses use outside init and dnit, which zeroizes it"
     ret 0;
 }
 
-test "chacha20-poly1305: rfc 8439 aead vector seals and opens" {
+test chacha20_poly1305__rfc_8439_aead_vector_seals_and_opens {
     var key:   [32]^u8;
     var nonce: [12]u8 = [12]u8{
         0x07, 0x00, 0x00, 0x00, 0x40, 0x41, 0x42, 0x43,
@@ -814,7 +814,7 @@ test "chacha20-poly1305: rfc 8439 aead vector seals and opens" {
     ret 0;
 }
 
-test "chacha20-poly1305: empty independent vector" {
+test chacha20_poly1305__empty_independent_vector {
     var key:   [32]^u8;
     var nonce: [12]u8;
     fill_secret(?key[0], 0, 32);
@@ -836,7 +836,7 @@ test "chacha20-poly1305: empty independent vector" {
     ret 0;
 }
 
-test "chacha20-poly1305: block boundary and supported overlap are safe" {
+test chacha20_poly1305__block_boundary_and_supported_overlap_are_safe {
     var key:       [32]^u8;
     var nonce:     [12]u8;
     var plaintext: [65]^u8;
@@ -917,7 +917,7 @@ test "chacha20-poly1305: block boundary and supported overlap are safe" {
     ret 0;
 }
 
-test "chacha20-poly1305: authentication failures clear output before release" {
+test chacha20_poly1305__authentication_failures_clear_output_before_release {
     var key:   [32]^u8;
     var nonce: [12]u8;
     var aad:   [12]u8;
@@ -976,7 +976,7 @@ test "chacha20-poly1305: authentication failures clear output before release" {
     ret 0;
 }
 
-test "chacha20-poly1305: malformed and bounded failures do not write" {
+test chacha20_poly1305__malformed_and_bounded_failures_do_not_write {
     var key:           [32]^u8;
     var nonce:         [12]u8;
     var public_output: [32]u8;
@@ -1087,7 +1087,7 @@ test "chacha20-poly1305: malformed and bounded failures do not write" {
     ret 0;
 }
 
-test "chacha20-poly1305: independent counter-carry differential vector" {
+test chacha20_poly1305__independent_counter_carry_differential_vector {
     var key:   [32]^u8;
     var nonce: [12]u8;
     var aad:   [65]u8;
@@ -1142,7 +1142,7 @@ test "chacha20-poly1305: independent counter-carry differential vector" {
 # mach-quic carves the aead and header protection contexts of both directions
 # of a handshake level from one 4096-byte secret chunk, so a hardware member's
 # key storage shares the context with the software member's and never adds to it
-test "aes-gcm: an aead and a header protection context fit half a 4 KiB chunk" {
+test aes_gcm__an_aead_and_a_header_protection_context_fit_half_a_4_kib_chunk {
     if ($size_of(aes_gcm.Context) + $size_of(aes.Context) > 2048) { ret 1; }
     ret 0;
 }

@@ -245,7 +245,7 @@ fun tag_equals(tag: *^u8, expected: *u8) bool {
 # over the same padded layout: a fully clamped r on all-ones blocks, r = 1
 # with h crossing p at the final reduction, r = 2 with the pad addition
 # carrying between the tag words, and aad with a partial final block
-test "poly1305: carry edges match independent vectors over the padded layout" {
+test poly1305__carry_edges_match_independent_vectors_over_the_padded_layout {
     val clamped_key: [32]u8 = [32]u8{
         0xff, 0xff, 0xff, 0x0f, 0xfc, 0xff, 0xff, 0x0f, 0xfc, 0xff, 0xff, 0x0f,
         0xfc, 0xff, 0xff, 0x0f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,

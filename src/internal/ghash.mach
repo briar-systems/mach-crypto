@@ -165,7 +165,7 @@ fun hash_record(key: *Key, data: *u8, len: usize, split: usize, output: *^u8) {
     finish(?state, output);
 }
 
-test "ghash: hardware and software members agree over random keys, splits and lengths" {
+test ghash__hardware_and_software_members_agree_over_random_keys_splits_and_lengths {
     if (!available(HARDWARE)) {
         # a member the host lacks is refused and leaves the key empty
         var subkey: [16]^u8;

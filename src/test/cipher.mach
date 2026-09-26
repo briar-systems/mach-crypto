@@ -117,7 +117,7 @@ fun encrypts_all(context: *aes.Context, input: *u8, expected: *u8, blocks: usize
     ret true;
 }
 
-test "aes: fips 197 and sp 800-38a blocks through one keyed context" {
+test aes__fips_197_and_sp_800_38a_blocks_through_one_keyed_context {
     var key:    [32]^u8;
     var input:  [16]^u8;
     var output: [16]^u8;
@@ -163,7 +163,7 @@ test "aes: fips 197 and sp 800-38a blocks through one keyed context" {
     ret 0;
 }
 
-test "aes: the context refuses use outside init and dnit, which zeroizes it" {
+test aes__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it {
     var key:    [32]^u8;
     var block:  [16]^u8;
     var output: [16]^u8;

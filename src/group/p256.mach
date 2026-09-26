@@ -108,7 +108,7 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     ret contracts.Operation{error: contracts.OK, written: SHARED_SECRET_SIZE};
 }
 
-test "p256: scalar and shared secret dimensions match the field size" {
+test p256__scalar_and_shared_secret_dimensions_match_the_field_size {
     if (SCALAR_SIZE != 32 || SHARED_SECRET_SIZE != 32) { ret 1; }
     if (PUBLIC_UNCOMPRESSED_SIZE != 65)                { ret 1; }
     ret 0;

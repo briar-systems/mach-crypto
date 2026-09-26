@@ -21,7 +21,7 @@ pub val REVIEW_COMPLETE:     ReviewStatus = 2;
 # review is deliberately independent from callable algorithm availability
 pub val INDEPENDENT_REVIEW: ReviewStatus = REVIEW_NOT_RECORDED;
 
-test "assurance: levels are ordered by accumulated evidence" {
+test assurance__levels_are_ordered_by_accumulated_evidence {
     if (SCAFFOLD >= FUNCTIONAL)                    { ret 1; }
     if (FUNCTIONAL >= VECTORS_VERIFIED)            { ret 1; }
     if (LEAKAGE_TESTED >= INDEPENDENTLY_REVIEWED)  { ret 1; }

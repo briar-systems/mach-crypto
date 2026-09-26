@@ -791,7 +791,7 @@ pub fun parse_point(output: *Point, input: *u8) ^u8 {
     ret x_canonical & y_canonical & on_curve;
 }
 
-test "p256 internal: constants are the montgomery forms of the nist values" {
+test p256_internal__constants_are_the_montgomery_forms_of_the_nist_values {
     if (PRIME[0] != 0xFFFFFFFFFFFFFFFF || ORDER[0] != 0xF3B9CAC2FC632551) { ret 1; }
     var generator_x: UInt;
     var generator_y: UInt;
@@ -872,7 +872,7 @@ fun words_equal(left: *u64, right: *u64) u8 {
     ret 1;
 }
 
-test "p256 internal: inversion chains raise to p - 2 and n - 2" {
+test p256_internal__inversion_chains_raise_to_p_2_and_n_2 {
     var actual:   [5]u64;
     var expected: [5]u64;
     chain_exponent(?FIELD_CHAIN[0], FIELD_STEPS, FIELD_RESULT, ?actual[0]);
@@ -884,7 +884,7 @@ test "p256 internal: inversion chains raise to p - 2 and n - 2" {
     ret 0;
 }
 
-test "p256 internal: every comb table entry is digit * 16^window * G" {
+test p256_internal__every_comb_table_entry_is_digit_16_window_g {
     var base: Point;
     generator(?base);
     var window: u64 = 0;

@@ -1217,7 +1217,7 @@ pub fun verify_ecdsa_p384_sha384(public_key: contracts.Bytes,
     ret p384.verify_sha384(public_key, message, signature);
 }
 
-test "signature: algorithm ids match the tls registry" {
+test signature__algorithm_ids_match_the_tls_registry {
     if (ECDSA_P256_SHA256 != 0x0403)   { ret 1; }
     if (ECDSA_P384_SHA384 != 0x0503)   { ret 1; }
     if (ED25519 != 0x0807)             { ret 1; }

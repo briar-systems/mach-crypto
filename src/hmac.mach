@@ -89,7 +89,7 @@ pub fun sha384(key: contracts.SecretBytes, message: contracts.Bytes,
     ret contracts.Operation{error: contracts.OK, written: SHA384_TAG_SIZE};
 }
 
-test "hmac: sha-2 dimensions match their hash functions" {
+test hmac__sha_2_dimensions_match_their_hash_functions {
     if (SHA256_BLOCK_SIZE != 64 || SHA256_TAG_SIZE != 32)  { ret 1; }
     if (SHA384_BLOCK_SIZE != 128 || SHA384_TAG_SIZE != 48) { ret 1; }
     ret 0;

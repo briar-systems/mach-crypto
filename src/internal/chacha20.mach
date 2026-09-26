@@ -132,7 +132,7 @@ pub fun block(context: *Context, counter: u32, output: *^u8) {
     ct.zeroize((?working[0]):~*^u8, 64);
 }
 
-test "chacha20: rfc 8439 block vector" {
+test chacha20__rfc_8439_block_vector {
     var key:   [32]^u8;
     var nonce: [12]u8 = [12]u8{
         0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x4a,

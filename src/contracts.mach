@@ -45,7 +45,7 @@ pub rec Operation {
     written: usize;
 }
 
-test "contracts: error values are distinct" {
+test contracts__error_values_are_distinct {
     if (OK == INVALID_INPUT)                      { ret 1; }
     if (AUTH_FAILED == UNSUPPORTED)               { ret 1; }
     if (ENTROPY_UNAVAILABLE == ALLOCATION_FAILED) { ret 1; }

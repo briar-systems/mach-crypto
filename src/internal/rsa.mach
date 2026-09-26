@@ -479,7 +479,7 @@ pub fun private_apply(output: *^u8, input: *^u8, modulus_bytes: *u8,
 }
 
 # n = 65521 * 65497, e = 17, d = e^-1 mod (p - 1)(q - 1)
-test "rsa: montgomery exponentiation round trip" {
+test rsa__montgomery_exponentiation_round_trip {
     val modulus:          [4]u8  = [4]u8{0xff, 0xca, 0x02, 0x49};
     val public_exponent:  [1]u8  = [1]u8{17};
     var private_exponent: [4]^u8 = [4]^u8{0xb4, 0x8d, 0x2e, 0xf1};

@@ -608,7 +608,7 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
 # on edge elements up to the 2^54 limb bound and a deterministic sweep, compared
 # canonically. on a target
 # without the hardware cell both sides are the serial path and the test still runs
-test "x25519 field: the selected multiply agrees with the serial reference" {
+test x25519_field__the_selected_multiply_agrees_with_the_serial_reference {
     val edges: [6]u64 = [6]u64{
         0, 1, 2251799813685229, 2251799813685247, 4503599627370495, 18014398509481983
     };

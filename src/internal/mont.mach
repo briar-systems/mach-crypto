@@ -750,7 +750,7 @@ fun test_equal(value: *^u64, expected: *u64) u8 {
     ret 1;
 }
 
-test "mont: products and wide reductions match independent values mod the ed25519 order" {
+test mont__products_and_wide_reductions_match_independent_values_mod_the_ed25519_order {
     var left: [4]^u64 = [4]^u64{
         0xF2A74DE452E6B438, 0x6513270E269E0D37, 0x0C5C7FD0A6A3A450, 0x691F8412128B2F33
     };
@@ -845,7 +845,7 @@ fun test_equal6(value: *^u64, expected: *u64) u8 {
 
 # the six-limb ring, the loop form, against independent values mod the p-384
 # prime and order
-test "mont: six-limb products, squares and wide reductions match independent values" {
+test mont__six_limb_products_squares_and_wide_reductions_match_independent_values {
     var left: [6]^u64 = [6]^u64{
         0xDDA1494C73CF256D, 0xDB5B5FAB8F4D3E27, 0xC7FDE805EC99108D,
         0x73AB48767734D7C1, 0xDAE445508201E2BD, 0x309D6B79965EDA32
@@ -894,7 +894,7 @@ test "mont: six-limb products, squares and wide reductions match independent val
 
 # the unrolled four-limb ring against the loop form on a deterministic sweep
 # mod the ed25519 order, so the two never drift apart
-test "mont: the unrolled four-limb ring agrees with the loop form" {
+test mont__the_unrolled_four_limb_ring_agrees_with_the_loop_form {
     var state: u64   = 0x9E3779B97F4A7C15;
     var round: usize = 0;
     for (round < 256) {
