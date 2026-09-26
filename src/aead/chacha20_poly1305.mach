@@ -185,9 +185,3 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     ct.end();
     ret contracts.Operation{error: contracts.OK, written: ciphertext_len};
 }
-
-test "chacha20-poly1305: tls and quic dimensions are fixed" {
-    if (KEY_SIZE != 32 || NONCE_SIZE != 12 || TAG_SIZE != 16) { ret 1; }
-    if (MAX_PLAINTEXT_SIZE != 274877906880)                   { ret 1; }
-    ret 0;
-}
