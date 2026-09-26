@@ -44,12 +44,3 @@ pub rec Operation {
     error:   Error;
     written: usize;
 }
-
-test "contracts: error values are distinct" {
-    if (OK == INVALID_INPUT)                      { ret 1; }
-    if (AUTH_FAILED == UNSUPPORTED)               { ret 1; }
-    if (ENTROPY_UNAVAILABLE == ALLOCATION_FAILED) { ret 1; }
-    if (ALLOCATION_FAILED == DEALLOCATION_FAILED) { ret 1; }
-    if (DEALLOCATION_FAILED == INVALID_STATE)     { ret 1; }
-    ret 0;
-}

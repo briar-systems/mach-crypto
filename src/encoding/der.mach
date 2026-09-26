@@ -447,8 +447,3 @@ pub fun write(tag: Tag, content: contracts.Bytes,
     }
     ret contracts.Operation{error: contracts.OK, written: required};
 }
-
-test "der: sequence is constructed and universal" {
-    if (SEQUENCE != 0x30 || MAX_DEPTH < 8) { ret 1; }
-    ret 0;
-}

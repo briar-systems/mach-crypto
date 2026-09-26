@@ -34,11 +34,7 @@ The layers run separately so one kind of evidence cannot stand in for another:
 3. Each independent or differential test runs alone in both profiles.
 4. Each hostile or invalid-input test runs alone in both profiles.
 5. Each behavioral zeroization test runs alone in both profiles.
-6. Each performance test runs alone in release only. A wall-clock budget is a
-   claim about an optimized build on an idle machine, so it lives in
-   `test/performance/`, which `assurance/projects.tsv` does not list, and the
-   package run never judges it.
-7. Every leakage control in `assurance/leakage.tsv` must be rejected for every
+6. Every leakage control in `assurance/leakage.tsv` must be rejected for every
    target and profile, with the diagnostic that row names. Rejection for any
    other reason fails. The controls are a secret-dependent branch
    (`test/leakage-negative`), a table read at a secret index
@@ -50,10 +46,10 @@ The layers run separately so one kind of evidence cannot stand in for another:
    is the record of where `crypto.internal.word` computes secret products in
    hardware, and a change in mach's catalog fails the run until the record is
    updated on purpose.
-8. Every project is built for all six targets and both profiles with emitted
+7. Every project is built for all six targets and both profiles with emitted
    IR and emitted assembly (IR verification is mandatory in mach 5.0).
-9. A second clean matrix build must produce byte-identical artifacts.
-10. Every module named by `assurance/zeroization.tsv` must retain explicit
+8. A second clean matrix build must produce byte-identical artifacts.
+9. Every module named by `assurance/zeroization.tsv` must retain explicit
    zeroization calls in generated IR. Security-critical release assembly named
    by that policy must also retain the zeroization, either as a call or as the
    inline expansion the release IR records, since mach 5.0 release builds
@@ -124,26 +120,18 @@ source constant claiming evidence that is absent on the verifying machine.
 successful automated run does not change `independent_review` from
 `NOT_RECORDED`.
 
-## Performance gate
+## Performance
 
-The release evidence gate runs a warmed five-sample P-384 verification test and
-requires its monotonic-clock median to stay at or below 250 milliseconds. It
-lives in `test/performance/`, alone, and is judged only in release: a budget
-measured against an optimized build on an idle machine reports load rather than
-a defect if it is judged in debug beside every other test. The
-budget is intentionally more than twice the current measurement while rejecting
-the former multi-second arithmetic and its CPU-exhaustion exposure.
+No test judges wall-clock time: mach's test policy keeps tests deterministic,
+so the release gate carries no performance budget. The measurements below
+characterize the implementation, and `test/benchmark/` measures AES-GCM on
+demand.
 
 On 2026-08-31, nine isolated warm release-profile NIST P-384 verification runs
 took 110 through 113 milliseconds, with a 111-millisecond median, on an AMD
 Ryzen 7 5800X3D 8-Core Processor with frequency boost disabled and Mach 4.26.5.
-This machine-specific measurement characterizes the implementation. The
-250-millisecond release gate is the enforced regression contract.
-
-The same gate budgets RSA-PSS with SHA-256 on OpenSSL-generated 2048 and
-3072-bit keys: a five-sample median of signing at or below 250 and 500
-milliseconds, and of verifying the signature it produced at or below 25 and 50
-milliseconds. On 2026-09-19, with Mach 5.9.0 on the same machine, signing took
-13.5 and 42 milliseconds and verification 0.32 and 0.66 milliseconds. Signing
-runs the private exponent through a masked-scan windowed exponentiation, so its
-budget is the constant-time cost of the full exponent width, not a fast path.
+On 2026-09-19, with Mach 5.9.0 on the same machine, RSA-PSS with SHA-256 on
+OpenSSL-generated 2048 and 3072-bit keys signed in 13.5 and 42 milliseconds and
+verified in 0.32 and 0.66 milliseconds. Signing runs the private exponent
+through a masked-scan windowed exponentiation, so its cost is the constant-time
+cost of the full exponent width, not a fast path.

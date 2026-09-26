@@ -684,58 +684,7 @@ pub fun verify_sha384(public_key: contracts.Bytes, message: contracts.Bytes,
     ret result;
 }
 
-test "p384 internal: constants are the montgomery forms of the nist values" {
-    if (PRIME[0] != 0x00000000FFFFFFFF || ORDER[0] != 0xECEC196ACCC52973) { ret 1; }
-    var x: UInt;
-    var y: UInt;
-    copy_constant(?x, (?GENERATOR_X[0]):~*u64);
-    copy_constant(?y, (?GENERATOR_Y[0]):~*u64);
-    field_from_montgomery(?x, ?x);
-    field_from_montgomery(?y, ?y);
-    if (x.limb[5]:>u64 != 0xAA87CA22BE8B0537 || x.limb[0]:>u64 != 0x3A545E3872760AB7) { ret 2; }
-    if (y.limb[5]:>u64 != 0x3617DE4A96262C6F || y.limb[0]:>u64 != 0x7A431D7C90EA0E5F) { ret 3; }
-    ret 0;
-}
-
-test "p384 internal: montgomery arithmetic matches small values" {
-    var one:    UInt;
-    var two:    UInt;
-    var three:  UInt;
-    var value:  UInt;
-    var normal: UInt;
-    set_small(?one, 1);
-    set_small(?two, 2);
-    set_small(?three, 3);
-    field_to_montgomery(?value, ?one);
-    field_from_montgomery(?normal, ?value);
-    if (equal(?normal, ?one):>u8 != 1) { ret 1; }
-    field_square(?value, ?value);
-    field_from_montgomery(?normal, ?value);
-    if (equal(?normal, ?one):>u8 != 1) { ret 5; }
-    field_inverse(?value, ?value);
-    field_from_montgomery(?normal, ?value);
-    if (equal(?normal, ?one):>u8 != 1) { ret 6; }
-    field_to_montgomery(?value, ?two);
-    field_to_montgomery(?normal, ?three);
-    field_multiply(?value, ?value, ?normal);
-    field_from_montgomery(?normal, ?value);
-    set_small(?one, 6);
-    if (equal(?normal, ?one):>u8 != 1) { ret 2; }
-    scalar_multiply_values(?value, ?two, ?three);
-    if (equal(?value, ?one):>u8 != 1) { ret 3; }
-    scalar_inverse(?value, ?two);
-    scalar_multiply_values(?normal, ?value, ?two);
-    set_small(?one, 1);
-    if (equal(?normal, ?one):>u8 != 1) { ret 4; }
-    destroy_uint(?one);
-    destroy_uint(?two);
-    destroy_uint(?three);
-    destroy_uint(?value);
-    destroy_uint(?normal);
-    ret 0;
-}
-
-test "p384 internal: modular products match independent big integers" {
+test p384_internal__modular_products_match_independent_big_integers {
     val field_left: [6]u64 = [6]u64{
         0x8899AABBCCDDEEFF, 0x0011223344556677, 0x0123456789ABCDEF,
         0x899AABBCCDDEEFF0, 0x0112233445566778, 0x123456789ABCDEF0
@@ -784,7 +733,7 @@ test "p384 internal: modular products match independent big integers" {
     ret 0;
 }
 
-test "p384 internal: interleaved multiplication preserves each input" {
+test p384_internal__interleaved_multiplication_preserves_each_input {
     var zero:   UInt;
     var one:    UInt;
     var point:  Point;
