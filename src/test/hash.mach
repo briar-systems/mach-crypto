@@ -8,6 +8,7 @@ use std.types.bool.false;
 use std.types.bool.true;
 use std.types.size.usize;
 
+#[testing]
 fun nibble(byte: u8) u8 {
     if (byte >= '0' && byte <= '9') { ret byte - '0'; }
     if (byte >= 'a' && byte <= 'f') { ret byte - 'a' + 10; }
@@ -15,6 +16,7 @@ fun nibble(byte: u8) u8 {
     ret 255;
 }
 
+#[testing]
 fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
     if (text == nil || output == nil || text_len % 2 != 0) { ret false; }
     var i: usize = 0;
@@ -28,6 +30,7 @@ fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
     ret true;
 }
 
+#[testing]
 fun equal(left: *u8, right: *u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -37,6 +40,7 @@ fun equal(left: *u8, right: *u8, len: usize) bool {
     ret true;
 }
 
+#[testing]
 fun filled(input: *u8, byte: u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -46,6 +50,7 @@ fun filled(input: *u8, byte: u8, len: usize) bool {
     ret true;
 }
 
+#[testing]
 fun equal_sha256(left: *hash.Sha256, right: *hash.Sha256) bool {
     if (left.state != right.state || left.inner.buf_len != right.inner.buf_len ||
         left.inner.total != right.inner.total) { ret false; }
@@ -63,6 +68,7 @@ fun equal_sha256(left: *hash.Sha256, right: *hash.Sha256) bool {
     ret true;
 }
 
+#[testing]
 fun equal_sha384(left: *hash.Sha384, right: *hash.Sha384) bool {
     if (left.state != right.state || left.inner.buf_len != right.inner.buf_len ||
         left.inner.total != right.inner.total) { ret false; }
@@ -80,6 +86,7 @@ fun equal_sha384(left: *hash.Sha384, right: *hash.Sha384) bool {
     ret true;
 }
 
+#[testing]
 fun zero_sha256(context: *hash.Sha256) bool {
     if (context.state != hash.EMPTY || context.inner.buf_len != 0 ||
         context.inner.total != 0) { ret false; }
@@ -95,6 +102,7 @@ fun zero_sha256(context: *hash.Sha256) bool {
     ret true;
 }
 
+#[testing]
 fun zero_sha384(context: *hash.Sha384) bool {
     if (context.state != hash.EMPTY || context.inner.buf_len != 0 ||
         context.inner.total != 0) { ret false; }

@@ -10,9 +10,12 @@ use std.types.bool.true;
 use std.types.size.usize;
 use std.types.string.str;
 
+#[testing]
 var max_sha256_output: [8160]^u8;
+#[testing]
 var max_sha384_output: [12240]^u8;
 
+#[testing]
 fun public_equal(actual: *u8, expected: *u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -22,6 +25,7 @@ fun public_equal(actual: *u8, expected: *u8, len: usize) bool {
     ret true;
 }
 
+#[testing]
 fun secret_equal(actual: *^u8, expected: *u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -31,6 +35,7 @@ fun secret_equal(actual: *^u8, expected: *u8, len: usize) bool {
     ret true;
 }
 
+#[testing]
 fun public_filled(actual: *u8, value: u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -40,6 +45,7 @@ fun public_filled(actual: *u8, value: u8, len: usize) bool {
     ret true;
 }
 
+#[testing]
 fun secret_filled(actual: *^u8, value: u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {

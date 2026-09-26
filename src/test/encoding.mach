@@ -11,8 +11,10 @@ use std.types.bool.false;
 use std.types.bool.true;
 use std.types.size.usize;
 
+#[testing]
 var probe_storage: [16384]^u8;
 
+#[testing]
 rec ProbeAllocator {
     capacity:            usize;
     offset:              usize;
@@ -25,6 +27,7 @@ rec ProbeAllocator {
     nonzero_releases:    usize;
 }
 
+#[testing]
 fun probe_allocate(context: ptr, secret_context: *^u8, len: usize,
     output: **^u8) i64 {
     val probe: *ProbeAllocator = context::*ProbeAllocator;
@@ -44,6 +47,7 @@ fun probe_allocate(context: ptr, secret_context: *^u8, len: usize,
     ret 0;
 }
 
+#[testing]
 fun probe_deallocate(context: ptr, secret_context: *^u8, data: *^u8,
     len: usize) i64 {
     val probe: *ProbeAllocator = context::*ProbeAllocator;
@@ -61,6 +65,7 @@ fun probe_deallocate(context: ptr, secret_context: *^u8, data: *^u8,
     ret 0;
 }
 
+#[testing]
 fun probe_make(probe: *ProbeAllocator) secret.Allocator {
     probe.capacity            = 16384;
     probe.offset              = 0;
@@ -81,6 +86,7 @@ fun probe_make(probe: *ProbeAllocator) secret.Allocator {
         initialized: true};
 }
 
+#[testing]
 fun equal(left: *u8, right: *u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -90,6 +96,7 @@ fun equal(left: *u8, right: *u8, len: usize) bool {
     ret true;
 }
 
+#[testing]
 fun filled(input: *u8, byte: u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -99,6 +106,7 @@ fun filled(input: *u8, byte: u8, len: usize) bool {
     ret true;
 }
 
+#[testing]
 fun secret_equal(left: *^u8, right: *^u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -108,6 +116,7 @@ fun secret_equal(left: *^u8, right: *^u8, len: usize) bool {
     ret true;
 }
 
+#[testing]
 fun nibble(byte: u8) u8 {
     if (byte >= '0' && byte <= '9') { ret byte - '0'; }
     if (byte >= 'a' && byte <= 'f') { ret byte - 'a' + 10; }
@@ -115,6 +124,7 @@ fun nibble(byte: u8) u8 {
     ret 255;
 }
 
+#[testing]
 fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
     if (text == nil || output == nil || text_len % 2 != 0) { ret false; }
     var i: usize = 0;
@@ -128,6 +138,7 @@ fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
     ret true;
 }
 
+#[testing]
 #[oblivious]
 fun decode_secret_hex(text: *u8, text_len: usize, output: *^u8) bool {
     if (text == nil || output == nil || text_len % 2 != 0) { ret false; }
@@ -315,24 +326,28 @@ test pem__canonical_base64_bounds_overlap_and_every_truncation_are_enforced {
     ret 0;
 }
 
+#[testing]
 fun set_ed25519_pkcs8(output: *^u8) bool {
     ret decode_secret_hex(
         "302e020100300506032b6570042204209d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"::*u8,
         96, output);
 }
 
+#[testing]
 fun set_x25519_pkcs8(output: *^u8) bool {
     ret decode_secret_hex(
         "302e020100300506032b656e0422042077076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a"::*u8,
         96, output);
 }
 
+#[testing]
 fun set_ed25519_spki(output: *u8) bool {
     ret decode_hex(
         "302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"::*u8,
         88, output);
 }
 
+#[testing]
 fun set_x25519_spki(output: *u8) bool {
     ret decode_hex(
         "302a300506032b656e0321008520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"::*u8,
@@ -402,18 +417,21 @@ test keys__rfc_8410_ed25519_and_x25519_containers_are_exact_and_bounded {
     ret 0;
 }
 
+#[testing]
 fun set_p256_sec1(output: *^u8) bool {
     ret decode_secret_hex(
         "307702010104200000000000000000000000000000000000000000000000000000000000000001a00a06082a8648ce3d030107a144034200046b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c2964fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"::*u8,
         242, output);
 }
 
+#[testing]
 fun set_p256_pkcs8(output: *^u8) bool {
     ret decode_secret_hex(
         "308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b02010104200000000000000000000000000000000000000000000000000000000000000001a144034200046b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c2964fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"::*u8,
         276, output);
 }
 
+#[testing]
 fun set_p256_spki(output: *u8) bool {
     ret decode_hex(
         "3059301306072a8648ce3d020106082a8648ce3d030107034200046b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c2964fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"::*u8,
@@ -483,6 +501,7 @@ test keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree {
     ret 0;
 }
 
+#[testing]
 fun set_p384_spki(output: *u8) bool {
     ret decode_hex(
         "3076301006072a8648ce3d020106052b8104002203620004aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab73617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f"::*u8,
@@ -534,12 +553,14 @@ test keys__p_384_spki_validates_the_named_curve_and_every_boundary {
     ret 0;
 }
 
+#[testing]
 fun set_rsa_pkcs8(output: *^u8) bool {
     ret decode_secret_hex(
         "308204bd020100300d06092a864886f70d0101010500048204a7308204a30201000282010100cd0d4a9e79ece89342b35e97d4dfc9461b68b46cda89f0bc9681d7056ddaf8713b5ada74e9e26c5178e84f01ae2abb072b7591f6d0fb82d245dffc107eae711c1c966a3c1016e38a1cc3bd93daabbda4ecd5c6307813b9e5ac195a30a05debf13d83afa1bcd20d992b4c0634bfc6aeca3b0c21a2c89d914064848c724ccad4b31a3efede42a7de0f6cbedeee7a0cd9809e1052f7583ae9b81188b436b0f5da5bd94ca77cce5cb7ae5293937024660e63ca43a38d33d8a49a2133c426156a1860d2a6cf0253ca7cdcb66b4b0111f1107aeeece92d806d26626784016262ba1e9a1436ecac8fd1cccdb8e57f1a7e1da27200514fcd8fd399852fe745c239520ee1020301000102820100378c743c7e5739a23b1d90709d508a9c1d6cbe040727fb397ba46cf5a18f0262da6b8066cfbd710e992c85cab4be0ab0a48b532183f7beb6ec0b03a40c4d8182d613c16fc8040b5c2cf2b1f6cdf45c89c3471e4b9f1be8ee5932fd05d34bde511a13048f5231ad51633353331308e5ed0f15f83ebb0e447d273de93645ab64f72b2e0e4c7040f058ed75fc7e6f298f7538a95f01358c805cabab3ca7337699a6927330b8b3ed6e2c5c4c78b937e1eba9e9e35b95c66f92f989ced994ec4dce4670a1de0fd9f9de79eeec91703446b6c76cb7699c814e9b03c286d8d75b7b25f5c5b807d0ebda7781632461f36607a1f4458076dae686e108d3b2ffe8af75fb6902818100ffe09bf7aaa7ad65880b683ece2776bd5c72f34ca91166029f57b20dedeeabadcfe0e3f26ed83ebe1e34a0a5463a7b61e606485ba7384c781be7174cca8d0223ea580d7a9471b138dc14520671952b18c5f63e4c34d9e33e008e72389c0a00868a7facbbbbf1b05b8e9210b48eb751d869021d9451d0a86253e857c19c3d280702818100cd26727007c9bbf4b410e6b7cf1444b39fc39e5317efd6b074dff045e319732ef19a8d4bf503c3b0de46980abc8e8e054d0caf2f19059ae0ce2ef39072a67cb2a46ace4f4f50232affc3d53ca45ab2cc6ffb1a9a145cb95140b5e48d1ecfb42af5a1f1dc6a297c561897ef991fb7dedcad6afdcde298ad99b8abcb32e368c7d702818100bf05d1aa3daedc5636103e0cd51ec5186d122bec893341f2a73e72e0cf4624c8a7ae7ebe185e3bc8f707d6fe4bc59122eef4b5c426bc72ea1ffa8f7c76a27a7c919096cf724ec63d6a9f88f4e28ab817d0821ad40d88b48b2f2328c67647494927d05505fa335eb39b66142e9774e817259dbcb363b8e05c37c3f6efc5522ab5028180719061f3206c8d4e95cb715cb916783d93285fe191b3a3fe0484dee66123fa7e37229e2b3913ff654e7677be21c92c5744e2cbab5fc79987eebb50fb5a6c4d453afd20fe0862cd450556ac1928c6488a214738dfa87bf7de41db2f0cebcc80e8f316d5e3752547fe05193e7a5e7393bc47879dbe363cdc84e714baa48dfcb7fb0281806a8b308c0cdc8699b188a55e042a7361884d243788e27ac90ef32769e7d02b166e6fbdf60542e293a8f77dc1be98d03ac7360e1d6768876cfad1f335596d19579c5eb6e79118be3103a46452a508282f9bda23c248d326691afb99bb827dac7cd56ba0517097b44d18fd20cc050c47808f42bcca54dd954d6008c1cddeb7a6ae"::*u8,
         2434, output);
 }
 
+#[testing]
 fun set_rsa_spki(output: *u8) bool {
     ret decode_hex(
         "30820122300d06092a864886f70d01010105000382010f003082010a0282010100cd0d4a9e79ece89342b35e97d4dfc9461b68b46cda89f0bc9681d7056ddaf8713b5ada74e9e26c5178e84f01ae2abb072b7591f6d0fb82d245dffc107eae711c1c966a3c1016e38a1cc3bd93daabbda4ecd5c6307813b9e5ac195a30a05debf13d83afa1bcd20d992b4c0634bfc6aeca3b0c21a2c89d914064848c724ccad4b31a3efede42a7de0f6cbedeee7a0cd9809e1052f7583ae9b81188b436b0f5da5bd94ca77cce5cb7ae5293937024660e63ca43a38d33d8a49a2133c426156a1860d2a6cf0253ca7cdcb66b4b0111f1107aeeece92d806d26626784016262ba1e9a1436ecac8fd1cccdb8e57f1a7e1da27200514fcd8fd399852fe745c239520ee10203010001"::*u8,

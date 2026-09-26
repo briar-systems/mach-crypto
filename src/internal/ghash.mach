@@ -147,6 +147,7 @@ pub fun wipe(state: *State) {
 }
 
 # splitmix64, a fixed stream so a failure reproduces
+#[testing]
 fun next_random(state: *u64) u64 {
     @state = @state + 0x9E3779B97F4A7C15;
     var z: u64 = @state;
@@ -156,6 +157,7 @@ fun next_random(state: *u64) u64 {
 }
 
 # hash `data` as aad and text split at `split`, the way aes-gcm feeds it
+#[testing]
 fun hash_record(key: *Key, data: *u8, len: usize, split: usize, output: *^u8) {
     var state: State;
     start(?state);

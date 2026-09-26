@@ -440,6 +440,7 @@ pub fun encrypt(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8) {
     encrypt_blocks(schedule, rounds, input, output, 1);
 }
 
+#[testing]
 fun reference_multiply(x: u8, y: u8) u8 {
     var left:   u8 = x;
     var right:  u8 = y;
@@ -454,11 +455,13 @@ fun reference_multiply(x: u8, y: u8) u8 {
     ret result;
 }
 
+#[testing]
 fun reference_rotate(x: u8, n: u8) u8 {
     ret (x << n) | (x >> (8 - n));
 }
 
 # fips 197 s-box from its definition, public and variable-time, for tests only
+#[testing]
 fun reference_substitute(x: u8) u8 {
     var inverse: u8  = 0;
     var y:       u16 = 1;
