@@ -28,8 +28,11 @@ jobs:
     uses: briar-systems/.github/.github/workflows/mach-lib.yml@main
     with:
       heavy: ${{ inputs.heavy }}
-      # crypto needs mach 5.12, so it seeds v5.12.0 until the family pin moves (briar-systems/.github#103)
-      mach-version: v5.12.0
+      # the hardware aes and ghash members need mach 5.12.2's aes, pclmul and pmull
+      # rows (briar-systems/mach#3835), so crypto seeds v5.12.2 until the family pin
+      # moves (briar-systems/.github#103). an older compiler builds the software
+      # members alone
+      mach-version: v5.12.2
       # mach tests only the selected artifact's closure, so the test modules run
       # through the tests artifact, and .github/ci/verify.sh fails when it misses one
       test-selections: '[["--lib", "tests"]]'
@@ -57,7 +60,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: briar-systems/.github/.github/actions/seed-mach@main
         with:
-          tag: v5.12.0
+          tag: v5.12.2
       - name: ripgrep
         run: |
           sudo apt-get update

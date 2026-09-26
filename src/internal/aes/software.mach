@@ -18,9 +18,11 @@ pub val PARALLEL_BLOCKS: usize = 4;
 val MAX_ROUNDS: usize = 14;
 
 # the expanded key as bit planes, eight per round key
+#
+# the round count is the dispatcher's, so the schedule is secret storage alone
+# and shares a context's storage with the hardware member's
 pub rec Schedule {
     round_planes: [120]^u64;
-    rounds:       usize;
 }
 
 # boyar-peralta forward s-box circuit over eight bit planes, plane 0 the lsb
@@ -202,7 +204,6 @@ fun next_rcon(value: u8) u8 {
 
 pub fun wipe(schedule: *Schedule) {
     ct.zeroize((?schedule.round_planes[0]):~*^u8, 960);
-    schedule.rounds = 0;
 }
 
 # spread one 16-byte round key over the bit planes of every parallel block
@@ -229,12 +230,22 @@ fun spread_round_key(schedule: *Schedule, round: usize, key: *^u8) {
     }
 }
 
+# substitutes four key-schedule bytes in place through the s-box
+pub def Substitute: fun(*^u8);
+
+# the fips 197 key expansion into byte-order round keys
+#
+# round_keys must hold 240 bytes. writes (rounds + 1) * 16 of them and returns
+# the round count. `substitute` is the s-box on one word: the bitsliced
+# circuit here, or the hardware rounds, which keep this form as their schedule.
+# round_keys comes before the key record: after it, the riscv64 constant-time
+# check reads the pointer as secret at its stores.
 #[oblivious]
-pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) {
-    schedule.rounds = 10;
-    if (key.len == AES256_KEY_SIZE) { schedule.rounds = 14; }
-    val expanded_size: usize = (schedule.rounds + 1) * BLOCK_SIZE;
-    var round_keys:    [240]^u8;
+pub fun expand_round_keys(round_keys: *^u8, key: contracts.SecretBytes,
+    substitute: Substitute) usize {
+    var rounds: usize = 10;
+    if (key.len == AES256_KEY_SIZE) { rounds = 14; }
+    val expanded_size: usize = (rounds + 1) * BLOCK_SIZE;
     var generated:     usize = 0;
     for (generated < key.len) {
         round_keys[generated] = key.data[generated];
@@ -256,12 +267,12 @@ pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) {
             temporary[1] = temporary[2];
             temporary[2] = temporary[3];
             temporary[3] = first;
-            substitute_word(?temporary[0]);
+            substitute(?temporary[0]);
             temporary[0] = temporary[0] ^ rcon;
             rcon         = next_rcon(rcon);
         }
         or (key.len == AES256_KEY_SIZE && generated % key.len == 16) {
-            substitute_word(?temporary[0]);
+            substitute(?temporary[0]);
         }
         i = 0;
         for (i < 4) {
@@ -270,13 +281,22 @@ pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) {
             i                     = i + 1;
         }
     }
-    var round: usize = 0;
-    for (round <= schedule.rounds) {
+    ct.zeroize(?temporary[0], 4);
+    ret rounds;
+}
+
+# expand the key and return its round count
+#[oblivious]
+pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) usize {
+    var round_keys: [240]^u8;
+    val rounds:     usize = expand_round_keys(?round_keys[0], key, substitute_word);
+    var round:      usize = 0;
+    for (round <= rounds) {
         spread_round_key(schedule, round, ?round_keys[round * BLOCK_SIZE]);
         round = round + 1;
     }
-    ct.zeroize(?temporary[0], 4);
     ct.zeroize(?round_keys[0], 240);
+    ret rounds;
 }
 
 #[oblivious]
@@ -395,12 +415,13 @@ fun unload_blocks(q: *^u64, output: *^u8, count: usize) {
 # count must be between one and PARALLEL_BLOCKS. input and output may be the
 # same storage because every input byte is loaded before any output write.
 #[oblivious]
-pub fun encrypt_blocks(schedule: *Schedule, input: *^u8, output: *^u8, count: usize) {
+pub fun encrypt_blocks(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8,
+    count: usize) {
     var q: [8]^u64;
     load_blocks(?q[0], input, count);
     add_round_key(schedule, ?q[0], 0);
     var round: usize = 1;
-    for (round < schedule.rounds) {
+    for (round < rounds) {
         substitute(?q[0]);
         shift_rows(?q[0]);
         mix_columns(?q[0]);
@@ -409,14 +430,14 @@ pub fun encrypt_blocks(schedule: *Schedule, input: *^u8, output: *^u8, count: us
     }
     substitute(?q[0]);
     shift_rows(?q[0]);
-    add_round_key(schedule, ?q[0], schedule.rounds);
+    add_round_key(schedule, ?q[0], rounds);
     unload_blocks(?q[0], output, count);
     ct.zeroize((?q[0]):~*^u8, 64);
 }
 
 #[oblivious]
-pub fun encrypt(schedule: *Schedule, input: *^u8, output: *^u8) {
-    encrypt_blocks(schedule, input, output, 1);
+pub fun encrypt(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8) {
+    encrypt_blocks(schedule, rounds, input, output, 1);
 }
 
 fun reference_multiply(x: u8, y: u8) u8 {
@@ -479,10 +500,10 @@ test "aes: parallel blocks equal one-block encryption in every lane" {
         i      = i + 1;
     }
     var schedule: Schedule;
-    expand(?schedule, contracts.SecretBytes{data: ?key[0], len: 16});
-    var input:  [64]^u8;
-    var batch:  [64]^u8;
-    var single: [16]^u8;
+    val rounds:   usize = expand(?schedule, contracts.SecretBytes{data: ?key[0], len: 16});
+    var input:    [64]^u8;
+    var batch:    [64]^u8;
+    var single:   [16]^u8;
     i = 0;
     for (i < 64) {
         input[i] = (i * 29 + 7)::u8;
@@ -490,10 +511,10 @@ test "aes: parallel blocks equal one-block encryption in every lane" {
     }
     var count: usize = 1;
     for (count <= PARALLEL_BLOCKS) {
-        encrypt_blocks(?schedule, ?input[0], ?batch[0], count);
+        encrypt_blocks(?schedule, rounds, ?input[0], ?batch[0], count);
         var block: usize = 0;
         for (block < count) {
-            encrypt(?schedule, ?input[block * 16], ?single[0]);
+            encrypt(?schedule, rounds, ?input[block * 16], ?single[0]);
             i = 0;
             for (i < 16) {
                 if (single[i]:>u8 != batch[block * 16 + i]:>u8) { ret 2; }
@@ -530,15 +551,15 @@ test "aes: fips 197 appendix c aes-128 and aes-256 blocks" {
         0xea, 0xfc, 0x49, 0x90, 0x4b, 0x49, 0x60, 0x89
     };
     var schedule: Schedule;
-    expand(?schedule, contracts.SecretBytes{data: ?key[0], len: 16});
-    encrypt(?schedule, ?block[0], ?output[0]);
+    var rounds:   usize = expand(?schedule, contracts.SecretBytes{data: ?key[0], len: 16});
+    encrypt(?schedule, rounds, ?block[0], ?output[0]);
     i = 0;
     for (i < 16) {
         if (output[i]:>u8 != expected128[i]) { ret 2; }
         i = i + 1;
     }
-    expand(?schedule, contracts.SecretBytes{data: ?key[0], len: 32});
-    encrypt(?schedule, ?block[0], ?output[0]);
+    rounds = expand(?schedule, contracts.SecretBytes{data: ?key[0], len: 32});
+    encrypt(?schedule, rounds, ?block[0], ?output[0]);
     i = 0;
     for (i < 16) {
         if (output[i]:>u8 != expected256[i]) { ret 4; }

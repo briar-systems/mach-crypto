@@ -2,13 +2,18 @@
 #
 # prints one line per operation: the median over five batches of the
 # nanoseconds one call takes. a one-shot call expands the key every time, a
-# context call runs against a key expanded once. build release and run on an
+# context call runs against a key expanded once. a context runs the members
+# this host prefers, which the first line names, and the software rows force
+# the portable members, as a host without the aes and carry-less multiply
+# extensions runs them. build release and run on an
 # idle machine: `mach build . && out/linux-x86_64/release/bin/benchmark`.
 # an optional first argument is the calls per batch.
 
 use crypto.aead.aes_gcm;
 use crypto.cipher.aes;
 use crypto.contracts;
+use core: crypto.internal.aes;
+use crypto.internal.ghash;
 use std.chrono.time;
 use std.print;
 use std.runtime;
@@ -35,6 +40,8 @@ rec Bench {
     len:       usize;
     gcm:       aes_gcm.Context;
     block:     aes.Context;
+    software:  aes_gcm.Context;
+    portable:  aes.Context;
 }
 
 var bench: Bench;
@@ -70,6 +77,43 @@ fun seal_context(b: *Bench) bool {
         contracts.SecretBytes{data: ?b.plaintext[0], len: b.len},
         contracts.Buffer{data: ?b.sealed[0], capacity: b.len + 16});
     ret result.error == contracts.OK;
+}
+
+fun seal_software(b: *Bench) bool {
+    val result: contracts.Operation = aes_gcm.seal_with(?b.software, nonce_bytes(b), aad_bytes(b),
+        contracts.SecretBytes{data: ?b.plaintext[0], len: b.len},
+        contracts.Buffer{data: ?b.sealed[0], capacity: b.len + 16});
+    ret result.error == contracts.OK;
+}
+
+fun open_software(b: *Bench) bool {
+    val result: contracts.Operation = aes_gcm.open_with(?b.software, nonce_bytes(b), aad_bytes(b),
+        contracts.Bytes{data: ?b.sealed[0], len: b.len + 16},
+        contracts.SecretBuffer{data: ?b.opened[0], capacity: b.len});
+    ret result.error == contracts.OK;
+}
+
+fun mask_software(b: *Bench) bool {
+    ret aes.encrypt_block(?b.portable, contracts.SecretBytes{data: ?b.sample[0], len: 16},
+        contracts.SecretBuffer{data: ?b.mask[0], capacity: 16}) == contracts.OK;
+}
+
+# key contexts on the software members, the way `init` keys the preferred ones
+fun force_software(b: *Bench) bool {
+    val key: contracts.SecretBytes = key_bytes(b);
+    if (core.init_backend(?b.software.cipher, key, core.SOFTWARE) != contracts.OK) { ret false; }
+    var subkey: [16]^u8;
+    core.encrypt(?b.software.cipher, ?subkey[0], ?subkey[0]);
+    if (ghash.init(?b.software.hash, ?subkey[0], ghash.SOFTWARE) != contracts.OK) { ret false; }
+    b.software.state = aes_gcm.ACTIVE;
+    if (core.init_backend(?b.portable.cipher, key, core.SOFTWARE) != contracts.OK) { ret false; }
+    b.portable.state = aes.ACTIVE;
+    ret true;
+}
+
+fun member(backend: u8) str {
+    if (backend == core.HARDWARE) { ret "hardware"; }
+    ret "software";
 }
 
 fun open_context(b: *Bench) bool {
@@ -176,21 +220,31 @@ fun main(argc: i64, argv: **u8) i64 {
     bench.block = aes.empty();
     if (aes_gcm.init(?bench.gcm, key_bytes(?bench)) != contracts.OK) { ret 1; }
     if (aes.init(?bench.block, key_bytes(?bench)) != contracts.OK)   { ret 1; }
+    bench.software = aes_gcm.empty();
+    bench.portable = aes.empty();
+    if (!force_software(?bench)) { ret 1; }
+    print.printlnf("preferred members: aes {}, ghash {}", member(bench.gcm.cipher.backend),
+        member(bench.gcm.hash.backend));
 
     val lengths: [2]usize = [2]usize{64, 1200};
     var index:   usize    = 0;
     for (index < 2) {
         bench.len = lengths[index];
-        if (!report("aes-128-gcm seal one-shot", seal_once, calls))    { ret 2; }
-        if (!report("aes-128-gcm seal context ", seal_context, calls)) { ret 2; }
-        if (!report("aes-128-gcm open one-shot", open_once, calls))    { ret 2; }
-        if (!report("aes-128-gcm open context ", open_context, calls)) { ret 2; }
+        if (!report("aes-128-gcm seal one-shot", seal_once, calls))     { ret 2; }
+        if (!report("aes-128-gcm seal context ", seal_context, calls))  { ret 2; }
+        if (!report("aes-128-gcm open one-shot", open_once, calls))     { ret 2; }
+        if (!report("aes-128-gcm open context ", open_context, calls))  { ret 2; }
+        if (!report("aes-128-gcm seal software", seal_software, calls)) { ret 2; }
+        if (!report("aes-128-gcm open software", open_software, calls)) { ret 2; }
         index = index + 1;
     }
     bench.len = 16;
-    if (!report("aes-128 block one-shot", mask_once, calls))    { ret 2; }
-    if (!report("aes-128 block context ", mask_context, calls)) { ret 2; }
+    if (!report("aes-128 block one-shot", mask_once, calls))     { ret 2; }
+    if (!report("aes-128 block context ", mask_context, calls))  { ret 2; }
+    if (!report("aes-128 block software", mask_software, calls)) { ret 2; }
     aes_gcm.dnit(?bench.gcm);
     aes.dnit(?bench.block);
+    aes_gcm.dnit(?bench.software);
+    aes.dnit(?bench.portable);
     ret 0;
 }
