@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-26
+
+### Breaking
+
+- Requires mach 6 (`mach = "^6"`) and mach-std 9.0.0, selected by `version = "^9.0"`. Dependency resolution is flat, so a consumer of this release moves to mach 6 and std 9 with it. The public API is unchanged. `test/benchmark` pins `tag/v9.0.0`, and CI and the assurance job seed mach v6.0.0 (#177).
+- The release evidence gate no longer carries a performance budget. `test/performance`, with its P-384 verification and RSA-PSS sign and verify wall-clock medians, is removed along with its assurance category and `assurance/tests.tsv` rows, since mach's test policy keeps tests deterministic. `doc/assurance.md` keeps the recorded measurements as characterization, and `test/benchmark` still measures AES-GCM on demand (#177).
+
+### Changed
+
+- Every test is named by identifier (`test subject__case`), as mach 6 requires. `assurance/tests.tsv` selects each evidence test by qualified name (`module#name`), and `tools/test-selection` compares qualified names. Test-only helpers, fixtures and vector tables are `#[testing]` (#177).
+- The suite is pruned to mach's test policy, from 144 tests to 112. Every known-answer vector that is the only coverage of its algorithm or member stays, as does every zeroization and constant-time check. Duplicated vectors, constant pins, volume sweeps and timing assertions are gone, and the member differentials run tables of boundary lengths rather than every length (#177).
+- The README drops the note that the hardware AES and GHASH members need mach 5.12.2, since the manifest now requires 6 (#177).
+
+### Removed
+
+- Two private declarations nothing referenced: `MAX_ROUNDS` in `crypto.internal.aes.software` and `version_public` in `crypto.encoding.keys`. Neither was visible to consumers (#177).
+
 ## [0.23.0] - 2026-09-26
 
 ### Performance
