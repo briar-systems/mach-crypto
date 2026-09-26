@@ -2,6 +2,7 @@
 
 use crypto.aead.aes_gcm;
 use crypto.aead.chacha20_poly1305;
+use crypto.cipher.aes;
 use crypto.contracts;
 use std.crypto.hash.sha256;
 use std.runtime;
@@ -733,12 +734,18 @@ test "aes-gcm: the context refuses use outside init and dnit, which zeroizes it"
     result = aes_gcm.open_with(?context, nonce12, no_aad, input, plain);
     if (result.error != contracts.OK || !secret_filled(?opened[0], 0x3C, 16)) { ret 18; }
 
-    val planes: *^u8 = (?context.cipher.software.round_planes[0]):~*^u8;
-    val hash:   *^u8 = (?context.hash.software.h[0]):~*^u8;
-    if (secret_filled(planes, 0, 960) || secret_filled(hash, 0, 16))   { ret 19; }
-    if (aes_gcm.dnit(?context) != contracts.OK)                        { ret 20; }
-    if (!secret_filled(planes, 0, 960) || !secret_filled(hash, 0, 16)) { ret 24; }
-    if (aes_gcm.dnit(?context) != contracts.OK)                        { ret 25; }
+    # the active members hold the key, and dnit clears every member
+    val planes:       *^u8 = (?context.cipher.schedule.software.round_planes[0]):~*^u8;
+    val rounds:       *^u8 = ?context.cipher.schedule.hardware.round_keys[0];
+    val hash:         *^u8 = (?context.hash.member.software.h[0]):~*^u8;
+    val powers:       *^u8 = (?context.hash.member.hardware.powers[0]):~*^u8;
+    val cipher_keyed: bool = !secret_filled(planes, 0, 960) || !secret_filled(rounds, 0, 240);
+    val hash_keyed:   bool = !secret_filled(hash, 0, 16) || !secret_filled(powers, 0, 64);
+    if (!cipher_keyed || !hash_keyed)           { ret 19; }
+    if (aes_gcm.dnit(?context) != contracts.OK) { ret 20; }
+    if (!secret_filled(planes, 0, 960) || !secret_filled(rounds, 0, 240) ||
+        !secret_filled(hash, 0, 16) || !secret_filled(powers, 0, 64)) { ret 24; }
+    if (aes_gcm.dnit(?context) != contracts.OK) { ret 25; }
     result = aes_gcm.open_with(?context, nonce12, no_aad, input, plain);
     if (result.error != contracts.INVALID_STATE || !secret_filled(?opened[0], 0x3C, 16)) { ret 21; }
     context.state = 9;
@@ -1129,5 +1136,13 @@ test "chacha20-poly1305: independent counter-carry differential vector" {
         if (long_chacha_opened[i]:>u8 != (i * 7 + 3)::u8) { ret 4; }
         i = i + 1;
     }
+    ret 0;
+}
+
+# mach-quic carves the aead and header protection contexts of both directions
+# of a handshake level from one 4096-byte secret chunk, so a hardware member's
+# key storage shares the context with the software member's and never adds to it
+test "aes-gcm: an aead and a header protection context fit half a 4 KiB chunk" {
+    if ($size_of(aes_gcm.Context) + $size_of(aes.Context) > 2048) { ret 1; }
     ret 0;
 }

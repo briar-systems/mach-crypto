@@ -211,10 +211,15 @@ authentication tags, and stream blocks are explicitly zeroized.
 AES and GHASH each run behind an internal backend seam (`crypto.internal.aes`
 and `crypto.internal.ghash`). A context records the member chosen when its key
 is installed, and every later call runs that member. The bitsliced software
-member is portable and constant time, and it is the only member in this
-revision. Hardware members for AES-NI with PCLMULQDQ and ARMv8 AES with PMULL
-will be added behind the same contexts, with no change to this API, once the
-compiler can encode those instructions.
+member is portable and constant time. The hardware members are AES-NI and
+PCLMULQDQ on x86_64 and the ARMv8 AES rounds and PMULL on aarch64. `init`
+picks them where the processor has the extensions, which `std.system.cpu`
+reports (or the build target selects, in which case nothing is probed), and
+the AES and GHASH members are chosen independently. The hardware kernels are
+fixed instruction streams with no branch or secret address, checked by
+`#[oblivious]`, and GHASH reduces with shifts in the bit-reflected form of
+Intel's carry-less multiply white paper. They need mach 5.12.2 or later. An
+older compiler builds the software members alone.
 
 ## AES block cipher
 
