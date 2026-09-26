@@ -120,11 +120,6 @@ fun secret_equal(value: contracts.SecretBytes, expected: *u8, len: usize) bool {
     ret ct.eq[u8](difference, 0):>u8 == 1;
 }
 
-fun version_public(element: *der.Element, expected: u8) bool {
-    ret element.tag == der.INTEGER && element.content.len == 1 &&
-        element.content.data[0] == expected;
-}
-
 #[oblivious]
 fun version_secret(element: *der.SecretElement, expected: u8) bool {
     ret element.tag == der.INTEGER && element.content.len == 1 &&

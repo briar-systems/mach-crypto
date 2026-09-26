@@ -15,8 +15,6 @@ pub val BLOCK_SIZE:      usize = 16;
 pub val AES256_KEY_SIZE: usize = 32;
 pub val PARALLEL_BLOCKS: usize = 4;
 
-val MAX_ROUNDS: usize = 14;
-
 # the expanded key as bit planes, eight per round key
 #
 # the round count is the dispatcher's, so the schedule is secret storage alone
