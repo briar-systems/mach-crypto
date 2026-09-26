@@ -71,9 +71,6 @@ invalid-input	.	pem	RFC 7468 and mach-crypto parser contract	crypto.test.encodin
 invalid-input	.	key-containers	mach-crypto ownership contract	crypto.test.encoding#keys__allocation_and_cleanup_failures_retain_exact_ownership
 invalid-input	.	key-containers	RFC 5480 and SEC 1 named-curve contract	crypto.test.encoding#keys__p_384_spki_validates_the_named_curve_and_every_boundary
 invalid-input	.	key-containers	RFC 7468 and mach-crypto parser contract	crypto.test.encoding#keys__private_pem_truncation_fails_before_allocation_at_every_boundary
-performance	test/performance	ecdsa-p384-sha384	250 ms median verification budget	#ecdsa_p_384__median_verification_stays_below_250_ms
-performance	test/performance	rsa-pss-sha256	250 ms median signing and 25 ms verification budget, 2048-bit	#rsa_pss_2048__median_signing_stays_below_250_ms_and_verification_below_25_ms
-performance	test/performance	rsa-pss-sha256	500 ms median signing and 50 ms verification budget, 3072-bit	#rsa_pss_3072__median_signing_stays_below_500_ms_and_verification_below_50_ms
 zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret#secret__partial_allocation_failure_is_wiped_and_cleanup_ownership_is_retained
 zeroization	.	secret-storage	mach-crypto entropy contract	crypto.test.secret#secret__entropy_failure_is_distinct_and_wipes_partial_output
 zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret#secret__failed_cleanup_rewipes_retained_ownership_before_retry

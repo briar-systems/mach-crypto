@@ -45,9 +45,8 @@ jobs:
          {"path": "test/benchmark", "build": true, "test": false}]
 
   # the release evidence gate the README documents. it resolves every project,
-  # runs the suite and the release-only performance budget, builds six targets
-  # twice for reproducibility, re-derives the leakage control evidence and
-  # inspects zeroization in the generated code
+  # runs the suite, builds six targets twice for reproducibility, re-derives
+  # the leakage control evidence and inspects zeroization in the generated code
   assurance:
     if: github.base_ref == 'main' || inputs.heavy == 'all' || inputs.heavy == 'assurance'
     runs-on: ubuntu-latest

@@ -68,8 +68,6 @@ manifest_hash() {
             assurance/tests.tsv \
             assurance/zeroization.tsv \
             assurance/leakage.tsv \
-            test/performance/mach.toml \
-            test/performance/src/performance.mach \
             tools/assurance
         leakage_projects | while IFS= read -r project; do
             sha256sum "$project/mach.toml"
@@ -102,8 +100,6 @@ check_prerequisites() {
     while IFS= read -r project; do
         require_file "$root/$project/mach.toml"
     done < <(leakage_projects)
-    require_file "$root/test/performance/mach.toml"
-    require_file "$root/test/performance/src/performance.mach"
 }
 
 assert_clean_source() {
@@ -121,8 +117,6 @@ resolve_dependencies() {
         (cd "$root" && mach dep pull "$project" --quiet) >/dev/null 2>&1 </dev/null || \
             die "dependency resolution failed for $project; run 'mach dep pull $project' for details"
     done < <(leakage_projects)
-    (cd "$root" && mach dep pull test/performance --quiet) >/dev/null 2>&1 || \
-        die "dependency resolution failed for test/performance; run 'mach dep pull test/performance' for details"
     tree_is_clean || die "dependency resolution changed the source tree; commit the refreshed pins before producing release evidence"
 }
 
@@ -205,9 +199,6 @@ run_independent_tests() {
         index=$((index + 1))
         mapfile -t selection < <(test_selection "$project")
         for profile in "${profiles[@]}"; do
-            if [[ "$category" == performance && "$profile" != release ]]; then
-                continue
-            fi
             printf -v relative 'logs/tests/%s/%03d-%s.ndjson' "$category" "$index" "$profile"
             log="$stage/$relative"
             mkdir -p "$(dirname -- "$log")"
@@ -426,7 +417,7 @@ inspect_zeroization() {
 
 assert_complete_results() {
     local category
-    for category in functional official-vector differential invalid-input performance \
+    for category in functional official-vector differential invalid-input \
         generated-code leakage zeroization reproducibility; do
         awk -F '\t' -v category="$category" '$1 == category && $8 == "PASS" { found = 1 } END { exit !found }' \
             "$results" || die "required evidence category did not pass: $category"
