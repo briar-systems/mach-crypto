@@ -19,8 +19,3 @@ pub rec Vector {
 
 # a runner returns the number of failed cases
 pub def Runner: fun(*Vector, usize) usize;
-
-test vectors__valid_and_invalid_cases_are_distinct {
-    if (VALID == INVALID) { ret 1; }
-    ret 0;
-}

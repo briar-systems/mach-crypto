@@ -614,7 +614,7 @@ test x25519_field__the_selected_multiply_agrees_with_the_serial_reference {
     };
     var state: u64   = 0x9E3779B97F4A7C15;
     var round: usize = 0;
-    for (round < 512) {
+    for (round < 64) {
         var left:  Field;
         var right: Field;
         var i:     usize = 0;

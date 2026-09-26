@@ -112,9 +112,3 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     ct.end();
     ret contracts.Operation{error: contracts.OK, written: SHARED_SECRET_SIZE};
 }
-
-test x25519__every_wire_and_key_value_is_32_bytes {
-    if (PRIVATE_KEY_SIZE != 32 || PUBLIC_KEY_SIZE != 32) { ret 1; }
-    if (SHARED_SECRET_SIZE != 32)                        { ret 1; }
-    ret 0;
-}

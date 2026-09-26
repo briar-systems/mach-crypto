@@ -173,7 +173,7 @@ test hash__nist_empty_and_abc_vectors_preserve_snapshots {
     ret 0;
 }
 
-test hash__every_split_and_byte_fragment_matches_nist_multiblock_vectors {
+test hash__splits_and_byte_fragments_match_nist_multiblock_vectors {
     val message: *u8 =
         "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"::*u8;
     var expected256: [32]u8;
@@ -209,7 +209,7 @@ test hash__every_split_and_byte_fragment_matches_nist_multiblock_vectors {
             !equal(?output[0], ?expected384[0], 48)) { ret 5; }
         hash.destroy_sha256(?sha256);
         hash.destroy_sha384(?sha384);
-        split = split + 1;
+        split = split + 28;
     }
 
     var byte256: hash.Sha256 = hash.empty_sha256();

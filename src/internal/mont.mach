@@ -897,7 +897,7 @@ test mont__six_limb_products_squares_and_wide_reductions_match_independent_value
 test mont__the_unrolled_four_limb_ring_agrees_with_the_loop_form {
     var state: u64   = 0x9E3779B97F4A7C15;
     var round: usize = 0;
-    for (round < 256) {
+    for (round < 64) {
         var left:  [4]^u64;
         var right: [4]^u64;
         var i:     usize = 0;

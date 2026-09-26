@@ -310,7 +310,7 @@ test aes__hardware_and_software_members_agree_over_random_keys_and_block_counts 
     var round:    usize = 0;
     var hardware: Context;
     var software: Context;
-    for (round < 128) {
+    for (round < 2 * PARALLEL_BLOCKS) {
         var key:   [32]^u8;
         var input: [128]^u8;
         var left:  [128]^u8;

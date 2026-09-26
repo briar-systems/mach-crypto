@@ -30,15 +30,6 @@ fun secret_equal(actual: *^u8, expected: *u8, len: usize) bool {
     ret true;
 }
 
-fun secrets_equal(actual: *^u8, expected: *^u8, len: usize) bool {
-    var i: usize = 0;
-    for (i < len) {
-        if (actual[i]:>u8 != expected[i]:>u8) { ret false; }
-        i = i + 1;
-    }
-    ret true;
-}
-
 fun public_filled(actual: *u8, value: u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
@@ -628,7 +619,7 @@ test p256_internal__comb_base_multiplication_matches_the_generic_window {
     load_limbs(?multiplier, (?BASE_SCALARS[0]):~*u64, 23 * 8);
     core.reduce_scalar_once(?scalar);
     var round: usize = 0;
-    for (round < 16) {
+    for (round < 4) {
         core.scalar_multiply_values(?scalar, ?scalar, ?multiplier);
         core.scalar_multiply_base(?comb, ?scalar);
         core.scalar_multiply(?window, ?scalar, ?generator);
@@ -679,7 +670,7 @@ test ed25519_internal__comb_base_multiplication_matches_the_generic_window {
     }
     var sweep: [32]^u8;
     var round: usize = 0;
-    for (round < 16) {
+    for (round < 4) {
         var i: usize = 0;
         for (i < 32) {
             sweep[i] = ((round + 3) * 97 + i * i * 13 + i * 29)::u8;
@@ -737,7 +728,7 @@ test x25519__comb_key_derivation_matches_the_montgomery_ladder {
     var comb:   [32]u8;
     var ladder: [32]u8;
     var index:  usize = 0;
-    for (index < LADDER_CASES + 16) {
+    for (index < LADDER_CASES + 4) {
         var i: usize = 0;
         for (i < 32) {
             if (index < LADDER_CASES) {

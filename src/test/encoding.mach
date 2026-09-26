@@ -99,15 +99,6 @@ fun filled(input: *u8, byte: u8, len: usize) bool {
     ret true;
 }
 
-fun secret_equal_public(left: *^u8, right: *u8, len: usize) bool {
-    var i: usize = 0;
-    for (i < len) {
-        if (left[i]:>u8 != right[i]) { ret false; }
-        i = i + 1;
-    }
-    ret true;
-}
-
 fun secret_equal(left: *^u8, right: *^u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {

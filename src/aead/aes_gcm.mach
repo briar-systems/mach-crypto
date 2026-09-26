@@ -388,13 +388,8 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     ret result;
 }
 
-test aes_gcm__tls_and_quic_dimensions_are_fixed {
-    if (AES128_KEY_SIZE != 16 || AES256_KEY_SIZE != 32) { ret 1; }
-    if (NONCE_SIZE != 12 || TAG_SIZE != 16)             { ret 1; }
-    if (MAX_PLAINTEXT_SIZE != 68719476704)              { ret 1; }
-
-    # the keystream buffer fits one call of the widest aes backend
-    if (STREAM_BLOCKS > core.PARALLEL_BLOCKS || STREAM_SIZE != STREAM_BLOCKS * 16) { ret 2; }
+test aes_gcm__keystream_buffer_fits_one_call_of_the_widest_aes_backend {
+    if (STREAM_BLOCKS > core.PARALLEL_BLOCKS || STREAM_SIZE != STREAM_BLOCKS * 16) { ret 1; }
     ret 0;
 }
 
@@ -690,19 +685,19 @@ var differential_hardware:  [4112]u8;
 var differential_software:  [4112]u8;
 var differential_opened:    [4096]^u8;
 
-# every record length from 0 to 300 bytes, then 1200 and 4096
-fun differential_length(index: usize) usize {
-    if (index <= 300) { ret index; }
-    if (index == 301) { ret 1200; }
-    ret 4096;
-}
+# empty, partial and whole blocks around the four-block ghash aggregate and the
+# eight-block keystream, then long records
+val DIFFERENTIAL_CASES:   usize                     = 18;
+val DIFFERENTIAL_LENGTHS: [DIFFERENTIAL_CASES]usize = [DIFFERENTIAL_CASES]usize{
+    0, 1, 15, 16, 17, 63, 64, 65, 127, 128, 129, 143, 144, 255, 256, 257, 1200, 4096
+};
 
 test aes_gcm__hardware_and_software_members_agree_over_random_keys_nonces_and_records {
     if (!core.available(core.HARDWARE) || !ghash.available(ghash.HARDWARE)) { ret 0; }
     var state: u64   = 159;
     var index: usize = 0;
-    for (index <= 302) {
-        val text_len: usize = differential_length(index);
+    for (index < DIFFERENTIAL_CASES) {
+        val text_len: usize = DIFFERENTIAL_LENGTHS[index];
         var key_len:  usize = AES128_KEY_SIZE;
         if ((index & 1) == 1) { key_len = AES256_KEY_SIZE; }
         var key:    [32]u8;

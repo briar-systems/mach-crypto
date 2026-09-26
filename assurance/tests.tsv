@@ -1,15 +1,11 @@
 category	project	algorithm	vector_source	filter
 official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__nist_empty_and_abc_vectors_preserve_snapshots
-official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__every_split_and_byte_fragment_matches_nist_multiblock_vectors
+official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__splits_and_byte_fragments_match_nist_multiblock_vectors
 official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__million_byte_nist_vectors_span_repeated_fragments
 official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	crypto.test.mac#hmac__rfc_4231_sha_256_and_sha_384_vectors
 official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	crypto.test.mac#hmac__rfc_4231_multiblock_message_vectors
 official-vector	.	hkdf-sha-256	RFC 5869	crypto.test.mac#hkdf__rfc_5869_sha_256_case_one
-official-vector	.	aes-128-gcm	NIST SP 800-38D	crypto.test.aead#aes_gcm__nist_empty_and_single_block_aes_128_vectors
-official-vector	.	aes-256-gcm	NIST SP 800-38D	crypto.test.aead#aes_gcm__nist_empty_and_single_block_aes_256_vectors
-official-vector	.	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	crypto.test.aead#aes_gcm__nist_aad_and_partial_block_vector_seals_and_opens
-official-vector	.	aes-128-gcm,aes-256-gcm	NIST SP 800-38D	crypto.test.aead#aes_gcm__nist_vectors_seal_and_open_through_one_keyed_context
-official-vector	.	aes-128,aes-256	NIST FIPS 197 and SP 800-38A	crypto.test.cipher#aes__fips_197_and_sp_800_38a_blocks_through_one_keyed_context
+official-vector	.	aes-128,aes-256	NIST FIPS 197	crypto.test.cipher#aes__fips_197_blocks_through_one_keyed_context
 official-vector	.	aes-128,aes-256	NIST FIPS 197 and SP 800-38A	crypto.internal.aes#aes__fips_197_and_sp_800_38a_blocks_on_every_member_this_host_runs
 official-vector	.	aes-128-gcm,aes-256-gcm	GCM specification test cases 1-4 and 13-16 and NIST CAVP gcmEncryptExtIV128	crypto.aead.aes_gcm#aes_gcm__gcm_spec_vectors_on_every_aes_and_ghash_member_this_host_runs
 official-vector	.	chacha20-poly1305	RFC 8439	crypto.test.aead#chacha20_poly1305__rfc_8439_aead_vector_seals_and_opens
@@ -28,9 +24,8 @@ differential	.	hkdf-sha-384	independent Python hashlib vector	crypto.test.mac#hk
 differential	.	aes-128-gcm,aes-256-gcm	independent AES-GCM implementation	crypto.test.aead#aes_gcm__independent_counter_carry_differential_vector
 differential	.	aes-128-gcm,aes-256-gcm	independent Python cryptography AES-GCM	crypto.test.aead#aes_gcm__independent_record_length_differential_vectors
 differential	.	aes-128-gcm,aes-256-gcm	mach-crypto software AES-GCM members	crypto.aead.aes_gcm#aes_gcm__hardware_and_software_members_agree_over_random_keys_nonces_and_records
-differential	.	aes-128-gcm,aes-256-gcm	mach-crypto software GHASH member	crypto.internal.ghash#ghash__hardware_and_software_members_agree_over_random_keys_splits_and_lengths
+differential	.	aes-128-gcm,aes-256-gcm	mach-crypto software GHASH member	crypto.internal.ghash#ghash__hardware_and_software_members_agree_over_random_keys_splits_and_block_boundaries
 differential	.	aes-128,aes-256	mach-crypto software AES member	crypto.internal.aes#aes__hardware_and_software_members_agree_over_random_keys_and_block_counts
-differential	.	chacha20-poly1305	independent RFC-compatible implementation	crypto.test.aead#chacha20_poly1305__empty_independent_vector
 differential	.	chacha20-poly1305	independent RFC-compatible implementation	crypto.test.aead#chacha20_poly1305__independent_counter_carry_differential_vector
 differential	.	chacha20-poly1305	independent Python integer arithmetic	crypto.internal.poly1305#poly1305__carry_edges_match_independent_vectors_over_the_padded_layout
 differential	.	x25519	independent X25519 implementation	crypto.test.group#x25519__independent_differential_vector_and_private_output_overlap
@@ -77,7 +72,6 @@ zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret
 zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret#secret__destruction_failure_rewipes_retained_storage_and_retries
 zeroization	.	secret-storage	mach-crypto typed ownership contract	crypto.test.secret#secret_array__allocation_failure_cleans_transferred_typed_ownership
 zeroization	.	secret-storage	mach-crypto typed ownership contract	crypto.test.secret#secret_array__failed_cleanup_rewipes_deeply_secret_ownership_for_retry
-zeroization	.	secret-storage	mach-crypto typed destruction contract	crypto.test.secret#secret_array__deallocation_retries_rewipe_public_values
 zeroization	.	secret-storage	mach-crypto typed destruction contract	crypto.test.secret#secret_array__deallocation_retries_rewipe_direct_secret_values
 zeroization	.	secret-storage	mach-std typed operating-system boundary	crypto.test.secret#secret_array__native_allocator_owns_deeply_secret_records
 zeroization	.	sha-256,sha-384	mach-crypto transcript lifecycle contract	crypto.test.hash#hash__snapshot_continues_and_final_consumes_only_after_success

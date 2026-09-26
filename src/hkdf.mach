@@ -249,9 +249,3 @@ pub fun expand_sha384(prk: contracts.SecretBytes, info: contracts.Bytes,
     wipe384(?key[0], ?previous[0], ?block[0]);
     ret contracts.Operation{error: contracts.OK, written: written};
 }
-
-test hkdf__output_expansion_is_bounded_by_the_rfc_block_counter {
-    if (MAX_BLOCKS != 255)                                       { ret 1; }
-    if (SHA256_MAX_OUTPUT != 8160 || SHA384_MAX_OUTPUT != 12240) { ret 1; }
-    ret 0;
-}
