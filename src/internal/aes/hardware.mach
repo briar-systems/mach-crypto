@@ -45,7 +45,7 @@ pub fun wipe(schedule: *Schedule) {
 # round count
 #[oblivious]
 pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) usize {
-    ret software.expand_round_keys(?schedule.round_keys[0], key, substitute_word);
+    ret software.expand_round_keys(key, ?schedule.round_keys[0], substitute_word);
 }
 
 # the s-box on one key-schedule word, through one hardware round
