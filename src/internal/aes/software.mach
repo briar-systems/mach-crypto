@@ -236,10 +236,8 @@ pub def Substitute: fun(*^u8);
 # round_keys must hold 240 bytes. writes (rounds + 1) * 16 of them and returns
 # the round count. `substitute` is the s-box on one word: the bitsliced
 # circuit here, or the hardware rounds, which keep this form as their schedule.
-# round_keys comes before the key record: after it, the riscv64 constant-time
-# check reads the pointer as secret at its stores.
 #[oblivious]
-pub fun expand_round_keys(round_keys: *^u8, key: contracts.SecretBytes,
+pub fun expand_round_keys(key: contracts.SecretBytes, round_keys: *^u8,
     substitute: Substitute) usize {
     var rounds: usize = 10;
     if (key.len == AES256_KEY_SIZE) { rounds = 14; }
@@ -287,7 +285,7 @@ pub fun expand_round_keys(round_keys: *^u8, key: contracts.SecretBytes,
 #[oblivious]
 pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) usize {
     var round_keys: [240]^u8;
-    val rounds:     usize = expand_round_keys(?round_keys[0], key, substitute_word);
+    val rounds:     usize = expand_round_keys(key, ?round_keys[0], substitute_word);
     var round:      usize = 0;
     for (round <= rounds) {
         spread_round_key(schedule, round, ?round_keys[round * BLOCK_SIZE]);
