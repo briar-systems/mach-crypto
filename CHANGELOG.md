@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-09-27
+
+### Changed
+
+- `expand_round_keys` takes its parameters in their natural order again, `(key, round_keys, substitute)`. The pointer-first order was a workaround for a riscv64 constant-time false positive (mach#3914), fixed by mach#3921, which every mach 6 release carries. The function is internal, so the public API is unchanged (#181).
+
 ## [0.24.0] - 2026-09-26
 
 ### Breaking
