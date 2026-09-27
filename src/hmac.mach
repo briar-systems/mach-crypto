@@ -13,16 +13,19 @@ pub val SHA384_TAG_SIZE:   usize = 48;
 # one-shot hmac callback with a secret key and public message
 pub def MacFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Buffer) contracts.Operation;
 
+# one-shot hmac callback whose tag stays secret
+pub def SecretMacFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.SecretBuffer) contracts.Operation;
+
 fun failed(error: contracts.Error) contracts.Operation {
     ret contracts.Operation{error: error, written: 0};
 }
 
-# authenticate a public message with hmac-sha-256
+# authenticate a public message with hmac-sha-256 into secret output
 #
-# the output may overlap the message because it is written only after the
-# complete tag exists. a nonempty public output cannot alias the secret key.
-pub fun sha256(key: contracts.SecretBytes, message: contracts.Bytes,
-    output: contracts.Buffer) contracts.Operation {
+# the output may overlap the key or the message because it is written only
+# after the complete tag exists.
+pub fun sha256_secret(key: contracts.SecretBytes, message: contracts.Bytes,
+    output: contracts.SecretBuffer) contracts.Operation {
     if (key.len != 0 && key.data == nil)         { ret failed(contracts.INVALID_INPUT); }
     if (message.len != 0 && message.data == nil) { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity < SHA256_TAG_SIZE)       { ret failed(contracts.OUTPUT_TOO_SMALL); }
@@ -46,19 +49,19 @@ pub fun sha256(key: contracts.SecretBytes, message: contracts.Bytes,
     }
     var i: usize = 0;
     for (i < SHA256_TAG_SIZE) {
-        output.data[i] = tag[i]:>u8;
+        output.data[i] = tag[i];
         i              = i + 1;
     }
     ct.zeroize(?tag[0], SHA256_TAG_SIZE);
     ret contracts.Operation{error: contracts.OK, written: SHA256_TAG_SIZE};
 }
 
-# authenticate a public message with hmac-sha-384
+# authenticate a public message with hmac-sha-384 into secret output
 #
-# the output may overlap the message because it is written only after the
-# complete tag exists. a nonempty public output cannot alias the secret key.
-pub fun sha384(key: contracts.SecretBytes, message: contracts.Bytes,
-    output: contracts.Buffer) contracts.Operation {
+# the output may overlap the key or the message because it is written only
+# after the complete tag exists.
+pub fun sha384_secret(key: contracts.SecretBytes, message: contracts.Bytes,
+    output: contracts.SecretBuffer) contracts.Operation {
     if (key.len != 0 && key.data == nil)         { ret failed(contracts.INVALID_INPUT); }
     if (message.len != 0 && message.data == nil) { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity < SHA384_TAG_SIZE)       { ret failed(contracts.OUTPUT_TOO_SMALL); }
@@ -82,9 +85,55 @@ pub fun sha384(key: contracts.SecretBytes, message: contracts.Bytes,
     }
     var i: usize = 0;
     for (i < SHA384_TAG_SIZE) {
-        output.data[i] = tag[i]:>u8;
+        output.data[i] = tag[i];
         i              = i + 1;
     }
     ct.zeroize(?tag[0], SHA384_TAG_SIZE);
     ret contracts.Operation{error: contracts.OK, written: SHA384_TAG_SIZE};
+}
+
+# authenticate a public message with hmac-sha-256
+#
+# the output may overlap the message because it is written only after the
+# complete tag exists. a nonempty public output cannot alias the secret key.
+pub fun sha256(key: contracts.SecretBytes, message: contracts.Bytes,
+    output: contracts.Buffer) contracts.Operation {
+    if (output.capacity < SHA256_TAG_SIZE) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil)                { ret failed(contracts.INVALID_INPUT); }
+
+    var tag:    [32]^u8;
+    val result: contracts.Operation = sha256_secret(key, message,
+        contracts.SecretBuffer{data: ?tag[0], capacity: SHA256_TAG_SIZE});
+    if (result.error == contracts.OK) {
+        var i: usize = 0;
+        for (i < SHA256_TAG_SIZE) {
+            output.data[i] = tag[i]:>u8;
+            i              = i + 1;
+        }
+    }
+    ct.zeroize(?tag[0], SHA256_TAG_SIZE);
+    ret result;
+}
+
+# authenticate a public message with hmac-sha-384
+#
+# the output may overlap the message because it is written only after the
+# complete tag exists. a nonempty public output cannot alias the secret key.
+pub fun sha384(key: contracts.SecretBytes, message: contracts.Bytes,
+    output: contracts.Buffer) contracts.Operation {
+    if (output.capacity < SHA384_TAG_SIZE) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil)                { ret failed(contracts.INVALID_INPUT); }
+
+    var tag:    [48]^u8;
+    val result: contracts.Operation = sha384_secret(key, message,
+        contracts.SecretBuffer{data: ?tag[0], capacity: SHA384_TAG_SIZE});
+    if (result.error == contracts.OK) {
+        var i: usize = 0;
+        for (i < SHA384_TAG_SIZE) {
+            output.data[i] = tag[i]:>u8;
+            i              = i + 1;
+        }
+    }
+    ct.zeroize(?tag[0], SHA384_TAG_SIZE);
+    ret result;
 }
