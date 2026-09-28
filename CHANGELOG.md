@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-28
+
+### Added
+
+- `Allocator.wipes_on_release` and `ArrayAllocator[T].wipes_on_release` declare that the allocator's release already wipes the whole span. `system_allocator` and `system_array_allocator[T]` set it, since std's secret memory wipes before release, and `release_wiped` and `release_wiped_array` then skip their own wipe, so a secret is wiped once instead of twice. An allocator that omits the field keeps crypto's wipe (#173).
+- `Allocator.zeroes_on_allocate` and `ArrayAllocator[T].zeroes_on_allocate` declare that a successful allocation returns the span zeroed. The system allocators set it, and `init` and `init_array` then skip their zeroing. An allocator that omits the field keeps crypto's zeroing (#193).
+
+### Changed
+
+- Dependencies: requires mach-std 9.4, selected by `version = "^9.4"` with the gitlink at v9.4.1, which maps a guard page below every linux thread stack. `test/benchmark` pins `tag/v9.4.1`. The public API is otherwise unchanged.
+
 ## [0.25.0] - 2026-09-27
 
 ### Added
