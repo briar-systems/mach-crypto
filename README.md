@@ -37,6 +37,12 @@ Use `secret.move` to transfer the allocation and `secret.clone` when an
 independent copy is required. Direct record copies are invalid because they
 duplicate ownership.
 
+`secret.init` returns fully zeroed storage, and exactly one layer zeroes it. An
+allocator whose `zeroes_on_allocate` is set returns zeroed storage itself, and
+`secret.init` uses it as returned. The system allocators set it, because
+`std.memory.secret` already allocates zero-filled storage. For any other
+allocator `secret.init` zeroes the allocation.
+
 `secret.bytes` and `secret.buffer` return bounded borrowed views. A view must
 not outlive its owner or any move or destroy operation. Exactly one layer wipes
 each release. An allocator whose `wipes_on_release` is set wipes the whole span
@@ -58,7 +64,8 @@ active. No raw pointer or declassification cast is needed for directly secret
 values or records with deeply nested secret fields.
 
 Array initialization checks `count * $size_of(T)`, supplies `$align_of(T)` to
-the typed allocator, and zero-initializes the complete allocation. A zero-count
+the typed allocator, and returns the complete allocation zeroed, zeroing it
+itself unless the allocator sets `zeroes_on_allocate`. A zero-count
 array is active with nil data and acquires no allocation. `destroy_array[T]`
 splits the release wipe the same way. A wiping allocator zeroes every element
 itself, and for any other allocator `destroy_array[T]` wipes all elements before
@@ -70,7 +77,8 @@ allocation even when allocation reports failure.
 
 The native allocator and entropy source delegate to `mach-std` secret-welded OS
 primitives. Storage remains secret-welded through every native boundary,
-allocation begins zeroed, entropy fills are complete or leave a fully wiped
+std's allocation begins zeroed, which is the only allocation zeroing on this
+path, entropy fills are complete or leave a fully wiped
 destination, and std's release wipes before returning storage to the operating
 system, which is the only release wipe on this path. Custom allocators follow
 the same ownership rule. A nonnil allocation
