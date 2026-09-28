@@ -10,7 +10,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.secret` owns allocated secret storage, bounded views, explicit moves,
   allocating clones, entropy initialization, and deterministic destruction.
 - `crypto.hash` provides incremental SHA-256 and SHA-384 transcript hashing.
-- `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384.
+- `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384, with public or
+  secret tags.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
 - `crypto.cipher.aes` provides the AES-128 and AES-256 block cipher under one
@@ -150,6 +151,13 @@ are explicitly zeroized.
 caller-owned public output. The output capacity must be at least the full tag
 size. Successful calls write the full tag. The output may overlap the public
 message because no output is written until authentication is complete.
+
+`hmac.sha256_secret` and `hmac.sha384_secret` take the same inputs and write
+the tag into a caller-owned `contracts.SecretBuffer`, for a tag that is itself
+secret derived material, such as a stateless reset token or a derived key. The
+caller decides where, or whether, to declassify it. The output may overlap the
+key or the message. `hmac.sha256` and `hmac.sha384` are these functions
+followed by one declassify into the public output.
 
 `hkdf.extract_sha256` and `hkdf.extract_sha384` accept secret salt and input key
 material and write a fixed-size secret pseudorandom key. Empty salt and input
