@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-27
+
+### Added
+
+- `hmac.sha256_secret` and `hmac.sha384_secret`, which write the tag into a `contracts.SecretBuffer`, and the `SecretMacFun` callback type, so a caller deriving secret material by HMAC no longer reaches into `crypto.internal.hmac` (#185). `hmac.sha256` and `hmac.sha384` are the secret form plus one declassify, so there is one implementation. The public wrappers validate the output before the inputs, which only changes which error wins when several inputs are bad at once.
+
+### Changed
+
+- Dependencies: requires mach-std 9.3.0, selected by `version = "^9.3"`. `test/benchmark` pins `tag/v9.3.0`. The public API is otherwise unchanged (#188).
+
 ## [0.24.1] - 2026-09-27
 
 ### Changed
