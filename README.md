@@ -38,11 +38,16 @@ independent copy is required. Direct record copies are invalid because they
 duplicate ownership.
 
 `secret.bytes` and `secret.buffer` return bounded borrowed views. A view must
-not outlive its owner or any move or destroy operation. `secret.destroy` wipes
-storage immediately before every release attempt. If a deallocator mutates the
-allocation and fails while retaining ownership, `secret.destroy` wipes it again
-before returning. The owner remains in a wiped cleanup-pending state, and a
-later destroy retries with fully zeroed storage.
+not outlive its owner or any move or destroy operation. Exactly one layer wipes
+each release. An allocator whose `wipes_on_release` is set wipes the whole span
+before every release attempt and leaves zeroed storage when the attempt fails,
+so `secret.destroy` hands it the storage untouched. The system allocators set
+it, because `std.memory.secret` already wipes on release. For any other
+allocator `secret.destroy` wipes storage immediately before every release
+attempt, and if the deallocator mutates the allocation and fails while
+retaining ownership, wipes it again before returning. Either way the owner
+remains in a wiped cleanup-pending state, and a later destroy retries with
+fully zeroed storage.
 
 `crypto.secret.SecretArray[T]` owns a dynamically sized typed allocation while
 preserving every field's secrecy shape. Initialize an owner with
@@ -55,8 +60,10 @@ values or records with deeply nested secret fields.
 Array initialization checks `count * $size_of(T)`, supplies `$align_of(T)` to
 the typed allocator, and zero-initializes the complete allocation. A zero-count
 array is active with nil data and acquires no allocation. `destroy_array[T]`
-wipes all elements before every release attempt. A failed release rewipes any
-callback mutation, then retains the typed pointer, count, byte size, allocator,
+splits the release wipe the same way. A wiping allocator zeroes every element
+itself, and for any other allocator `destroy_array[T]` wipes all elements before
+every release attempt and rewipes any callback mutation after a failed one. A
+failed release then retains the typed pointer, count, byte size, allocator,
 and cleanup-pending state for retry. Custom `ArrayAllocator[T]` callbacks follow
 the same ownership contract. A nonnil output transfers the full requested
 allocation even when allocation reports failure.
@@ -64,8 +71,9 @@ allocation even when allocation reports failure.
 The native allocator and entropy source delegate to `mach-std` secret-welded OS
 primitives. Storage remains secret-welded through every native boundary,
 allocation begins zeroed, entropy fills are complete or leave a fully wiped
-destination, and release wipes before returning storage to the operating
-system. Custom allocators follow the same ownership rule. A nonnil allocation
+destination, and std's release wipes before returning storage to the operating
+system, which is the only release wipe on this path. Custom allocators follow
+the same ownership rule. A nonnil allocation
 result transfers ownership even when allocation reports failure, allowing
 partial storage to be wiped and released deterministically.
 
