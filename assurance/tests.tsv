@@ -73,6 +73,7 @@ zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret
 zeroization	.	secret-storage	mach-crypto typed ownership contract	crypto.test.secret#secret_array__allocation_failure_cleans_transferred_typed_ownership
 zeroization	.	secret-storage	mach-crypto typed ownership contract	crypto.test.secret#secret_array__failed_cleanup_rewipes_deeply_secret_ownership_for_retry
 zeroization	.	secret-storage	mach-crypto typed destruction contract	crypto.test.secret#secret_array__deallocation_retries_rewipe_direct_secret_values
+zeroization	.	secret-storage	mach-crypto typed destruction contract	crypto.test.secret#secret_array__wiping_allocator_owns_the_only_release_wipe
 zeroization	.	secret-storage	mach-std typed operating-system boundary	crypto.test.secret#secret_array__native_allocator_owns_deeply_secret_records
 zeroization	.	sha-256,sha-384	mach-crypto transcript lifecycle contract	crypto.test.hash#hash__snapshot_continues_and_final_consumes_only_after_success
 zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto authenticated release contract	crypto.test.aead#aes_gcm__authentication_failures_clear_output_before_release
