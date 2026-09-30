@@ -12,23 +12,23 @@ use std.types.bool.true;
 use std.types.size.usize;
 
 #[testing]
-var long_plaintext: [4097]^u8;
+var long_plaintext:        [4097]^u8;
 #[testing]
-var long_sealed: [4113]u8;
+var long_sealed:           [4113]u8;
 #[testing]
-var long_opened: [4097]^u8;
+var long_opened:           [4097]^u8;
 #[testing]
-var record_plaintext: [16388]^u8;
+var record_plaintext:      [16388]^u8;
 #[testing]
-var record_sealed: [16404]u8;
+var record_sealed:         [16404]u8;
 #[testing]
-var record_opened: [16388]^u8;
+var record_opened:         [16388]^u8;
 #[testing]
 var long_chacha_plaintext: [16385]^u8;
 #[testing]
-var long_chacha_sealed: [16401]u8;
+var long_chacha_sealed:    [16401]u8;
 #[testing]
-var long_chacha_opened: [16385]^u8;
+var long_chacha_opened:    [16385]^u8;
 
 #[testing]
 fun public_equal(actual: *u8, expected: *u8, len: usize) bool {
@@ -329,13 +329,13 @@ test aes_gcm__independent_counter_carry_differential_vector {
 
 # python cryptography aes-gcm over the same key, nonce, header and plaintext pattern
 #[testing]
-val GCM_CASES: usize = 11;
+val GCM_CASES:       usize     = 11;
 #[testing]
 val GCM_KEY_LENGTHS: [11]usize = [11]usize{16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 32};
 #[testing]
-val GCM_LENGTHS: [11]usize = [11]usize{0, 1, 15, 16, 17, 63, 65, 1024, 16384, 16388, 16384};
+val GCM_LENGTHS:     [11]usize = [11]usize{0, 1, 15, 16, 17, 63, 65, 1024, 16384, 16388, 16384};
 #[testing]
-val GCM_DIGESTS: [352]u8 = [352]u8{
+val GCM_DIGESTS:     [352]u8   = [352]u8{
     0xdf, 0xc1, 0xa4, 0x9c, 0x5e, 0x09, 0x52, 0x36,
     0x44, 0x41, 0xe5, 0xa6, 0x82, 0x7a, 0x92, 0x39,
     0xeb, 0xfe, 0x70, 0xee, 0xbb, 0x03, 0x36, 0x43,
