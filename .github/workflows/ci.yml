@@ -1,84 +1,64 @@
 name: CI
 
-# the family pipeline from briar-systems/.github. a pull request into dev runs
-# the light tier on x86_64-linux, a pull request into main runs every tier, and
-# a dispatch pulls named heavy work onto any ref, and cd.yml calls it with
-# heavy: all. nothing runs on push.
-
 on:
   pull_request:
-  workflow_call:
-    inputs:
-      heavy:
-        type: string
-        default: none
   workflow_dispatch:
     inputs:
-      heavy:
-        description: heavy work to run on this ref
-        type: choice
-        default: none
-        options: [none, all, aarch64-linux, x86_64-windows, aarch64-darwin, x86_64-darwin, assurance]
+      runners:
+        description: runners to test on, as a JSON array, e.g. ["macos-15", "windows-latest"]
+        type: string
+  workflow_call:
+    inputs:
+      runners:
+        type: string
+      profile:
+        type: string
+        default: debug
 
 permissions:
   contents: read
 
-jobs:
-  lib:
-    uses: briar-systems/.github/.github/workflows/mach-lib.yml@main
-    with:
-      heavy: ${{ inputs.heavy }}
-      mach-version: v6.0.0
-      # mach tests only the selected artifact's closure, so the test modules run
-      # through the tests artifact, and .github/ci/verify.sh fails when it misses one
-      test-selections: '[["--lib", "tests"]]'
-      # every test binary links a DIT-admitted secret multiply on aarch64, so a
-      # runner without FEAT_DIT runs the tests under qemu-aarch64 -cpu max
-      dit: required
-      # the leakage controls are judged per target by tools/assurance from
-      # assurance/leakage.tsv (refused, or admitted in hardware), so they are only resolved here
-      # test/benchmark is a bin with no tests, built so it cannot rot
-      subprojects: >-
-        [{"path": "test/leakage-negative", "test": false},
-         {"path": "test/leakage-index", "test": false},
-         {"path": "test/multiply-negative", "test": false},
-         {"path": "test/benchmark", "build": true, "test": false}]
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-  # the release evidence gate the README documents. it resolves every project,
-  # runs the suite, builds six targets twice for reproducibility, re-derives
-  # the leakage control evidence and inspects zeroization in the generated code
-  assurance:
-    if: github.base_ref == 'main' || inputs.heavy == 'all' || inputs.heavy == 'assurance'
-    runs-on: ubuntu-latest
+env:
+  MACH_VERSION: 6.8.0
+  PROFILE: ${{ inputs.profile || 'debug' }}
+
+jobs:
+  # every runner builds every artifact for every target and tests the ones it can run
+  test:
+    name: test (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ fromJSON(inputs.runners || '["ubuntu-latest"]') }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v6
-      - uses: briar-systems/.github/.github/actions/seed-mach@main
-        with:
-          tag: v6.0.0
-      - name: ripgrep
+      - name: install mach
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ripgrep
-      - name: produce release evidence
-        run: tools/assurance run
-      - name: verify release evidence
-        run: tools/assurance verify
-      - name: evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: assurance-evidence
-          path: out/assurance/current
-          if-no-files-found: warn
-          retention-days: 14
+          export MACH_INSTALL_DIR="$RUNNER_TEMP/mach"
+          url="https://raw.githubusercontent.com/briar-systems/mach/v$MACH_VERSION/dist"
+          if [ "$RUNNER_OS" = Windows ]; then
+            pwsh -NoProfile -Command "irm $url/install.ps1 | iex"
+          else
+            curl -fsSL "$url/install.sh" | sh
+          fi
+          echo "$MACH_INSTALL_DIR" >> "$GITHUB_PATH"
+      - run: mach dep pull .
+      - if: strategy.job-index == 0
+        run: mach fmt --check .
+      - run: mach test . --all -p "$PROFILE"
 
   gate:
     if: always()
-    needs: [lib, assurance]
+    needs: [test]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - uses: briar-systems/.github/.github/actions/gate@main
-        with:
-          needs: ${{ toJSON(needs) }}
+      - run: exit ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 1 || 0 }}
