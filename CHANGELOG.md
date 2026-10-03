@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-10-03
+
+### Fixed
+
+- `der.MAX_DEPTH` rises from 16 to 32, still bounding `exact`, `write` and `enter` over the whole tree (#200). A CMS SignedData carrying an RFC 3161 time-stamp token as an unsigned attribute nests to about 19 levels and was refused. A vector from a real freetsa.org token checks the new bound, and a tree one level past it is still refused.
+
 ## [0.26.0] - 2026-09-28
 
 ### Added
