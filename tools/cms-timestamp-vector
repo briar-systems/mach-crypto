@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""generate src/test/vectors/cms-timestamped.der, a cms signeddata carrying a
+real rfc 3161 time-stamp token from a public tsa as its unsigned attribute
+
+openssl signs a fixed content with a throwaway p-256 key, the tsa stamps the
+signature value (rfc 3161 appendix a), and the token goes in the signerinfo's
+unsignedAttrs as id-aa-timeStampToken. openssl then verifies the cms structure
+and the token against the tsa's published chain. a tsa reply is unique, so a
+rerun yields new bytes and the provenance file is rewritten with them.
+
+usage: tools/cms-timestamp-vector [tsa-url]   (needs openssl and network)
+"""
+
+import datetime
+import hashlib
+import pathlib
+import subprocess
+import sys
+import tempfile
+import urllib.request
+
+TSA = 'https://freetsa.org/tsr'
+TSA_CA = 'https://freetsa.org/files/cacert.pem'
+TSA_CERT = 'https://freetsa.org/files/tsa.crt'
+TIMESTAMP_TOKEN = bytes.fromhex('2a864886f70d010910020e')
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+VECTORS = ROOT / 'src' / 'test' / 'vectors'
+OUTPUT = VECTORS / 'cms-timestamped.der'
+PROVENANCE = VECTORS / 'cms-timestamped.md'
+
+
+def header(data, offset):
+    tag, length, content = data[offset], data[offset + 1], offset + 2
+    if length & 0x80:
+        count = length & 0x7f
+        length = int.from_bytes(data[content:content + count], 'big')
+        content += count
+    return tag, content, length
+
+
+def parse(data, offset, end):
+    nodes = []
+    while offset < end:
+        tag, content, length = header(data, offset)
+        body = data[content:content + length]
+        if tag & 0x20:
+            body = parse(data, content, content + length)
+        nodes.append([tag, body])
+        offset = content + length
+    return nodes
+
+
+def encode(node):
+    tag, body = node
+    if isinstance(body, list):
+        body = b''.join(encode(child) for child in body)
+    length = len(body)
+    if length < 128:
+        prefix = bytes([length])
+    else:
+        octets = length.to_bytes((length.bit_length() + 7) // 8, 'big')
+        prefix = bytes([0x80 | len(octets)]) + octets
+    return bytes([tag]) + prefix + body
+
+
+def depth(nodes, level):
+    deepest = level
+    for _, body in nodes:
+        if isinstance(body, list):
+            deepest = max(deepest, depth(body, level + 1))
+    return deepest
+
+
+def openssl(*args, cwd):
+    subprocess.run(['openssl', *args], cwd=cwd, check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def fetch(url, data=None):
+    headers = {'Content-Type': 'application/timestamp-query'} if data else {}
+    request = urllib.request.Request(url, data=data, headers=headers)
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return response.read()
+
+
+def main():
+    tsa = sys.argv[1] if len(sys.argv) > 1 else TSA
+    with tempfile.TemporaryDirectory() as scratch:
+        work = pathlib.Path(scratch)
+        (work / 'content.txt').write_bytes(b'mach-crypto issue 200 cms depth vector\n')
+        openssl('req', '-x509', '-newkey', 'ec', '-pkeyopt',
+                'ec_paramgen_curve:P-256', '-nodes', '-keyout', 'signer.key',
+                '-out', 'signer.pem', '-days', '3650', '-subj',
+                '/CN=mach-crypto CMS depth vector', cwd=work)
+        openssl('cms', '-sign', '-binary', '-nosmimecap', '-nodetach',
+                '-in', 'content.txt', '-signer', 'signer.pem', '-inkey',
+                'signer.key', '-md', 'sha256', '-outform', 'DER', '-out',
+                'signed.der', cwd=work)
+        signed = (work / 'signed.der').read_bytes()
+        tree = parse(signed, 0, len(signed))
+        assert encode(tree[0]) == signed
+        signer_infos = tree[0][1][1][1][0][1][-1]
+        assert signer_infos[0] == 0x31
+        signer_info = signer_infos[1][0]
+        signature = signer_info[1][-1]
+        assert signature[0] == 0x04
+        (work / 'signature.bin').write_bytes(signature[1])
+
+        openssl('ts', '-query', '-data', 'signature.bin', '-sha256', '-cert',
+                '-out', 'query.tsq', cwd=work)
+        (work / 'reply.tsr').write_bytes(fetch(tsa, (work / 'query.tsq').read_bytes()))
+        (work / 'cacert.pem').write_bytes(fetch(TSA_CA))
+        (work / 'tsa.crt').write_bytes(fetch(TSA_CERT))
+        openssl('ts', '-verify', '-in', 'reply.tsr', '-queryfile', 'query.tsq',
+                '-CAfile', 'cacert.pem', '-untrusted', 'tsa.crt', cwd=work)
+        openssl('ts', '-reply', '-in', 'reply.tsr', '-token_out', '-out',
+                'token.der', cwd=work)
+        token = (work / 'token.der').read_bytes()
+
+        attribute = [0x30, [[0x06, TIMESTAMP_TOKEN],
+                            [0x31, parse(token, 0, len(token))]]]
+        signer_info[1].append([0xa1, [attribute]])
+        vector = encode(tree[0])
+        (work / 'vector.der').write_bytes(vector)
+        openssl('cms', '-verify', '-noverify', '-inform', 'DER', '-in',
+                'vector.der', '-out', 'verified.txt', cwd=work)
+        openssl('ts', '-verify', '-data', 'signature.bin', '-in', 'token.der',
+                '-token_in', '-CAfile', 'cacert.pem', '-untrusted', 'tsa.crt',
+                cwd=work)
+        stamped = subprocess.run(['openssl', 'ts', '-reply', '-in', 'reply.tsr',
+                                  '-text'], cwd=work, check=True,
+                                 capture_output=True, text=True).stdout
+        version = subprocess.run(['openssl', 'version'], check=True,
+                                 capture_output=True, text=True).stdout.strip()
+
+    when = next(line.split(':', 1)[1].strip() for line in stamped.splitlines()
+                if line.startswith('Time stamp:'))
+    VECTORS.mkdir(parents=True, exist_ok=True)
+    OUTPUT.write_bytes(vector)
+    PROVENANCE.write_text(f'''# cms-timestamped.der
+
+A CMS SignedData (RFC 5652) whose one SignerInfo carries an RFC 3161
+time-stamp token as its `id-aa-timeStampToken` unsigned attribute, written by
+`tools/cms-timestamp-vector` on {datetime.date.today().isoformat()}.
+
+- signer: a throwaway P-256 key and self-signed certificate, discarded after
+  signing, over a fixed 39-byte content with `openssl cms -sign -nosmimecap`
+- time stamp: {tsa}, issued {when},
+  over the SHA-256 of the signature value, with the TSA certificate requested
+- checks: `openssl cms -verify` on the vector and `openssl ts -verify` of the
+  token against the TSA's published chain ({TSA_CA})
+- tool: {version}
+- size: {len(vector)} bytes, token {len(token)} bytes
+- deepest constructed content: level {depth(tree[0][1], 1)}, counting the
+  outer ContentInfo's content as level 1
+- sha-256: {hashlib.sha256(vector).hexdigest()}
+''')
+
+
+if __name__ == '__main__':
+    main()

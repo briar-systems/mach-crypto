@@ -251,6 +251,26 @@ test der__canonical_lengths_values_depth_and_transactions_are_strict {
     ret 0;
 }
 
+#[testing]
+#[embed("vectors/cms-timestamped.der")]
+val CMS_TIMESTAMPED: [_]u8;
+
+# provenance in vectors/cms-timestamped.md
+test der__an_openssl_cms_signeddata_with_a_freetsa_rfc_3161_token_parses_and_rewrites {
+    val input: contracts.Bytes = contracts.Bytes{data: (?CMS_TIMESTAMPED[0]):~*u8,
+        len: $length_of(CMS_TIMESTAMPED)};
+    var element: der.Element;
+    if (der.exact(input, ?element) != contracts.OK ||
+        element.tag != der.SEQUENCE ||
+        element.encoded.len != input.len) { ret 1; }
+    var rewritten: [8192]u8;
+    val operation: contracts.Operation = der.write(der.SEQUENCE, element.content,
+        contracts.Buffer{data: ?rewritten[0], capacity: 8192});
+    if (operation.error != contracts.OK || operation.written != input.len ||
+        !equal(?rewritten[0], input.data, input.len)) { ret 2; }
+    ret 0;
+}
+
 test pem__canonical_base64_bounds_overlap_and_every_truncation_are_enforced {
     val expected: *u8             = "-----BEGIN TEST-----\nTWFu\n-----END TEST-----\n"::*u8;
     var source:   [3]u8           = [3]u8{'M', 'a', 'n'};
