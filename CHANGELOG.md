@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-03
+
+### Added
+
+- `signature.verify_ecdsa(curve, hash, key, message, sig)` and `signature.verify_ecdsa_digest(curve, key, digest, sig)` verify ECDSA over P-256, P-384 or P-521 with SHA-256, SHA-384 or SHA-512 in any pairing, since a CMS or PDF signer picks its digest apart from its curve (#204). The curves are `CURVE_P256`, `CURVE_P384` and `CURVE_P521`, the hashes `HASH_SHA256`, `HASH_SHA384` and `HASH_SHA512`. P-521 is verify only.
+- `signature.verify_rsa_pkcs1_sha512` and `signature.verify_rsa_pss_sha512` (#204).
+
+### Changed
+
+- `verify_ecdsa_p256_sha256` and `verify_ecdsa_p384_sha384` are wrappers over `verify_ecdsa`, with their behaviour unchanged except that a message past 2^61 bytes now reports `INVALID_INPUT` before `INVALID_KEY` (#204).
+
 ## [0.26.1] - 2026-10-03
 
 ### Fixed
