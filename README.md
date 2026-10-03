@@ -90,7 +90,8 @@ partial storage to be wiped and released deterministically.
 `encoding.der` accepts only definite, minimally encoded lengths and rejects
 noncanonical BOOLEAN, INTEGER, BIT STRING, NULL, and OBJECT IDENTIFIER values.
 Complete-document parsing rejects trailing bytes and validates every nested
-constructed value to a maximum depth of 16. Cursor failures are transactional.
+constructed value to a maximum depth of 32, which covers CMS SignedData carrying
+an RFC 3161 time-stamp token. Cursor failures are transactional.
 The public writer supports overlapping content through move semantics and
 validates constructed content before changing output.
 
