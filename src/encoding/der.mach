@@ -17,7 +17,8 @@ pub val NULL:         Tag = 0x05;
 pub val OBJECT_ID:    Tag = 0x06;
 pub val SEQUENCE:     Tag = 0x30;
 
-pub val MAX_DEPTH: usize = 16;
+# levels below the outermost element: cms with an rfc 3161 token reaches 19
+pub val MAX_DEPTH: usize = 32;
 
 pub rec Element {
     tag:     Tag;

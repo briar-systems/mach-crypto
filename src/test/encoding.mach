@@ -189,10 +189,10 @@ test der__canonical_lengths_values_depth_and_transactions_are_strict {
         ret 3;
     }
 
-    var nested:     [40]u8;
+    var nested:     [72]u8;
     var nested_len: usize = 0;
     var depth:      usize = 0;
-    for (depth < 17) {
+    for (depth < der.MAX_DEPTH + 1) {
         i = nested_len;
         for (i > 0) {
             nested[i + 1] = nested[i - 1];
@@ -207,6 +207,11 @@ test der__canonical_lengths_values_depth_and_transactions_are_strict {
         ?element) != contracts.OK) { ret 4; }
     if (der.exact(contracts.Bytes{data: ?nested[0], len: nested_len},
         ?element) == contracts.OK) { ret 5; }
+    var past_bound: [72]u8;
+    if (der.write(der.SEQUENCE,
+        contracts.Bytes{data: ?nested[0], len: nested_len},
+        contracts.Buffer{data: ?past_bound[0], capacity: 72}).error !=
+        contracts.INVALID_INPUT) { ret 10; }
 
     var truncated: der.Cursor;
     i = 0;
