@@ -1,10 +1,8 @@
 # constant-shape secp384r1 arithmetic
 
 use crypto.contracts;
-use crypto.internal.lift;
 use crypto.internal.mont;
 use std.crypto.ct;
-use std.crypto.hash.sha512;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
@@ -581,19 +579,6 @@ fun parse_signature(r: *UInt, s: *UInt, signature: contracts.Bytes) bool {
 }
 
 #[oblivious]
-fun hash_message(message: contracts.Bytes, digest: *^u8) contracts.Error {
-    var state: sha512.SecretState384;
-    state = sha512.init_secret384();
-    if (!lift.update384_public(?state, message.data, message.len)) {
-        sha512.destroy_secret384(?state);
-        ret contracts.INVALID_INPUT;
-    }
-    sha512.final_secret384(?state, digest);
-    sha512.destroy_secret384(?state);
-    ret contracts.OK;
-}
-
-#[oblivious]
 pub fun valid_public_point(value: contracts.Bytes) bool {
     if (value.len != PUBLIC_KEY_SIZE || value.data == nil || value.data[0] != 4) {
         ret false;
@@ -604,13 +589,30 @@ pub fun valid_public_point(value: contracts.Bytes) bool {
     ret valid:>u8 == 1;
 }
 
+# the digest as an integer: its leftmost 48 bytes, right-aligned, so a shorter
+# digest is padded on the left
 #[oblivious]
-pub fun verify_sha384(public_key: contracts.Bytes, message: contracts.Bytes,
+fun decode_digest(output: *UInt, digest: *^u8, digest_len: usize) {
+    var block: [48]^u8;
+    ct.zeroize(?block[0], 48);
+    var take: usize = digest_len;
+    if (take > 48) { take = 48; }
+    var i: usize = 0;
+    for (i < take) {
+        block[48 - take + i] = digest[i];
+        i                    = i + 1;
+    }
+    decode_secret(output, ?block[0]);
+    ct.zeroize(?block[0], 48);
+}
+
+# verify a strict der signature over a digest the caller has already computed
+#[oblivious]
+pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usize,
     signature: contracts.Bytes) contracts.Error {
     if (public_key.len != PUBLIC_KEY_SIZE)           { ret contracts.INVALID_KEY; }
     if (public_key.data == nil)                      { ret contracts.INVALID_INPUT; }
     if (public_key.data[0] != 0x04)                  { ret contracts.INVALID_KEY; }
-    if (message.len != 0 && message.data == nil)     { ret contracts.INVALID_INPUT; }
     if (signature.len != 0 && signature.data == nil) { ret contracts.INVALID_INPUT; }
 
     ct.begin();
@@ -639,16 +641,6 @@ pub fun verify_sha384(public_key: contracts.Bytes, message: contracts.Bytes,
         ct.end();
         ret contracts.AUTH_FAILED;
     }
-    var digest:      [48]^u8;
-    val hash_status: contracts.Error = hash_message(message, ?digest[0]);
-    if (hash_status != contracts.OK) {
-        destroy_point(?peer);
-        destroy_uint(?r);
-        destroy_uint(?s);
-        ct.zeroize(?digest[0], 48);
-        ct.end();
-        ret hash_status;
-    }
     var hash_scalar: UInt;
     var inverse:     UInt;
     var u1:          UInt;
@@ -656,9 +648,8 @@ pub fun verify_sha384(public_key: contracts.Bytes, message: contracts.Bytes,
     var sum:         Point;
     var x:           UInt;
     var y:           UInt;
-    decode_secret(?hash_scalar, ?digest[0]);
+    decode_digest(?hash_scalar, digest, digest_len);
     reduce_scalar_once(?hash_scalar);
-    ct.zeroize(?digest[0], 48);
     scalar_inverse(?inverse, ?s);
     scalar_multiply_values(?u1, ?hash_scalar, ?inverse);
     scalar_multiply_values(?u2, ?r, ?inverse);
