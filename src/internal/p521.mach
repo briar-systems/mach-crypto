@@ -1,4 +1,7 @@
-# constant-shape secp384r1 arithmetic
+# secp521r1 arithmetic, in the shape of crypto.internal.p384
+#
+# verification only: every input is public, and the shape is kept so the same
+# code reads the same way
 
 use crypto.contracts;
 use crypto.internal.mont;
@@ -8,65 +11,65 @@ use std.types.bool.false;
 use std.types.bool.true;
 use std.types.size.usize;
 
-val PUBLIC_KEY_SIZE:    usize = 97;
+val PUBLIC_KEY_SIZE:    usize = 133;
 val SIGNATURE_MIN_SIZE: usize = 8;
-val SIGNATURE_MAX_SIZE: usize = 104;
+val SIGNATURE_MAX_SIZE: usize = 139;
 
-# the field and the scalar ring are montgomery rings over six 64-bit limbs
+# the field and the scalar ring are montgomery rings over nine 64-bit limbs
 # (crypto.internal.mont). field elements inside a point are in montgomery
-# form, times 2^384 mod p; scalars stay in the ordinary domain
-val LIMBS: usize = 6;
+# form, times 2^576 mod p; scalars stay in the ordinary domain
+val LIMBS: usize = 9;
 
-val PRIME: [6]u64 = [6]u64{
-    0x00000000FFFFFFFF, 0xFFFFFFFF00000000, 0xFFFFFFFFFFFFFFFE, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
+val PRIME: [9]u64 = [9]u64{
+    0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x00000000000001FF
 };
 
-val ORDER: [6]u64 = [6]u64{
-    0xECEC196ACCC52973, 0x581A0DB248B0A77A, 0xC7634D81F4372DDF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
+val ORDER: [9]u64 = [9]u64{
+    0xBB6FB71E91386409, 0x3BB5C9B8899C47AE, 0x7FCC0148F709A5D0, 0x51868783BF2F966B, 0xFFFFFFFFFFFFFFFA, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x00000000000001FF
 };
 
-val PRIME_R2: [6]u64 = [6]u64{
-    0xFFFFFFFE00000001, 0x0000000200000000, 0xFFFFFFFE00000000, 0x0000000200000000, 0x0000000000000001, 0x0000000000000000
+val PRIME_R2: [9]u64 = [9]u64{
+    0x0000000000000000, 0x0000400000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000
 };
 
-val ORDER_R2: [6]u64 = [6]u64{
-    0x2D319B2419B409A9, 0xFF3D81E5DF1AA419, 0xBC3E483AFCB82947, 0xD40D49174AAB1CC5, 0x3FB05B7A28266895, 0x0C84EE012B39BF21
+val ORDER_R2: [9]u64 = [9]u64{
+    0x137CD04DCF15DD04, 0xF707BADCE5547EA3, 0x12A78D38794573FF, 0xD3721EF557F75E06, 0xDD6E23D82E49C7DB, 0xCFF3D142B7756E3E, 0x5BCC6D61A8E567BC, 0x2D8E03D1492D0D45, 0x000000000000003D
 };
 
-val PRIME_FACTOR: u64 = 0x0000000100000001;
+val PRIME_FACTOR: u64 = 0x0000000000000001;
 
-val ORDER_FACTOR: u64 = 0x6ED46089E88FDC45;
+val ORDER_FACTOR: u64 = 0x1D2F5CCD79A995C7;
 
-val PRIME_MINUS_TWO: [6]u64 = [6]u64{
-    0x00000000FFFFFFFD, 0xFFFFFFFF00000000, 0xFFFFFFFFFFFFFFFE, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
+val PRIME_MINUS_TWO: [9]u64 = [9]u64{
+    0xFFFFFFFFFFFFFFFD, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x00000000000001FF
 };
 
-val ORDER_MINUS_TWO: [6]u64 = [6]u64{
-    0xECEC196ACCC52971, 0x581A0DB248B0A77A, 0xC7634D81F4372DDF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
+val ORDER_MINUS_TWO: [9]u64 = [9]u64{
+    0xBB6FB71E91386407, 0x3BB5C9B8899C47AE, 0x7FCC0148F709A5D0, 0x51868783BF2F966B, 0xFFFFFFFFFFFFFFFA, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x00000000000001FF
 };
 
-val FIELD_ONE: [6]u64 = [6]u64{
-    0xFFFFFFFF00000001, 0x00000000FFFFFFFF, 0x0000000000000001, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000
+val FIELD_ONE: [9]u64 = [9]u64{
+    0x0080000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000
 };
 
-val SCALAR_ONE: [6]u64 = [6]u64{
-    0x1313E695333AD68D, 0xA7E5F24DB74F5885, 0x389CB27E0BC8D220, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000
+val SCALAR_ONE: [9]u64 = [9]u64{
+    0xFB80000000000000, 0x28A2482470B763CD, 0x17E2251B23BB31DC, 0xCA4019FF5B847B2D, 0x02D73CBC3E206834, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000
 };
 
-val CURVE_B: [6]u64 = [6]u64{
-    0x081188719D412DCC, 0xF729ADD87A4C32EC, 0x77F2209B1920022E, 0xE3374BEE94938AE2, 0xB62B21F41F022094, 0xCD08114B604FBFF9
+val CURVE_B: [9]u64 = [9]u64{
+    0x8014654FAE586387, 0x78F7A28FEA35A81F, 0x839AB9EFC41E961A, 0xBD8B29605E9DD8DF, 0xF0AB0C9CA8F63F49, 0xF9DC5A44C8C77884, 0x77516D392DCCD98A, 0x0FC94D10D05B42A0, 0x000000000000004D
 };
 
-val GENERATOR_X: [6]u64 = [6]u64{
-    0x3DD0756649C0B528, 0x20E378E2A0D6CE38, 0x879C3AFC541B4D6E, 0x6454868459A30EFF, 0x812FF723614EDE2B, 0x4D3AADC2299E1513
+val GENERATOR_X: [9]u64 = [9]u64{
+    0xB331A16381ADC101, 0x4DFCBF3F18E172DE, 0x6F19A459E0C2B521, 0x947F0EE093D17FD4, 0xDD50A5AF3BF7F3AC, 0x90FC1457B035A69E, 0x214E32409C829FDA, 0xE6CF1F65B311CADA, 0x0000000000000074
 };
 
-val GENERATOR_Y: [6]u64 = [6]u64{
-    0x23043DAD4B03A4FE, 0xA1BFA8BF7BB4A9AC, 0x8BADE7562E83B050, 0xC6C3521968F4FFD9, 0xDD8002263969A840, 0x2B78ABC25A15C5E9
+val GENERATOR_Y: [9]u64 = [9]u64{
+    0x28460E4A5A9E268E, 0x20445F4A3B4FE8B3, 0xB09A9E3843513961, 0x2062A85C809FD683, 0x164BF7394CAF7A13, 0x340BD7DE8B939F33, 0xECCC7AA224ABCDA2, 0x022E452FDA163E8D, 0x00000000000001E0
 };
 
 rec UInt {
-    limb: [6]^u64;
+    limb: [9]^u64;
 }
 
 rec Point {
@@ -78,7 +81,7 @@ rec Point {
 #[oblivious]
 fun destroy_uint(value: *UInt) {
     if (value == nil) { ret; }
-    ct.zeroize((?value.limb[0]):~*^u8, 48);
+    ct.zeroize((?value.limb[0]):~*^u8, 72);
 }
 
 #[oblivious]
@@ -99,7 +102,7 @@ fun nonzero_bit(value: ^u64) ^u8 {
 fun is_zero(value: *UInt) ^u8 {
     var combined: ^u64  = 0;
     var i:        usize = 0;
-    for (i < 6) {
+    for (i < 9) {
         combined = combined | value.limb[i];
         i        = i + 1;
     }
@@ -112,7 +115,7 @@ fun is_zero(value: *UInt) ^u8 {
 fun equal(left: *UInt, right: *UInt) ^u8 {
     var difference: ^u64  = 0;
     var i:          usize = 0;
-    for (i < 6) {
+    for (i < 9) {
         difference = difference | (left.limb[i] ^ right.limb[i]);
         i          = i + 1;
     }
@@ -124,7 +127,7 @@ fun equal(left: *UInt, right: *UInt) ^u8 {
 #[oblivious]
 fun copy(output: *UInt, input: *UInt) {
     var i: usize = 0;
-    for (i < 6) {
+    for (i < 9) {
         output.limb[i] = input.limb[i];
         i              = i + 1;
     }
@@ -133,7 +136,7 @@ fun copy(output: *UInt, input: *UInt) {
 #[oblivious]
 fun copy_constant(output: *UInt, input: *u64) {
     var i: usize = 0;
-    for (i < 6) {
+    for (i < 9) {
         output.limb[i] = input[i];
         i              = i + 1;
     }
@@ -143,7 +146,7 @@ fun copy_constant(output: *UInt, input: *u64) {
 fun set_small(output: *UInt, value: u64) {
     output.limb[0] = value;
     var i: usize = 1;
-    for (i < 6) {
+    for (i < 9) {
         output.limb[i] = 0;
         i              = i + 1;
     }
@@ -153,7 +156,7 @@ fun set_small(output: *UInt, value: u64) {
 fun select(output: *UInt, left: *UInt, right: *UInt, choose_right: ^u8) {
     val mask: ^u64  = 0 - choose_right::^u64;
     var i:    usize = 0;
-    for (i < 6) {
+    for (i < 9) {
         output.limb[i] = (left.limb[i] & ~mask) | (right.limb[i] & mask);
         i              = i + 1;
     }
@@ -170,7 +173,7 @@ fun power_montgomery(output: *UInt, input: *UInt, modulus: *u64,
     exponent: *u64, one: *u64, factor: u64) {
     var result: UInt;
     copy_constant(?result, one);
-    var position: usize = 384;
+    var position: usize = 521;
     for (position > 0) {
         position = position - 1;
         mont.square(?result.limb[0], ?result.limb[0], modulus, factor, LIMBS);
@@ -254,29 +257,36 @@ fun reduce_scalar_once(value: *UInt) {
     destroy_uint(?order);
 }
 
+# a 66-byte big-endian integer into nine limbs
 #[oblivious]
 fun decode_secret(output: *UInt, input: *^u8) {
     var limb: usize = 0;
-    for (limb < 6) {
-        val offset: usize = 40 - (limb << 3);
-        output.limb[limb] = (input[offset]::^u64 << 56) | (input[offset + 1]::^u64 << 48) |
-            (input[offset + 2]::^u64 << 40) | (input[offset + 3]::^u64 << 32) |
-            (input[offset + 4]::^u64 << 24) | (input[offset + 5]::^u64 << 16) |
-            (input[offset + 6]::^u64 << 8) | input[offset + 7]::^u64;
-        limb = limb + 1;
+    for (limb < 9) {
+        output.limb[limb] = 0;
+        limb              = limb + 1;
+    }
+    var i: usize = 0;
+    for (i < 66) {
+        val position: usize = 65 - i;
+        output.limb[position >> 3] = output.limb[position >> 3] |
+            (input[i]::^u64 << ((position & 7) << 3));
+        i = i + 1;
     }
 }
 
 #[oblivious]
 fun decode_public(output: *UInt, input: *u8, base: usize) {
     var limb: usize = 0;
-    for (limb < 6) {
-        val offset: usize = base + 40 - (limb << 3);
-        output.limb[limb] = (input[offset]::u64 << 56) | (input[offset + 1]::u64 << 48) |
-            (input[offset + 2]::u64 << 40) | (input[offset + 3]::u64 << 32) |
-            (input[offset + 4]::u64 << 24) | (input[offset + 5]::u64 << 16) |
-            (input[offset + 6]::u64 << 8) | input[offset + 7]::u64;
-        limb = limb + 1;
+    for (limb < 9) {
+        output.limb[limb] = 0;
+        limb              = limb + 1;
+    }
+    var i: usize = 0;
+    for (i < 66) {
+        val position: usize = 65 - i;
+        output.limb[position >> 3] = output.limb[position >> 3] |
+            (input[base + i]::u64 << ((position & 7) << 3));
+        i = i + 1;
     }
 }
 
@@ -461,7 +471,7 @@ fun double_scalar_multiply(output: *Point, first_scalar: *UInt,
     point_infinity(?result);
     generator(?basepoint);
     point_add(?combined, ?basepoint, point);
-    var position: usize = 384;
+    var position: usize = 521;
     for (position > 0) {
         position = position - 1;
         point_double(?result, ?result);
@@ -507,7 +517,7 @@ fun parse_point(output: *Point, input: *u8) ^u8 {
     var x: UInt;
     var y: UInt;
     decode_public(?x, input, 1);
-    decode_public(?y, input, 49);
+    decode_public(?y, input, 67);
     val x_canonical: ^u8 = less_than_modulus(?x, (?PRIME[0]):~*u64);
     val y_canonical: ^u8 = less_than_modulus(?y, (?PRIME[0]):~*u64);
     field_to_montgomery(?output.x, ?x);
@@ -535,46 +545,54 @@ fun parse_point(output: *Point, input: *u8) ^u8 {
 
 fun parse_der_integer(output: *UInt, input: *u8, offset: usize,
     length: usize) bool {
-    if (length == 0 || length > 49)  { ret false; }
+    if (length == 0 || length > 67)  { ret false; }
     if ((input[offset] & 0x80) != 0) { ret false; }
     if (length > 1 && input[offset] == 0 && (input[offset + 1] & 0x80) == 0) {
         ret false;
     }
-    if (length == 49 && input[offset] != 0) { ret false; }
-    var encoded: [48]u8;
+    if (length == 67 && input[offset] != 0) { ret false; }
+    var encoded: [66]u8;
     var i:       usize = 0;
-    for (i < 48) {
+    for (i < 66) {
         encoded[i] = 0;
         i          = i + 1;
     }
     var skip: usize = 0;
-    if (length == 49) { skip = 1; }
+    if (length == 67) { skip = 1; }
     val significant: usize = length - skip;
     i = 0;
     for (i < significant) {
-        encoded[48 - significant + i] = input[offset + skip + i];
+        encoded[66 - significant + i] = input[offset + skip + i];
         i                             = i + 1;
     }
     decode_public(output, ?encoded[0], 0);
     ret true;
 }
 
+# strict der: the sequence length is short form below 128 and 0x81 above
 fun parse_signature(r: *UInt, s: *UInt, signature: contracts.Bytes) bool {
     if (signature.len < SIGNATURE_MIN_SIZE || signature.len > SIGNATURE_MAX_SIZE) {
         ret false;
     }
-    if (signature.data[0] != 0x30 || signature.data[1]::usize != signature.len - 2) {
-        ret false;
+    if (signature.data[0] != 0x30) { ret false; }
+    var header:  usize = 2;
+    var content: usize = signature.data[1]::usize;
+    if (content >= 0x80) {
+        if (content != 0x81)          { ret false; }
+        if (signature.data[2] < 0x80) { ret false; }
+        header  = 3;
+        content = signature.data[2]::usize;
     }
-    if (signature.data[2] != 0x02) { ret false; }
-    val r_length: usize = signature.data[3]::usize;
-    if (r_length == 0 || r_length > 49) { ret false; }
-    val s_tag: usize = 4 + r_length;
+    if (content != signature.len - header) { ret false; }
+    if (signature.data[header] != 0x02)    { ret false; }
+    val r_length: usize = signature.data[header + 1]::usize;
+    if (r_length == 0 || r_length > 67) { ret false; }
+    val s_tag: usize = header + 2 + r_length;
     if (s_tag + 2 > signature.len || signature.data[s_tag] != 0x02) { ret false; }
     val s_length: usize = signature.data[s_tag + 1]::usize;
-    if (s_tag + 2 + s_length != signature.len)                      { ret false; }
-    if (!parse_der_integer(r, signature.data, 4, r_length))         { ret false; }
-    if (!parse_der_integer(s, signature.data, s_tag + 2, s_length)) { ret false; }
+    if (s_tag + 2 + s_length != signature.len)                       { ret false; }
+    if (!parse_der_integer(r, signature.data, header + 2, r_length)) { ret false; }
+    if (!parse_der_integer(s, signature.data, s_tag + 2, s_length))  { ret false; }
     ret true;
 }
 
@@ -589,21 +607,21 @@ pub fun valid_public_point(value: contracts.Bytes) bool {
     ret valid:>u8 == 1;
 }
 
-# the digest as an integer: its leftmost 48 bytes, right-aligned, so a shorter
-# digest is padded on the left
+# the digest as an integer: its leftmost 66 bytes, right-aligned, so a shorter
+# digest is padded on the left. the largest digest is 64 bytes
 #[oblivious]
 fun decode_digest(output: *UInt, digest: *^u8, digest_len: usize) {
-    var block: [48]^u8;
-    ct.zeroize(?block[0], 48);
+    var block: [66]^u8;
+    ct.zeroize(?block[0], 66);
     var take: usize = digest_len;
-    if (take > 48) { take = 48; }
+    if (take > 66) { take = 66; }
     var i: usize = 0;
     for (i < take) {
-        block[48 - take + i] = digest[i];
+        block[66 - take + i] = digest[i];
         i                    = i + 1;
     }
     decode_secret(output, ?block[0]);
-    ct.zeroize(?block[0], 48);
+    ct.zeroize(?block[0], 66);
 }
 
 # verify a strict der signature over a digest the caller has already computed
@@ -673,98 +691,4 @@ pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usi
     destroy_uint(?y);
     ct.end();
     ret result;
-}
-
-test p384_internal__modular_products_match_independent_big_integers {
-    val field_left: [6]u64 = [6]u64{
-        0x8899AABBCCDDEEFF, 0x0011223344556677, 0x0123456789ABCDEF,
-        0x899AABBCCDDEEFF0, 0x0112233445566778, 0x123456789ABCDEF0
-    };
-    val field_right: [6]u64 = [6]u64{
-        0xEEFF001122334455, 0x66778899AABBCCDD, 0xEEFF001122334455,
-        0x66778899AABBCCDD, 0xBABE001122334455, 0x0000DEADBEEFCAFE
-    };
-    val field_product: [6]u64 = [6]u64{
-        0xD3FB93732F3D345C, 0x6A774C4A30EE1EA9, 0x893E1F40FB846D37,
-        0xC1EB9FAE78FA63D1, 0x056E18722AF4DBEA, 0xA6FB845427CB99DD
-    };
-    val scalar_left: [6]u64 = [6]u64{
-        0xDF91CC9B08568909, 0x21FE1E118779BD35, 0x6D2E3652184BF167,
-        0xE303C4A5E24A2A02, 0x000018AD00E923A7, 0x0000000000000000
-    };
-    val scalar_right: [6]u64 = [6]u64{
-        0xAA4D7AB15536FDA2, 0x2125109BC1F959DE, 0x33B467FE17B210BF,
-        0xA33EBAB8E08A133C, 0x00001559D339C386, 0x0000000000000000
-    };
-    val scalar_product: [6]u64 = [6]u64{
-        0x9582205D4ED17529, 0x01A08EC2D2B72176, 0xB6471C10E3E29D3A,
-        0x2DD5CE0FC1C9A028, 0x07CBD376035A3E23, 0xEF82E201D7D35DA2
-    };
-    var left:     UInt;
-    var right:    UInt;
-    var expected: UInt;
-    var result:   UInt;
-    copy_constant(?left, (?field_left[0]):~*u64);
-    copy_constant(?right, (?field_right[0]):~*u64);
-    copy_constant(?expected, (?field_product[0]):~*u64);
-    field_to_montgomery(?left, ?left);
-    field_to_montgomery(?right, ?right);
-    field_multiply(?result, ?left, ?right);
-    field_from_montgomery(?result, ?result);
-    if (equal(?result, ?expected):>u8 != 1) { ret 1; }
-    copy_constant(?left, (?scalar_left[0]):~*u64);
-    copy_constant(?right, (?scalar_right[0]):~*u64);
-    copy_constant(?expected, (?scalar_product[0]):~*u64);
-    scalar_multiply_values(?result, ?left, ?right);
-    if (equal(?result, ?expected):>u8 != 1) { ret 2; }
-    destroy_uint(?left);
-    destroy_uint(?right);
-    destroy_uint(?expected);
-    destroy_uint(?result);
-    ret 0;
-}
-
-test p384_internal__interleaved_multiplication_preserves_each_input {
-    var zero:   UInt;
-    var one:    UInt;
-    var point:  Point;
-    var result: Point;
-    var x:      UInt;
-    var y:      UInt;
-    set_small(?zero, 0);
-    set_small(?one, 1);
-    generator(?point);
-    field_from_montgomery(?x, ?point.x);
-    if (x.limb[0]:>u64 != 0x3A545E3872760AB7 || x.limb[5]:>u64 != 0xAA87CA22BE8B0537) {
-        ret 1;
-    }
-    field_multiply(?x, ?point.x, ?point.z);
-    field_from_montgomery(?x, ?x);
-    if (x.limb[0]:>u64 != 0x3A545E3872760AB7 || x.limb[5]:>u64 != 0xAA87CA22BE8B0537) {
-        ret 2;
-    }
-    to_affine(?x, ?y, ?point);
-    field_from_montgomery(?x, ?x);
-    if (x.limb[0]:>u64 != 0x3A545E3872760AB7 || x.limb[5]:>u64 != 0xAA87CA22BE8B0537) {
-        ret 3;
-    }
-    double_scalar_multiply(?result, ?one, ?zero, ?point);
-    to_affine(?x, ?y, ?result);
-    field_from_montgomery(?x, ?x);
-    if (x.limb[0]:>u64 != 0x3A545E3872760AB7 || x.limb[5]:>u64 != 0xAA87CA22BE8B0537) {
-        ret 4;
-    }
-    double_scalar_multiply(?result, ?zero, ?one, ?point);
-    to_affine(?x, ?y, ?result);
-    field_from_montgomery(?x, ?x);
-    if (x.limb[0]:>u64 != 0x3A545E3872760AB7 || x.limb[5]:>u64 != 0xAA87CA22BE8B0537) {
-        ret 5;
-    }
-    destroy_uint(?zero);
-    destroy_uint(?one);
-    destroy_point(?point);
-    destroy_point(?result);
-    destroy_uint(?x);
-    destroy_uint(?y);
-    ret 0;
 }

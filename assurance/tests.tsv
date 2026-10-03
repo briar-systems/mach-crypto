@@ -20,6 +20,14 @@ official-vector	.	rsa-pss-sha256	NIST CAVP	crypto.test.signature#rsa_pss__nist_c
 official-vector	.	rsa-pss-sha384	NIST CAVP	crypto.test.signature#rsa_pss__nist_cavp_sha384_verification
 official-vector	.	rsa-pkcs1-sha256,rsa-pkcs1-sha384	NIST CAVP	crypto.test.signature#rsa_pkcs1__nist_cavp_sha_256_and_sha_384_verification
 official-vector	.	key-containers	RFC 8410	crypto.test.encoding#keys__rfc_8410_ed25519_and_x25519_containers_are_exact_and_bounded
+official-vector	.	ecdsa-p256-sha256	Wycheproof ecdsa_secp256r1_sha256	crypto.test.signature#ecdsa_p_256__wycheproof_sha_256_vectors
+official-vector	.	ecdsa-p256-sha512	Wycheproof ecdsa_secp256r1_sha512	crypto.test.signature#ecdsa_p_256__wycheproof_sha_512_vectors
+official-vector	.	ecdsa-p384-sha256	Wycheproof ecdsa_secp384r1_sha256	crypto.test.signature#ecdsa_p_384__wycheproof_sha_256_vectors
+official-vector	.	ecdsa-p384-sha384	Wycheproof ecdsa_secp384r1_sha384	crypto.test.signature#ecdsa_p_384__wycheproof_sha_384_vectors
+official-vector	.	ecdsa-p384-sha512	Wycheproof ecdsa_secp384r1_sha512	crypto.test.signature#ecdsa_p_384__wycheproof_sha_512_vectors
+official-vector	.	ecdsa-p521-sha512	Wycheproof ecdsa_secp521r1_sha512	crypto.test.signature#ecdsa_p_521__wycheproof_sha_512_vectors
+official-vector	.	rsa-pkcs1-sha512	Wycheproof rsa_signature_2048_sha512 and rsa_signature_4096_sha512	crypto.test.signature#rsa_pkcs1__wycheproof_sha_512_vectors
+official-vector	.	rsa-pss-sha512	Wycheproof rsa_pss_4096_sha512_mgf1_64	crypto.test.signature#rsa_pss__wycheproof_sha_512_vectors
 differential	.	hkdf-sha-384	independent Python hashlib vector	crypto.test.mac#hkdf__sha_384_extract_and_expand_agree_with_independent_vectors
 differential	.	aes-128-gcm,aes-256-gcm	independent AES-GCM implementation	crypto.test.aead#aes_gcm__independent_counter_carry_differential_vector
 differential	.	aes-128-gcm,aes-256-gcm	independent Python cryptography AES-GCM	crypto.test.aead#aes_gcm__independent_record_length_differential_vectors
@@ -48,6 +56,9 @@ differential	.	ecdsa-p384-sha384	independent Python big-integer products	crypto.
 differential	.	p-256-ecdh	independent OpenSSL vectors	crypto.test.encoding#keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree
 differential	.	key-containers	independent OpenSSL vectors	crypto.test.encoding#keys__openssl_rsa_containers_preserve_exact_public_and_private_parts
 differential	.	der	independent OpenSSL CMS with a freetsa.org RFC 3161 token	crypto.test.encoding#der__an_openssl_cms_signeddata_with_a_freetsa_rfc_3161_token_parses_and_rewrites
+differential	.	ecdsa-p256-sha384	independent OpenSSL-compatible signer (Python cryptography)	crypto.test.signature#ecdsa_p_256__openssl_sha_384_vectors
+differential	.	ecdsa-p521-sha256	independent OpenSSL-compatible signer (Python cryptography)	crypto.test.signature#ecdsa_p_521__openssl_sha_256_vectors
+differential	.	ecdsa-p521-sha384	independent OpenSSL-compatible signer (Python cryptography)	crypto.test.signature#ecdsa_p_521__openssl_sha_384_vectors
 invalid-input	.	sha-256,sha-384	mach-crypto bounded transcript contract	crypto.test.hash#hash__validation_and_overflow_failures_preserve_state_and_output
 invalid-input	.	hmac-sha-256,hmac-sha-384	mach-crypto bounded output contract	crypto.test.mac#hmac__output_overlap_and_failures_have_defined_behavior
 invalid-input	.	hkdf-sha-256,hkdf-sha-384	RFC 5869 and mach-crypto bounded output contract	crypto.test.mac#hkdf__limits_capacities_and_invalid_inputs_do_not_write
@@ -67,6 +78,7 @@ invalid-input	.	pem	RFC 7468 and mach-crypto parser contract	crypto.test.encodin
 invalid-input	.	key-containers	mach-crypto ownership contract	crypto.test.encoding#keys__allocation_and_cleanup_failures_retain_exact_ownership
 invalid-input	.	key-containers	RFC 5480 and SEC 1 named-curve contract	crypto.test.encoding#keys__p_384_spki_validates_the_named_curve_and_every_boundary
 invalid-input	.	key-containers	RFC 7468 and mach-crypto parser contract	crypto.test.encoding#keys__private_pem_truncation_fails_before_allocation_at_every_boundary
+invalid-input	.	ecdsa-p256-sha256,ecdsa-p384-sha384,ecdsa-p521-sha512	FIPS 186-5 digest handling and mach-crypto verification contract	crypto.test.signature#ecdsa__verify_over_a_caller_supplied_digest_for_any_curve
 zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret#secret__partial_allocation_failure_is_wiped_and_cleanup_ownership_is_retained
 zeroization	.	secret-storage	mach-crypto entropy contract	crypto.test.secret#secret__entropy_failure_is_distinct_and_wipes_partial_output
 zeroization	.	secret-storage	mach-crypto destruction contract	crypto.test.secret#secret__failed_cleanup_rewipes_retained_ownership_before_retry

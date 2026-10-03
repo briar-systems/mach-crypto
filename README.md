@@ -19,8 +19,9 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
 - `crypto.group.x25519` provides X25519 key agreement.
 - `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
-- `crypto.signature` provides ECDSA P-256 and P-384 verification, Ed25519,
-  RSA-PSS, and strict RSA PKCS#1 v1.5 signatures.
+- `crypto.signature` provides ECDSA verification over P-256, P-384, and P-521
+  with any of SHA-256, SHA-384, and SHA-512, Ed25519, RSA-PSS, and strict RSA
+  PKCS#1 v1.5 signatures.
 - `crypto.encoding.der`, `crypto.encoding.pem`, and `crypto.encoding.keys`
   provide strict TLS key-container parsing and exact serialization.
 - `crypto.vectors` defines a common test vector contract.
@@ -337,6 +338,17 @@ accepts an exact 97-byte uncompressed secp384r1 public key and strict DER
 signature of at most 104 bytes. It validates canonical coordinates, the curve
 equation, and scalar ranges. P-384 private signing and ECDH are not exposed.
 
+`signature.verify_ecdsa` takes the curve (`CURVE_P256`, `CURVE_P384`, or
+`CURVE_P521`) and the hash (`HASH_SHA256`, `HASH_SHA384`, or `HASH_SHA512`)
+independently, as CMS and PDF signers choose them, and hashes the public
+message. `signature.verify_ecdsa_digest` takes the curve and a 32, 48, or
+64-byte digest the caller computed. A digest longer than the curve order is
+truncated to its leftmost bytes and a shorter one is padded on the left, per
+FIPS 186-5. The public key is an exact uncompressed SEC1 point (65, 97, or 133
+bytes) and the signature is strict DER, up to 72, 104, or 139 bytes. The two
+fixed pairs above call `verify_ecdsa`. P-521 is verification only, so no
+signing or ECDH is exposed for it.
+
 Field and scalar values are four 64-bit limbs on one Montgomery ring
 (`crypto.internal.mont`), and field coordinates stay in Montgomery form inside
 a point. Each product is 16 limb products and a 16-product reduction, computed
@@ -354,6 +366,11 @@ products together in one fixed 384-step loop with masked four-way point
 selection and no secret-indexed table. Inversions retain fixed public
 exponents. Hashes, field and scalar temporaries, and projective points remain
 welded until explicitly zeroized.
+
+P-521 verification (`crypto.internal.p521`) follows the P-384 code on nine
+64-bit limbs, with a 521-step loop. A P-521 signature of 128 or more content
+bytes carries the DER long-form sequence length `0x81`, which the parser
+requires and accepts only in minimal form.
 
 ## Ed25519 and RSA signatures
 
@@ -388,11 +405,14 @@ signature. The encoded message uses `emBits = modBits - 1`, MGF1 with the same
 hash, an exact hash-length salt, and trailer `0xbc`. Signatures are exactly the
 modulus width. Verification enforces the same salt and encoded-message policy.
 
-`signature.verify_rsa_pkcs1_sha256` and
-`signature.verify_rsa_pkcs1_sha384` accept certificate signatures encoded by
+`signature.verify_rsa_pss_sha512` verifies RSA-PSS with SHA-512, MGF1 over
+SHA-512 and a 64-byte salt. `signature.sign_rsa_pss_sha512` is not provided.
+
+`signature.verify_rsa_pkcs1_sha256`,
+`signature.verify_rsa_pkcs1_sha384`, and `signature.verify_rsa_pkcs1_sha512` accept certificate signatures encoded by
 EMSA-PKCS1-v1_5. Verification requires a signature exactly as wide as the
-modulus, at least eight `0xff` padding bytes, the exact RFC 8017 SHA-256 or
-SHA-384 `DigestInfo` with explicit NULL parameters, and no leading or trailing
+modulus, at least eight `0xff` padding bytes, the exact RFC 8017 SHA-256,
+SHA-384, or SHA-512 `DigestInfo` with explicit NULL parameters, and no leading or trailing
 bytes. Malformed encodings and digest mismatches return `AUTH_FAILED` without
 changing caller-owned key, message, or signature storage.
 
@@ -412,7 +432,8 @@ The repository combines callable primitives with contracts for algorithms that
 are still being built. AES-128-GCM, AES-256-GCM, the AES-128 and AES-256
 block cipher, ChaCha20-Poly1305, X25519,
 P-256 ECDH, ECDSA P-256 with SHA-256, ECDSA P-384 verification with SHA-384,
-Ed25519, RSA-PSS and RSA PKCS#1 v1.5 with SHA-256 and SHA-384, HMAC-SHA-256,
+ECDSA verification over P-256, P-384, and P-521 with SHA-256, SHA-384, and SHA-512,
+Ed25519, RSA-PSS and RSA PKCS#1 v1.5 with SHA-256 and SHA-384, and their verification with SHA-512, HMAC-SHA-256,
 HMAC-SHA-384, HKDF-Extract, HKDF-Expand, incremental SHA-256 and SHA-384,
 strict DER and PEM, and TLS key containers are callable in this revision. Their
 tests include NIST FIPS 197, NIST SP 800-38A, NIST SP 800-38D, other NIST,
