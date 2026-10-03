@@ -47,6 +47,7 @@ differential	.	x25519	independent Python cryptography X25519	crypto.test.group#x
 differential	.	ecdsa-p384-sha384	independent Python big-integer products	crypto.internal.p384#p384_internal__modular_products_match_independent_big_integers
 differential	.	p-256-ecdh	independent OpenSSL vectors	crypto.test.encoding#keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree
 differential	.	key-containers	independent OpenSSL vectors	crypto.test.encoding#keys__openssl_rsa_containers_preserve_exact_public_and_private_parts
+differential	.	der	independent OpenSSL CMS with a freetsa.org RFC 3161 token	crypto.test.encoding#der__an_openssl_cms_signeddata_with_a_freetsa_rfc_3161_token_parses_and_rewrites
 invalid-input	.	sha-256,sha-384	mach-crypto bounded transcript contract	crypto.test.hash#hash__validation_and_overflow_failures_preserve_state_and_output
 invalid-input	.	hmac-sha-256,hmac-sha-384	mach-crypto bounded output contract	crypto.test.mac#hmac__output_overlap_and_failures_have_defined_behavior
 invalid-input	.	hkdf-sha-256,hkdf-sha-384	RFC 5869 and mach-crypto bounded output contract	crypto.test.mac#hkdf__limits_capacities_and_invalid_inputs_do_not_write

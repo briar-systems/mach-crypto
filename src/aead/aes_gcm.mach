@@ -646,9 +646,9 @@ fun check_vectors(cipher: core.Backend, hash: ghash.Backend) u32 {
 }
 
 #[testing]
-val CIPHER_MEMBERS: [2]core.Backend = [2]core.Backend{core.SOFTWARE, core.HARDWARE};
+val CIPHER_MEMBERS: [2]core.Backend  = [2]core.Backend{core.SOFTWARE, core.HARDWARE};
 #[testing]
-val HASH_MEMBERS: [2]ghash.Backend = [2]ghash.Backend{ghash.SOFTWARE, ghash.HARDWARE};
+val HASH_MEMBERS:   [2]ghash.Backend = [2]ghash.Backend{ghash.SOFTWARE, ghash.HARDWARE};
 
 test aes_gcm__gcm_spec_vectors_on_every_aes_and_ghash_member_this_host_runs {
     var c: usize = 0;
@@ -710,16 +710,16 @@ fun fill_random(state: *u64, output: *u8, len: usize) {
 #[testing]
 var differential_plaintext: [4096]^u8;
 #[testing]
-var differential_hardware: [4112]u8;
+var differential_hardware:  [4112]u8;
 #[testing]
-var differential_software: [4112]u8;
+var differential_software:  [4112]u8;
 #[testing]
-var differential_opened: [4096]^u8;
+var differential_opened:    [4096]^u8;
 
 # empty, partial and whole blocks around the four-block ghash aggregate and the
 # eight-block keystream, then long records
 #[testing]
-val DIFFERENTIAL_CASES: usize = 18;
+val DIFFERENTIAL_CASES:   usize                     = 18;
 #[testing]
 val DIFFERENTIAL_LENGTHS: [DIFFERENTIAL_CASES]usize = [DIFFERENTIAL_CASES]usize{
     0, 1, 15, 16, 17, 63, 64, 65, 127, 128, 129, 143, 144, 255, 256, 257, 1200, 4096

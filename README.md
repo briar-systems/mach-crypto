@@ -90,7 +90,8 @@ partial storage to be wiped and released deterministically.
 `encoding.der` accepts only definite, minimally encoded lengths and rejects
 noncanonical BOOLEAN, INTEGER, BIT STRING, NULL, and OBJECT IDENTIFIER values.
 Complete-document parsing rejects trailing bytes and validates every nested
-constructed value to a maximum depth of 16. Cursor failures are transactional.
+constructed value to a maximum depth of 32, which covers CMS SignedData carrying
+an RFC 3161 time-stamp token. Cursor failures are transactional.
 The public writer supports overlapping content through move semantics and
 validates constructed content before changing output.
 
@@ -449,14 +450,14 @@ are separate fields. Independent review is currently `NOT_RECORDED`.
 Dependencies are pinned Git tags. Build output uses Mach's default `out/`
 directory inside this repository.
 
-`mach test .` runs only the tests the library reaches. `mach test . --lib tests`
+`mach test .` runs only the tests the library reaches. `mach test . -a tests`
 runs every test, through `src/lib/tests.mach`. A new test module goes there,
 and `tools/test-selection` fails until it does.
 
 ```sh
 mach dep pull .
 mach build .
-mach test . --lib tests
+mach test . -a tests
 tools/test-selection
 tools/assurance run
 tools/assurance verify

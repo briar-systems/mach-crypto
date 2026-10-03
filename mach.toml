@@ -1,6 +1,6 @@
 [project]
 id = "crypto"
-version = "0.26.0"
+version = "0.26.1"
 mach = "^6"
 src = "src"
 out = "out/{target.name}/{profile.name}"
@@ -51,7 +51,7 @@ simd = "scalarize"
 vectorize = true
 float_reassoc = false
 
-# the library, and the only artifact `mach build .` and `--all-targets` select
+# the library, and the only artifact `mach build .` selects
 [artifact.crypto]
 kind = "static"
 default = true
@@ -65,7 +65,7 @@ need = []
 git = "https://github.com/briar-systems/mach-std"
 version = "^9.4"
 
-# test-only: the library and every test module, run with `mach test . --lib tests`
+# test-only: the library and every test module, run with `mach test . -a tests`
 [artifact.tests]
 kind = "static"
 entry = "lib/tests.mach"

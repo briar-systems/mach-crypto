@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# fails unless `mach test . --lib tests` collects every test declared under src,
+# fails unless `mach test . -a tests` collects every test declared under src,
 # on every manifest target. mach tests only the selected artifact's closure
 # (briar-systems/mach#3813), so a test module that src/lib/tests.mach does not reach
 # would otherwise stop running without a sound
@@ -24,7 +24,7 @@ declared=$(wc -l < "$scratch/declared")
 
 status=0
 while IFS= read -r target; do
-    if ! "$mach" test . --lib tests --target "$target" --list > "$scratch/listed" 2> "$scratch/error"; then
+    if ! "$mach" test . -a tests --target "$target" --list > "$scratch/listed" 2> "$scratch/error"; then
         cat "$scratch/error" >&2
         echo "test-selection: listing failed on $target" >&2
         exit 1
@@ -32,7 +32,7 @@ while IFS= read -r target; do
     awk '{ print $1 }' "$scratch/listed" | sort > "$scratch/collected"
     missing=$(comm -23 "$scratch/declared" "$scratch/collected")
     if [[ -n "$missing" ]]; then
-        printf 'test-selection: %s: declared tests that `mach test . --lib tests` does not collect:\n%s\n' \
+        printf 'test-selection: %s: declared tests that `mach test . -a tests` does not collect:\n%s\n' \
             "$target" "$missing" >&2
         status=1
     else

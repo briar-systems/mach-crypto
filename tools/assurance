@@ -164,7 +164,7 @@ record_result() {
 test_selection() {
     local project=$1
     if grep -qx '\[artifact\.tests\]' "$root/$project/mach.toml"; then
-        printf '%s\n' --lib tests
+        printf '%s\n' -a tests
     fi
 }
 
@@ -260,7 +260,7 @@ run_build_pass() {
         for profile in "${profiles[@]}"; do
             relative="logs/build/${pass}-${algorithm}-${profile}.log"
             log="$stage/$relative"
-            if ! (cd "$root" && mach build "$project" --all-targets --profile "$profile" \
+            if ! (cd "$root" && mach build "$project" -t '*' --profile "$profile" \
                 --emit-ir --emit-asm) > "$log" 2>&1; then
                 die "verified build failed for $project $profile during $pass; see $log"
             fi
