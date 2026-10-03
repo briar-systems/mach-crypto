@@ -109,7 +109,7 @@ by contract.
 
 - RFC 8410 Ed25519 and X25519 PKCS#8 private keys and SPKI public keys
 - P-256 SEC1 and PKCS#8 private keys and uncompressed SPKI public keys
-- P-384 uncompressed SPKI public keys
+- P-384 and P-521 uncompressed SPKI public keys
 - PKCS#1 RSA private keys, RSA PKCS#8 private keys, and RSA SPKI public keys
 
 Algorithm identifiers and parameters are exact. P-256 private scalars are

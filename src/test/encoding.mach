@@ -5,6 +5,7 @@ use crypto.encoding.der;
 use crypto.encoding.keys;
 use crypto.encoding.pem;
 use crypto.secret;
+use crypto.signature;
 use std.runtime;
 use std.types.bool.bool;
 use std.types.bool.false;
@@ -546,7 +547,7 @@ test keys__p_384_spki_validates_the_named_curve_and_every_boundary {
     if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 120}, ?key) !=
         contracts.INVALID_KEY) { ret 2; }
     if (!set_p384_spki(?spki[0])) { ret 3; }
-    spki[19] = 0x23;
+    spki[19] = 0x24;
     if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 120}, ?key) !=
         contracts.UNSUPPORTED) { ret 4; }
     if (!set_p384_spki(?spki[0])) { ret 5; }
@@ -575,6 +576,69 @@ test keys__p_384_spki_validates_the_named_curve_and_every_boundary {
     }
     if (keys.decode_spki(contracts.Bytes{data: nil, len: 120}, ?key) !=
         contracts.INVALID_INPUT) { ret 13; }
+    ret 0;
+}
+
+#[testing]
+fun set_p521_spki(output: *u8) bool {
+    ret decode_hex(
+        "30819b301006072a8648ce3d020106052b810400230381860004005c6457ec088d532f482093965ae53ccd07e556ed59e2af945cd8c7a95c1c644f8a56a8a8a3cd77392ddd861e8a924dac99c69069093bd52a52fa6c56004a074508007878d6d42e4b4dd1e9c0696cb3e19f63033c3db4e60d473259b3ebe079aaf0a986ee6177f8217a78c68b813f7e149a4e56fd9562c07fed3d895942d7d101cb83f6"::*u8,
+        316, output);
+}
+
+test keys__p_521_spki_round_trips_verifies_and_refuses_bad_points {
+    var spki: [158]u8;
+    var key:  keys.PublicKey;
+    if (!set_p521_spki(?spki[0]) ||
+        keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 158}, ?key) !=
+        contracts.OK || key.algorithm != keys.P521 || key.container != keys.SPKI ||
+        key.first.len != 133 || key.first.data[0] != 4 ||
+        key.first.data[1] != 0x00 || key.first.data[132] != 0xf6) { ret 1; }
+
+    var encoded: [158]u8;
+    val written: contracts.Operation = keys.encode_public_der(?key,
+        contracts.Buffer{data: ?encoded[0], capacity: 158});
+    if (written.error != contracts.OK || written.written != 158) { ret 2; }
+    var i: usize = 0;
+    for (i < 158) {
+        if (encoded[i] != spki[i]) { ret 3; }
+        i = i + 1;
+    }
+
+    var message:   [6]u8;
+    var sig_bytes: [138]u8;
+    if (!decode_hex("313233343030"::*u8, 12, ?message[0]) ||
+        !decode_hex("30818702414e4223ee43e8cb89de3b1339ffc279e582f82c7ab0f71bbde43dbe374ac75ffbef29acdf8e70750b9a04f66fda48351de7bbfd515720b0ec5cd736f9b73bdf8645024201d74a2f6d95be8d4cb64f02d16d6b785a1246b4ebd206dc596818bb953253245f5a27a24a1aae1e218fdccd8cd7d4990b666d4bf4902b84fdad123f941fe906d948"::*u8,
+        276, ?sig_bytes[0])) { ret 4; }
+    if (signature.verify_ecdsa(signature.CURVE_P521, signature.HASH_SHA512, key.first,
+        contracts.Bytes{data: ?message[0], len: 6},
+        contracts.Bytes{data: ?sig_bytes[0], len: 138}) != contracts.OK) { ret 5; }
+    message[0] = message[0] ^ 1;
+    if (signature.verify_ecdsa(signature.CURVE_P521, signature.HASH_SHA512, key.first,
+        contracts.Bytes{data: ?message[0], len: 6},
+        contracts.Bytes{data: ?sig_bytes[0], len: 138}) == contracts.OK) { ret 6; }
+
+    spki[157] = spki[157] ^ 1;
+    if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 158}, ?key) !=
+        contracts.INVALID_KEY) { ret 7; }
+    if (!set_p521_spki(?spki[0])) { ret 8; }
+    spki[25] = 0x03;
+    if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 158}, ?key) !=
+        contracts.INVALID_KEY) { ret 9; }
+
+    if (!set_p521_spki(?spki[0])) { ret 10; }
+    spki[2]  = 0x9a;
+    spki[23] = 0x85;
+    if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: 157}, ?key) !=
+        contracts.INVALID_KEY) { ret 11; }
+
+    if (!set_p521_spki(?spki[0])) { ret 12; }
+    i = 0;
+    for (i < 158) {
+        if (keys.decode_spki(contracts.Bytes{data: ?spki[0], len: i}, ?key) ==
+            contracts.OK) { ret 13; }
+        i = i + 1;
+    }
     ret 0;
 }
 

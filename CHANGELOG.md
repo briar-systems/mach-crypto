@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-10-03
+
+### Added
+
+- `keys.P521`: `decode_spki` reads a secp521r1 public key, checking its 133-byte uncompressed point is on the curve, and `encode_public_der` writes it back byte for byte, so a P-521 key from a certificate goes straight to `verify_ecdsa` with `CURVE_P521` (#208).
+
 ## [0.27.0] - 2026-10-03
 
 ### Added
