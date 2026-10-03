@@ -15,11 +15,20 @@ x25519	yes	RFC 7748	word
 p-256-ecdh	yes	NIST CAVP KAS-ECC	word
 ecdsa-p256-sha256	yes	RFC 6979	word
 ecdsa-p384-sha384	yes	NIST P-384 with SHA-384 example	word
+ecdsa-p256-sha384	yes	Wycheproof does not ship this pairing, so OpenSSL-compatible vectors	word
+ecdsa-p256-sha512	yes	Wycheproof ecdsa_secp256r1_sha512	word
+ecdsa-p384-sha256	yes	Wycheproof ecdsa_secp384r1_sha256	word
+ecdsa-p384-sha512	yes	Wycheproof ecdsa_secp384r1_sha512	word
+ecdsa-p521-sha256	yes	Wycheproof does not ship this pairing, so OpenSSL-compatible vectors	word
+ecdsa-p521-sha384	yes	Wycheproof does not ship this pairing, so OpenSSL-compatible vectors	word
+ecdsa-p521-sha512	yes	Wycheproof ecdsa_secp521r1_sha512	word
 ed25519	yes	RFC 8032	word
 rsa-pss-sha256	yes	NIST CAVP and RFC 8017	word
 rsa-pss-sha384	yes	NIST CAVP and RFC 8017	word
+rsa-pss-sha512	yes	Wycheproof rsa_pss_4096_sha512_mgf1_64	word
 rsa-pkcs1-sha256	yes	NIST CAVP and RFC 8017	word
 rsa-pkcs1-sha384	yes	NIST CAVP and RFC 8017	word
+rsa-pkcs1-sha512	yes	Wycheproof rsa_signature_sha512	word
 der	no	ITU-T X.690	none
 pem	no	RFC 7468	none
 key-containers	yes	RFC 5208, RFC 5480, RFC 5958, RFC 8017, RFC 8410, SEC 1	none
