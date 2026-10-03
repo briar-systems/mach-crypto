@@ -1,7 +1,7 @@
 # the montgomery ring every prime field and scalar ring shares
 #
 # values are 64-bit limbs, little-endian, $limbs of them up to LIMBS (four for
-# the 256-bit rings, six for P-384), and every product is a word product from
+# the 256-bit rings, six for P-384, nine for P-521), and every product is a word product from
 # crypto.internal.word, so the target that admits the hardware cell computes
 # one instruction per limb pair and every other target keeps the serial
 # reference (#83). a ring is (modulus, factor, r2): the modulus below
@@ -16,7 +16,7 @@ use crypto.internal.word;
 use std.types.size.usize;
 
 # the widest ring
-pub val LIMBS: usize = 6;
+pub val LIMBS: usize = 9;
 
 # wipe count limbs of scratch: limb stores, not a byte loop, because this runs
 # on every ring operation
@@ -36,7 +36,7 @@ fun wipe(scratch: *^u64, $count: usize) {
 #[oblivious]
 fun subtract_modulus(output: *^u64, value: *^u64, modulus: *u64, high: ^u64,
     $limbs: usize) {
-    var reduced: [6]^u64;
+    var reduced: [LIMBS]^u64;
     var borrow:  ^u64  = 0;
     var i:       usize = 0;
     for (i < limbs) {
@@ -169,7 +169,7 @@ pub fun add(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usi
 
 #[oblivious]
 fun add_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
-    var sum:   [6]^u64;
+    var sum:   [LIMBS]^u64;
     var carry: ^u64  = 0;
     var i:     usize = 0;
     for (i < limbs) {
@@ -198,7 +198,7 @@ pub fun subtract(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs
 
 #[oblivious]
 fun subtract_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
-    var difference: [6]^u64;
+    var difference: [LIMBS]^u64;
     var borrow:     ^u64  = 0;
     var i:          usize = 0;
     for (i < limbs) {
@@ -228,7 +228,7 @@ fun subtract_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $l
 # output = -value mod modulus, for a value below the modulus
 #[oblivious]
 pub fun negate(output: *^u64, value: *^u64, modulus: *u64, $limbs: usize) {
-    var zero: [6]^u64;
+    var zero: [LIMBS]^u64;
     var i:    usize = 0;
     for (i < limbs) {
         zero[i] = 0;
@@ -532,7 +532,7 @@ pub fun multiply(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor
 #[oblivious]
 fun multiply_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u64,
     $limbs: usize) {
-    var product: [12]^u64;
+    var product: [LIMBS * 2]^u64;
     var carry:   ^u128 = 0;
     var i:       usize = 0;
     for (i < limbs * 2) {
@@ -573,7 +573,7 @@ pub fun square(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: 
 
 #[oblivious]
 fun square_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
-    var product: [12]^u64;
+    var product: [LIMBS * 2]^u64;
     var carry:   ^u128 = 0;
     var i:       usize = 0;
     for (i < limbs * 2) {
@@ -638,7 +638,7 @@ pub fun reduce(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: 
 
 #[oblivious]
 fun reduce_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
-    var t: [13]^u64;
+    var t: [LIMBS * 2 + 1]^u64;
     var i: usize = 0;
     for (i < limbs * 2) {
         t[i] = value[i];
@@ -676,10 +676,10 @@ fun reduce_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $lim
 #[oblivious]
 pub fun reduce_wide(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2: *u64,
     $limbs: usize) {
-    var high: [6]^u64;
-    var low:  [6]^u64;
-    var one:  [6]^u64;
-    var r2s:  [6]^u64;
+    var high: [LIMBS]^u64;
+    var low:  [LIMBS]^u64;
+    var one:  [LIMBS]^u64;
+    var r2s:  [LIMBS]^u64;
     var i:    usize = 0;
     for (i < limbs) {
         r2s[i] = r2[i];
@@ -700,7 +700,7 @@ pub fun reduce_wide(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2:
 #[oblivious]
 pub fun to_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2: *u64,
     $limbs: usize) {
-    var r2s: [6]^u64;
+    var r2s: [LIMBS]^u64;
     var i:   usize = 0;
     for (i < limbs) {
         r2s[i] = r2[i];
@@ -714,7 +714,7 @@ pub fun to_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r
 #[oblivious]
 pub fun from_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64,
     $limbs: usize) {
-    var one: [6]^u64;
+    var one: [LIMBS]^u64;
     var i:   usize = 0;
     for (i < limbs) {
         one[i] = 0;
