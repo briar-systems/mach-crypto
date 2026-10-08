@@ -5,10 +5,10 @@
 # stays on the secret-state sha2 until std carries one
 
 use crypto.contracts;
+use crypto.hash.sha256;
+use crypto.hash.sha512;
 use crypto.internal.lift;
 use std.crypto.ct;
-use std.crypto.hash.sha256;
-use std.crypto.hash.sha512;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;

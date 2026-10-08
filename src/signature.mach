@@ -1,6 +1,8 @@
 # signatures needed by tls certificates and handshakes
 
 use crypto.contracts;
+use crypto.hash.sha256;
+use crypto.hash.sha512;
 use ed: crypto.internal.ed25519;
 use crypto.internal.hmac;
 use crypto.internal.lift;
@@ -9,8 +11,6 @@ use crypto.internal.p384;
 use crypto.internal.p521;
 use crypto.internal.rsa;
 use std.crypto.ct;
-use std.crypto.hash.sha256;
-use std.crypto.hash.sha512;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
