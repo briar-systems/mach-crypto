@@ -1,11 +1,11 @@
 # hkdf contracts
 
 use crypto.contracts;
+use crypto.hash.sha256;
+use crypto.hash.sha512;
 use core: crypto.internal.hmac;
 use crypto.internal.lift;
 use std.crypto.ct;
-use std.crypto.hash.sha256;
-use std.crypto.hash.sha512;
 use std.types.size.usize;
 
 pub val SHA256_PRK_SIZE:   usize = 32;
