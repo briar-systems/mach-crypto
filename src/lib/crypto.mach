@@ -6,6 +6,8 @@ fwd crypto.contracts;
 fwd crypto.secret;
 fwd crypto.assurance;
 fwd crypto.hash;
+fwd crypto.hash.sha256;
+fwd crypto.hash.sha512;
 fwd crypto.hmac;
 fwd crypto.hkdf;
 fwd crypto.aead;
