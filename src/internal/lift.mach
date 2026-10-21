@@ -5,9 +5,9 @@
 # update reports whether the running length stays inside the algorithm's bound,
 # which callers surface as an invalid input
 
+use crypto.hash.sha256;
+use crypto.hash.sha512;
 use std.crypto.ct;
-use std.crypto.hash.sha256;
-use std.crypto.hash.sha512;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;

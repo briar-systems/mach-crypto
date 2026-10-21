@@ -9,6 +9,7 @@ use std.types.size.usize;
 
 pub val MAX_LABEL_SIZE: usize = 64;
 pub val LINE_SIZE:      usize = 64;
+pub val MAX_LINE_SIZE:  usize = 76;
 
 val TABLE: [64]u8 = [64]u8{
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
@@ -219,6 +220,7 @@ fun parse(input: contracts.Bytes, layout: *Layout) contracts.Error {
     var last:          [4]u8;
     var saw_line:      bool  = false;
     var last_line_len: usize = 0;
+    var line_width:    usize = 0;
     for (position < input.len) {
         val line_start: usize = position;
         for (position < input.len && input.data[position] != '\r' &&
@@ -250,9 +252,12 @@ fun parse(input: contracts.Bytes, layout: *Layout) contracts.Error {
             layout.decoded_len  = groups * 3 - padding;
             ret contracts.OK;
         }
-        if (line_len == 0 || line_len > LINE_SIZE || line_len % 4 != 0 ||
+        # readers take the width of the first body line, as rfc 7468 lax parsing allows
+        if (!saw_line) { line_width = line_len; }
+        if (line_len == 0 || line_len > line_width || line_width > MAX_LINE_SIZE ||
+            line_len % 4 != 0 ||
             (saw_line && padding != 0)) { ret contracts.INVALID_INPUT; }
-        if (saw_line && last_line_len != LINE_SIZE) { ret contracts.INVALID_INPUT; }
+        if (saw_line && last_line_len != line_width) { ret contracts.INVALID_INPUT; }
         i = 0;
         for (i < line_len) {
             val byte: u8 = input.data[line_start + i];
@@ -322,6 +327,7 @@ fun parse_secret(input: contracts.SecretBytes,
     var last:          [4]^u8;
     var saw_line:      bool  = false;
     var last_line_len: usize = 0;
+    var line_width:    usize = 0;
     for (position < input.len) {
         val line_start: usize = position;
         for (position < input.len && input.data[position]:>u8 != '\r' &&
@@ -354,9 +360,12 @@ fun parse_secret(input: contracts.SecretBytes,
             layout.decoded_len  = groups * 3 - padding;
             ret contracts.OK;
         }
-        if (line_len == 0 || line_len > LINE_SIZE || line_len % 4 != 0 ||
+        # readers take the width of the first body line, as rfc 7468 lax parsing allows
+        if (!saw_line) { line_width = line_len; }
+        if (line_len == 0 || line_len > line_width || line_width > MAX_LINE_SIZE ||
+            line_len % 4 != 0 ||
             (saw_line && padding != 0)) { ret contracts.INVALID_INPUT; }
-        if (saw_line && last_line_len != LINE_SIZE) { ret contracts.INVALID_INPUT; }
+        if (saw_line && last_line_len != line_width) { ret contracts.INVALID_INPUT; }
         i = 0;
         for (i < line_len) {
             val byte: ^u8 = input.data[line_start + i];

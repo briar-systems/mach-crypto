@@ -157,10 +157,10 @@ unchanged.
 idempotent. A destroyed state rejects update, snapshot, and final, but can be
 activated again with `init`. This supports the TLS HelloRetryRequest transcript
 rewrite without exposing the underlying state. State records are opaque and
-must not be copied directly. SHA-2 runs on `std.crypto.hash`, which dispatches
-SHA-256 to SHA-NI or ARMv8 SHA2 where the processor has it. Secret input uses
-std's secret-typed states, and public input is lifted into them block by
-block. Snapshot clones, lift buffers, temporary digests, and destroyed contexts
+must not be copied directly. SHA-2 runs on `crypto.hash.sha256` and
+`crypto.hash.sha512`, and the former dispatches SHA-256 to SHA-NI or ARMv8 SHA2
+where the processor has it. Secret input uses those modules' secret-typed
+states, and public input is lifted into them block by block. Snapshot clones, lift buffers, temporary digests, and destroyed contexts
 are explicitly zeroized.
 
 ## HMAC and HKDF

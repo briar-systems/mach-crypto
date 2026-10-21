@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-10-21
+
+### Fixed
+
+- `pem.decode` and `pem.decode_secret` take a body's line width from its first line, up to `MAX_LINE_SIZE` of 76 columns, and hold every line but the last to it, as RFC 7468 lets a reader do (#214). curl's Mozilla CA bundle wraps at 76 and was refused. `pem.encode` still writes 64 columns. Mixed widths, lines past 76 and every other padding, bounds and truncation check are refused as before.
+
 ## [0.28.0] - 2026-10-03
 
 ### Added

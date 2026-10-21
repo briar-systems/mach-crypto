@@ -4,7 +4,7 @@ use crypto.aead.aes_gcm;
 use crypto.aead.chacha20_poly1305;
 use crypto.cipher.aes;
 use crypto.contracts;
-use std.crypto.hash.sha256;
+use crypto.hash.sha256;
 use std.runtime;
 use std.types.bool.bool;
 use std.types.bool.false;
