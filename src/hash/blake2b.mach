@@ -1,0 +1,371 @@
+# BLAKE2b cryptographic hash (RFC 7693)
+# https://www.rfc-editor.org/rfc/rfc7693.html
+#
+# `Params` is the whole parameter block: digest length, salt,
+# personalization, and the tree fields (fanout, depth, leaf length, node
+# offset, node depth, inner length) with the last-node flag. `params` gives
+# the sequential defaults and `valid` says whether a block describes an
+# instance. the digest length is a parameter, not a truncation of a 64-byte
+# digest. the key length is not a field: a key enters only through
+# `init_secret`, so a public `State` is never keyed.
+#
+# there are two states, with the contract of `sha256` and `sha512`. `State` is
+# public: `update` takes `*u8` and `final` writes `*u8`. `SecretState` holds
+# `^u64` words and a `[128]^u8` block, so any record embedding it is welded.
+# `update_secret` takes `*^u8` only, `final_secret` writes the digest to
+# `*^u8`, and declassifying it is the caller's decision. neither record aliases
+# the other. lengths and parameters are public. `destroy_secret` zeroizes the
+# words and the block through `ct.zeroize` and resets the rest, so a destroyed
+# state is all zero. the compression is `#[oblivious]` at the secret instance.
+#
+# the byte counter is the full 128 bits of the specification, so no message a
+# caller can supply overflows it. the last block is held back until `final`,
+# because only it carries the finalization flag: once any block has been
+# compressed `buf_len` is 1..128, and a keyed state starts with its padded key
+# as a full held block.
+
+use std.crypto.ct;
+use std.types.bool.bool;
+use std.types.bool.false;
+use std.types.size.usize;
+
+pub val BLOCK_SIZE:      usize = 128;
+pub val MAX_DIGEST_SIZE: usize = 64;
+pub val MAX_KEY_SIZE:    usize = 64;
+pub val SALT_SIZE:       usize = 16;
+pub val PERSONAL_SIZE:   usize = 16;
+
+# the parameter block of one BLAKE2b instance, all public
+pub rec Params {
+    digest_len:  usize;
+    salt:        [16]u8;
+    personal:    [16]u8;
+    fanout:      u8;
+    depth:       u8;
+    leaf_len:    u32;
+    node_offset: u64;
+    node_depth:  u8;
+    inner_len:   usize;
+    last_node:   bool;
+}
+
+pub rec State {
+    h:          [8]u64;
+    buf:        [128]u8;
+    buf_len:    usize;
+    t0:         u64;
+    t1:         u64;
+    digest_len: usize;
+    last_node:  bool;
+}
+
+# the secret-typed state, see the module doc
+pub rec SecretState {
+    h:          [8]^u64;
+    buf:        [128]^u8;
+    buf_len:    usize;
+    t0:         u64;
+    t1:         u64;
+    digest_len: usize;
+    last_node:  bool;
+}
+
+val IV: [8]u64 = [8]u64{
+    0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b,
+    0xa54ff53a5f1d36f1, 0x510e527fade682d1, 0x9b05688c2b3e6c1f,
+    0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
+};
+
+val SIGMA: [160]u8 = [160]u8{
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3,
+    11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4,
+    7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8,
+    9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13,
+    2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9,
+    12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11,
+    13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10,
+    6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5,
+    10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0
+};
+
+#[oblivious]
+#[inline]
+fun rotr[W](x: W, n: u64) W {
+    ret (x >> n) | (x << (64 - n));
+}
+
+#[oblivious]
+#[inline]
+fun read_le[W, B](buf: *B, off: usize) W {
+    ret buf[off]::W | (buf[off + 1]::W << 8) |
+        (buf[off + 2]::W << 16) | (buf[off + 3]::W << 24) |
+        (buf[off + 4]::W << 32) | (buf[off + 5]::W << 40) |
+        (buf[off + 6]::W << 48) | (buf[off + 7]::W << 56);
+}
+
+#[oblivious]
+#[inline]
+fun mix[W](v: *W, a: usize, b: usize, c: usize, d: usize, x: W, y: W) {
+    v[a] = v[a] + v[b] + x;
+    v[d] = rotr[W](v[d] ^ v[a], 32);
+    v[c] = v[c] + v[d];
+    v[b] = rotr[W](v[b] ^ v[c], 24);
+    v[a] = v[a] + v[b] + y;
+    v[d] = rotr[W](v[d] ^ v[a], 16);
+    v[c] = v[c] + v[d];
+    v[b] = rotr[W](v[b] ^ v[c], 63);
+}
+
+# the compression over either state, one 128-byte block
+#
+# oblivious at the secret instance: the message schedule is a public table
+# and the counter and flags are public. the message and working words are
+# wiped on the way out, since at the secret instance they hold key material
+#[oblivious]
+fun compress[W, B](h: *W, block: *B, t0: u64, t1: u64, f0: u64, f1: u64) {
+    var m: [16]W;
+    var v: [16]W;
+    var i: usize = 0;
+    for (i < 16) {
+        m[i] = read_le[W, B](block, i * 8);
+        i    = i + 1;
+    }
+    i = 0;
+    for (i < 8) {
+        v[i]     = h[i];
+        v[i + 8] = IV[i];
+        i        = i + 1;
+    }
+    v[12] = v[12] ^ t0;
+    v[13] = v[13] ^ t1;
+    v[14] = v[14] ^ f0;
+    v[15] = v[15] ^ f1;
+    var round: usize = 0;
+    for (round < 12) {
+        val s: usize = (round % 10) * 16;
+        mix[W](?v[0], 0, 4, 8, 12, m[SIGMA[s]::usize], m[SIGMA[s + 1]::usize]);
+        mix[W](?v[0], 1, 5, 9, 13, m[SIGMA[s + 2]::usize], m[SIGMA[s + 3]::usize]);
+        mix[W](?v[0], 2, 6, 10, 14, m[SIGMA[s + 4]::usize], m[SIGMA[s + 5]::usize]);
+        mix[W](?v[0], 3, 7, 11, 15, m[SIGMA[s + 6]::usize], m[SIGMA[s + 7]::usize]);
+        mix[W](?v[0], 0, 5, 10, 15, m[SIGMA[s + 8]::usize], m[SIGMA[s + 9]::usize]);
+        mix[W](?v[0], 1, 6, 11, 12, m[SIGMA[s + 10]::usize], m[SIGMA[s + 11]::usize]);
+        mix[W](?v[0], 2, 7, 8, 13, m[SIGMA[s + 12]::usize], m[SIGMA[s + 13]::usize]);
+        mix[W](?v[0], 3, 4, 9, 14, m[SIGMA[s + 14]::usize], m[SIGMA[s + 15]::usize]);
+        round = round + 1;
+    }
+    i = 0;
+    for (i < 8) {
+        h[i] = h[i] ^ v[i] ^ v[i + 8];
+        i    = i + 1;
+    }
+    i = 0;
+    for (i < 16) {
+        m[i] = 0;
+        v[i] = 0;
+        i    = i + 1;
+    }
+}
+
+# the sequential parameters for a digest of `digest_len` bytes
+# ---
+# digest_len: digest length in bytes, 1..64
+# ret:        parameters with no salt, no personalization, fanout and depth 1
+pub fun params(digest_len: usize) Params {
+    var p: Params;
+    p.digest_len = digest_len;
+    p.fanout     = 1;
+    p.depth      = 1;
+    ret p;
+}
+
+# whether a parameter block describes a BLAKE2b instance
+# ---
+# p:   parameters to check
+# ret: true when the digest length is 1..64, the depth at least 1 and the
+#      inner length at most 64
+pub fun valid(p: *Params) bool {
+    ret p != nil && p.digest_len >= 1 && p.digest_len <= MAX_DIGEST_SIZE &&
+        p.depth >= 1 && p.inner_len <= MAX_DIGEST_SIZE;
+}
+
+fun load_le(bytes: *u8) u64 {
+    ret read_le[u64, u8](bytes, 0);
+}
+
+# install the parameter block into either state; `key_len` is the only field
+# not carried by `Params`
+#[oblivious]
+fun setup[S](s: *S, p: *Params, key_len: usize) {
+    var i: usize = 0;
+    for (i < 8) {
+        s.h[i] = IV[i];
+        i      = i + 1;
+    }
+    s.h[0] = s.h[0] ^ (p.digest_len::u64 | (key_len::u64 << 8) |
+        (p.fanout::u64 << 16) | (p.depth::u64 << 24) | (p.leaf_len::u64 << 32));
+    s.h[1]       = s.h[1] ^ p.node_offset;
+    s.h[2]       = s.h[2] ^ (p.node_depth::u64 | (p.inner_len::u64 << 8));
+    s.h[4]       = s.h[4] ^ load_le(?p.salt[0]);
+    s.h[5]       = s.h[5] ^ load_le(?p.salt[8]);
+    s.h[6]       = s.h[6] ^ load_le(?p.personal[0]);
+    s.h[7]       = s.h[7] ^ load_le(?p.personal[8]);
+    s.buf_len    = 0;
+    s.t0         = 0;
+    s.t1         = 0;
+    s.digest_len = p.digest_len;
+    s.last_node  = p.last_node;
+}
+
+fun count[S](s: *S, n: usize) {
+    s.t0 = s.t0 + n::u64;
+    if (s.t0 < n::u64) { s.t1 = s.t1 + 1; }
+}
+
+# the engine over either state, which share their layout
+fun absorb[S, W, B](s: *S, data: *B, len: usize) {
+    if (len == 0) { ret; }
+    var off:  usize = 0;
+    val fill: usize = BLOCK_SIZE - s.buf_len;
+    if (len > fill) {
+        var i: usize = 0;
+        for (i < fill) {
+            s.buf[s.buf_len + i] = data[i];
+            i                    = i + 1;
+        }
+        count[S](s, BLOCK_SIZE);
+        compress[W, B](?s.h[0], ?s.buf[0], s.t0, s.t1, 0, 0);
+        s.buf_len = 0;
+        off       = fill;
+        # a block straight from the input only when more input follows it
+        for (len - off > BLOCK_SIZE) {
+            count[S](s, BLOCK_SIZE);
+            compress[W, B](?s.h[0], ?data[off], s.t0, s.t1, 0, 0);
+            off = off + BLOCK_SIZE;
+        }
+    }
+    var i: usize = 0;
+    for (off + i < len) {
+        s.buf[s.buf_len + i] = data[off + i];
+        i                    = i + 1;
+    }
+    s.buf_len = s.buf_len + i;
+}
+
+# pad the held block, compress it as the last one and write the digest
+#[oblivious]
+fun squeeze[S, W, B](s: *S, digest: *B) {
+    count[S](s, s.buf_len);
+    var i: usize = s.buf_len;
+    for (i < BLOCK_SIZE) {
+        s.buf[i] = 0;
+        i        = i + 1;
+    }
+    s.buf_len = BLOCK_SIZE;
+    var f1: u64 = 0;
+    if (s.last_node) { f1 = 0xffffffffffffffff; }
+    compress[W, B](?s.h[0], ?s.buf[0], s.t0, s.t1, 0xffffffffffffffff, f1);
+    i = 0;
+    for (i < s.digest_len) {
+        digest[i] = (s.h[i / 8] >> ((i % 8) * 8)::u64)::B;
+        i         = i + 1;
+    }
+}
+
+# initialize a public state
+# ---
+# p:   parameters, which must satisfy `valid`
+# ret: initialized state
+pub fun init(p: *Params) State {
+    var s: State;
+    setup[State](?s, p, 0);
+    ret s;
+}
+
+# feed data into the hash state
+# ---
+# s:    pointer to hash state
+# data: pointer to input bytes
+# len:  number of bytes to process
+pub fun update(s: *State, data: *u8, len: usize) {
+    absorb[State, u64, u8](s, data, len);
+}
+
+# finalize the hash and write the digest
+#
+# the state is spent afterwards; finalize a copy to keep hashing
+# ---
+# s:      pointer to hash state
+# digest: pointer to an output buffer of the state's digest length
+pub fun final(s: *State, digest: *u8) {
+    squeeze[State, u64, u8](s, digest);
+}
+
+# compute a sequential BLAKE2b digest of a byte buffer in one call
+# ---
+# data:       pointer to input bytes
+# len:        number of bytes to hash
+# digest:     pointer to the output buffer
+# digest_len: digest length in bytes, 1..64
+pub fun hash(data: *u8, len: usize, digest: *u8, digest_len: usize) {
+    var p: Params = params(digest_len);
+    var s: State  = init(?p);
+    update(?s, data, len);
+    final(?s, digest);
+}
+
+# initialize a secret state, keyed when `key_len` is not zero
+# ---
+# p:       parameters, which must satisfy `valid`
+# key:     pointer to the secret key, read only when `key_len` is not zero
+# key_len: key length in bytes, 0..64, public
+# ret:     initialized state holding the padded key as its first block
+pub fun init_secret(p: *Params, key: *^u8, key_len: usize) SecretState {
+    var s: SecretState;
+    ct.zeroize(?s.buf[0], BLOCK_SIZE);
+    setup[SecretState](?s, p, key_len);
+    if (key_len > 0) {
+        var i: usize = 0;
+        for (i < key_len) {
+            s.buf[i] = key[i];
+            i        = i + 1;
+        }
+        s.buf_len = BLOCK_SIZE;
+    }
+    ret s;
+}
+
+# feed secret bytes into a secret state
+#
+# takes `*^u8` only. lift public bytes at the call site
+# ---
+# s:    pointer to the state
+# data: pointer to the secret input bytes
+# len:  number of bytes to process, public
+pub fun update_secret(s: *SecretState, data: *^u8, len: usize) {
+    absorb[SecretState, ^u64, ^u8](s, data, len);
+}
+
+# finalize a secret state and write the digest as secret bytes
+#
+# the digest is `*^u8`. declassify it with `:>` at the caller if that is the
+# intent. the state keeps its words afterwards, so call `destroy_secret`
+# ---
+# s:      pointer to the state
+# digest: pointer to a secret output buffer of the state's digest length
+pub fun final_secret(s: *SecretState, digest: *^u8) {
+    squeeze[SecretState, ^u64, ^u8](s, digest);
+}
+
+# wipe a secret state: words and block zeroized, everything else reset
+# ---
+# s: pointer to the state, all zero afterwards
+pub fun destroy_secret(s: *SecretState) {
+    ct.zeroize((?s.h[0]):~*^u8, 64);
+    ct.zeroize(?s.buf[0], BLOCK_SIZE);
+    s.buf_len    = 0;
+    s.t0         = 0;
+    s.t1         = 0;
+    s.digest_len = 0;
+    s.last_node  = false;
+}

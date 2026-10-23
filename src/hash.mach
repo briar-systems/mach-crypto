@@ -1,10 +1,16 @@
-# bounded public transcript hashing
+# bounded public transcript hashing, and BLAKE2b contexts
 #
 # the transcript is public by contract, so sha-256 runs on std's public state,
 # which dispatches to sha-ni or armv8 sha2 where the processor has it. sha-384
 # stays on the secret-state sha2 until std carries one
+#
+# blake2b has a public context and a secret one. `Blake2b` hashes public input
+# under any parameter block. `Blake2bSecret` runs on the secret-typed state: it
+# takes an optional secret key and secret or public input, and writes a secret
+# digest. `mac_blake2b` and `mac_blake2b_secret` are its one-shot keyed form
 
 use crypto.contracts;
+use crypto.hash.blake2b;
 use crypto.hash.sha256;
 use crypto.hash.sha512;
 use crypto.internal.lift;
@@ -187,4 +193,247 @@ pub fun destroy_sha384(context: *Sha384) contracts.Error {
     context.state = EMPTY;
     if (!valid) { ret contracts.INVALID_STATE; }
     ret contracts.OK;
+}
+
+pub val BLAKE2B_MAX_DIGEST_SIZE: usize = 64;
+pub val BLAKE2B_MAX_KEY_SIZE:    usize = 64;
+
+# a public BLAKE2b hash under any parameter block
+pub rec Blake2b {
+    inner: blake2b.State;
+    state: State;
+}
+
+# a BLAKE2b hash on the secret-typed state, keyed or over secret input
+pub rec Blake2bSecret {
+    inner: blake2b.SecretState;
+    state: State;
+}
+
+fun failed(error: contracts.Error) contracts.Operation {
+    ret contracts.Operation{error: error, written: 0};
+}
+
+fun clear_blake2b(inner: *blake2b.State) {
+    var zero: blake2b.State;
+    @inner = zero;
+}
+
+pub fun empty_blake2b() Blake2b {
+    var context: Blake2b;
+    clear_blake2b(?context.inner);
+    context.state = EMPTY;
+    ret context;
+}
+
+pub fun empty_blake2b_secret() Blake2bSecret {
+    var context: Blake2bSecret;
+    blake2b.destroy_secret(?context.inner);
+    context.state = EMPTY;
+    ret context;
+}
+
+# the counter holds only compressed blocks, and a block is compressed only
+# when input follows it, so a state past its first block always holds input
+fun valid_blake2b_inner[S](inner: *S) bool {
+    ret inner.buf_len <= blake2b.BLOCK_SIZE && inner.digest_len >= 1 &&
+        inner.digest_len <= blake2b.MAX_DIGEST_SIZE &&
+        inner.t0 % blake2b.BLOCK_SIZE::u64 == 0 &&
+        (inner.buf_len > 0 || (inner.t0 == 0 && inner.t1 == 0));
+}
+
+fun valid_blake2b(context: *Blake2b) bool {
+    ret context != nil && context.state == ACTIVE &&
+        valid_blake2b_inner[blake2b.State](?context.inner);
+}
+
+fun valid_blake2b_secret(context: *Blake2bSecret) bool {
+    ret context != nil && context.state == ACTIVE &&
+        valid_blake2b_inner[blake2b.SecretState](?context.inner);
+}
+
+# activate an empty context with a parameter block, see `blake2b.params`
+pub fun init_blake2b(context: *Blake2b, params: blake2b.Params) contracts.Error {
+    if (context == nil)          { ret contracts.INVALID_INPUT; }
+    if (context.state != EMPTY)  { ret contracts.INVALID_STATE; }
+    if (!blake2b.valid(?params)) { ret contracts.INVALID_INPUT; }
+    context.inner = blake2b.init(?params);
+    context.state = ACTIVE;
+    ret contracts.OK;
+}
+
+# activate an empty secret context, keyed when the key is not empty
+#
+# the key is 0..64 bytes and is held as the first block until input follows
+pub fun init_blake2b_secret(context: *Blake2bSecret, params: blake2b.Params,
+    key: contracts.SecretBytes) contracts.Error {
+    if (context == nil)                  { ret contracts.INVALID_INPUT; }
+    if (context.state != EMPTY)          { ret contracts.INVALID_STATE; }
+    if (!blake2b.valid(?params))         { ret contracts.INVALID_INPUT; }
+    if (key.len != 0 && key.data == nil) { ret contracts.INVALID_INPUT; }
+    if (key.len > BLAKE2B_MAX_KEY_SIZE)  { ret contracts.INVALID_KEY; }
+    blake2b.destroy_secret(?context.inner);
+    context.inner = blake2b.init_secret(?params, key.data, key.len);
+    context.state = ACTIVE;
+    ret contracts.OK;
+}
+
+pub fun update_blake2b(context: *Blake2b, input: contracts.Bytes) contracts.Error {
+    if (context == nil)                     { ret contracts.INVALID_INPUT; }
+    if (!valid_blake2b(context))            { ret contracts.INVALID_STATE; }
+    if (input.len > 0 && input.data == nil) { ret contracts.INVALID_INPUT; }
+    blake2b.update(?context.inner, input.data, input.len);
+    ret contracts.OK;
+}
+
+pub fun update_blake2b_secret(context: *Blake2bSecret,
+    input: contracts.SecretBytes) contracts.Error {
+    if (context == nil)                     { ret contracts.INVALID_INPUT; }
+    if (!valid_blake2b_secret(context))     { ret contracts.INVALID_STATE; }
+    if (input.len > 0 && input.data == nil) { ret contracts.INVALID_INPUT; }
+    blake2b.update_secret(?context.inner, input.data, input.len);
+    ret contracts.OK;
+}
+
+# feed public input into a secret context, lifted block by block
+pub fun update_blake2b_public(context: *Blake2bSecret,
+    input: contracts.Bytes) contracts.Error {
+    if (context == nil)                     { ret contracts.INVALID_INPUT; }
+    if (!valid_blake2b_secret(context))     { ret contracts.INVALID_STATE; }
+    if (input.len > 0 && input.data == nil) { ret contracts.INVALID_INPUT; }
+    lift.update_blake2b_public(?context.inner, input.data, input.len);
+    ret contracts.OK;
+}
+
+# write the digest of the input so far without changing the context
+pub fun snapshot_blake2b(context: *Blake2b,
+    output: contracts.Buffer) contracts.Operation {
+    if (context == nil)                             { ret failed(contracts.INVALID_INPUT); }
+    if (!valid_blake2b(context))                    { ret failed(contracts.INVALID_STATE); }
+    if (output.capacity < context.inner.digest_len) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil)                         { ret failed(contracts.INVALID_INPUT); }
+    var copy: blake2b.State = context.inner;
+    blake2b.final(?copy, output.data);
+    ret contracts.Operation{error: contracts.OK, written: copy.digest_len};
+}
+
+# write the secret digest of the input so far without changing the context
+#[oblivious]
+pub fun snapshot_blake2b_secret(context: *Blake2bSecret,
+    output: contracts.SecretBuffer) contracts.Operation {
+    if (context == nil)                             { ret failed(contracts.INVALID_INPUT); }
+    if (!valid_blake2b_secret(context))             { ret failed(contracts.INVALID_STATE); }
+    if (output.capacity < context.inner.digest_len) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil)                         { ret failed(contracts.INVALID_INPUT); }
+    val digest_len: usize               = context.inner.digest_len;
+    var copy:       blake2b.SecretState = context.inner;
+    var digest:     [64]^u8;
+    blake2b.final_secret(?copy, ?digest[0]);
+    blake2b.destroy_secret(?copy);
+    var i: usize = 0;
+    for (i < digest_len) {
+        output.data[i] = digest[i];
+        i              = i + 1;
+    }
+    ct.zeroize(?digest[0], BLAKE2B_MAX_DIGEST_SIZE);
+    ret contracts.Operation{error: contracts.OK, written: digest_len};
+}
+
+pub fun final_blake2b(context: *Blake2b,
+    output: contracts.Buffer) contracts.Operation {
+    val result: contracts.Operation = snapshot_blake2b(context, output);
+    if (result.error != contracts.OK) { ret result; }
+    clear_blake2b(?context.inner);
+    context.state = EMPTY;
+    ret result;
+}
+
+#[oblivious]
+pub fun final_blake2b_secret(context: *Blake2bSecret,
+    output: contracts.SecretBuffer) contracts.Operation {
+    val result: contracts.Operation = snapshot_blake2b_secret(context, output);
+    if (result.error != contracts.OK) { ret result; }
+    blake2b.destroy_secret(?context.inner);
+    context.state = EMPTY;
+    ret result;
+}
+
+pub fun destroy_blake2b(context: *Blake2b) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    val valid: bool = context.state == EMPTY || context.state == ACTIVE;
+    clear_blake2b(?context.inner);
+    context.state = EMPTY;
+    if (!valid) { ret contracts.INVALID_STATE; }
+    ret contracts.OK;
+}
+
+pub fun destroy_blake2b_secret(context: *Blake2bSecret) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    val valid: bool = context.state == EMPTY || context.state == ACTIVE;
+    blake2b.destroy_secret(?context.inner);
+    context.state = EMPTY;
+    if (!valid) { ret contracts.INVALID_STATE; }
+    ret contracts.OK;
+}
+
+# one-shot public BLAKE2b
+#
+# the output may overlap the input because it is written only after the
+# complete digest exists
+pub fun digest_blake2b(params: blake2b.Params, input: contracts.Bytes,
+    output: contracts.Buffer) contracts.Operation {
+    var context:     Blake2b         = empty_blake2b();
+    val initialized: contracts.Error = init_blake2b(?context, params);
+    if (initialized != contracts.OK) { ret failed(initialized); }
+    val updated: contracts.Error = update_blake2b(?context, input);
+    if (updated != contracts.OK) {
+        destroy_blake2b(?context);
+        ret failed(updated);
+    }
+    val result: contracts.Operation = final_blake2b(?context, output);
+    destroy_blake2b(?context);
+    ret result;
+}
+
+# authenticate a public message with keyed BLAKE2b into secret output
+#
+# the key is 0..64 bytes. the output may overlap the key or the message
+# because it is written only after the complete tag exists
+pub fun mac_blake2b_secret(params: blake2b.Params, key: contracts.SecretBytes,
+    message: contracts.Bytes, output: contracts.SecretBuffer) contracts.Operation {
+    var context:     Blake2bSecret   = empty_blake2b_secret();
+    val initialized: contracts.Error = init_blake2b_secret(?context, params, key);
+    if (initialized != contracts.OK) { ret failed(initialized); }
+    val updated: contracts.Error = update_blake2b_public(?context, message);
+    if (updated != contracts.OK) {
+        destroy_blake2b_secret(?context);
+        ret failed(updated);
+    }
+    val result: contracts.Operation = final_blake2b_secret(?context, output);
+    destroy_blake2b_secret(?context);
+    ret result;
+}
+
+# authenticate a public message with keyed BLAKE2b
+#
+# the output may overlap the message because it is written only after the
+# complete tag exists. a nonempty public output cannot alias the secret key
+pub fun mac_blake2b(params: blake2b.Params, key: contracts.SecretBytes,
+    message: contracts.Bytes, output: contracts.Buffer) contracts.Operation {
+    if (!blake2b.valid(?params))             { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < params.digest_len) { ret failed(contracts.OUTPUT_TOO_SMALL); }
+    if (output.data == nil)                  { ret failed(contracts.INVALID_INPUT); }
+
+    var tag:    [64]^u8;
+    val result: contracts.Operation = mac_blake2b_secret(params, key, message,
+        contracts.SecretBuffer{data: ?tag[0], capacity: BLAKE2B_MAX_DIGEST_SIZE});
+    if (result.error == contracts.OK) {
+        var i: usize = 0;
+        for (i < result.written) {
+            output.data[i] = tag[i]:>u8;
+            i              = i + 1;
+        }
+    }
+    ct.zeroize(?tag[0], BLAKE2B_MAX_DIGEST_SIZE);
+    ret result;
 }

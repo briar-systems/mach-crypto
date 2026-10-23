@@ -32,3 +32,4 @@ rsa-pkcs1-sha512	yes	Wycheproof rsa_signature_sha512	word
 der	no	ITU-T X.690	none
 pem	no	RFC 7468	none
 key-containers	yes	RFC 5208, RFC 5480, RFC 5958, RFC 8017, RFC 8410, SEC 1	none
+blake2b	yes	RFC 7693, BLAKE2 reference KAT	none

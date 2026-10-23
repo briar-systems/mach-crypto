@@ -6,6 +6,7 @@ fwd crypto.contracts;
 fwd crypto.secret;
 fwd crypto.assurance;
 fwd crypto.hash;
+fwd crypto.hash.blake2b;
 fwd crypto.hash.sha256;
 fwd crypto.hash.sha512;
 fwd crypto.hash.keccak;

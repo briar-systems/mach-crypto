@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-23
+
+### Added
+
+- BLAKE2b following RFC 7693, with 1 to 64-byte digests (#219). `crypto.hash.blake2b` is the primitive: a public `State` and a secret-typed `SecretState` over one constant-time compression, with `Params` carrying the whole parameter block, so salt, personalization and tree hashing (fanout, depth, leaf length, node offset, node depth, inner length, last node) are available. The byte counter is the full 128 bits.
+- `hash.Blake2b` hashes public input with the transcript contract of `hash.Sha256`, and `hash.digest_blake2b` is its one-shot form (#219).
+- `hash.Blake2bSecret` is keyed BLAKE2b, with a secret key of up to 64 bytes and secret or public input, writing a secret digest. `hash.mac_blake2b` and `hash.mac_blake2b_secret` are its one-shot forms with a public or secret tag (#219).
+
 ## [0.28.1] - 2026-10-21
 
 ### Fixed

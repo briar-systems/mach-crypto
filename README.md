@@ -9,7 +9,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 
 - `crypto.secret` owns allocated secret storage, bounded views, explicit moves,
   allocating clones, entropy initialization, and deterministic destruction.
-- `crypto.hash` provides incremental SHA-256 and SHA-384 transcript hashing.
+- `crypto.hash` provides incremental SHA-256 and SHA-384 transcript hashing,
+  and BLAKE2b with keyed, salted, personalized and tree modes.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384, with public or
   secret tags.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
@@ -162,6 +163,36 @@ must not be copied directly. SHA-2 runs on `crypto.hash.sha256` and
 where the processor has it. Secret input uses those modules' secret-typed
 states, and public input is lifted into them block by block. Snapshot clones, lift buffers, temporary digests, and destroyed contexts
 are explicitly zeroized.
+
+## BLAKE2b
+
+`crypto.hash.blake2b` is the RFC 7693 primitive. `blake2b.Params` is the whole
+parameter block: digest length (1 to 64 bytes), 16-byte salt, 16-byte
+personalization, and the tree fields with the last-node flag.
+`blake2b.params(n)` returns sequential parameters for an `n`-byte digest, and
+`blake2b.valid` checks a block. The digest length is a parameter of the hash,
+not a truncation of a 64-byte digest. The byte counter is the full 128 bits of
+the specification, so no input length overflows it.
+
+`hash.Blake2b` hashes public input under any parameter block. It follows the
+transcript contract above: `empty_blake2b`, `init_blake2b`, `update_blake2b`,
+`snapshot_blake2b`, `final_blake2b` and `destroy_blake2b`. `snapshot` and
+`final` write exactly the configured digest length. `hash.digest_blake2b` is
+the one-shot form, and its output may overlap its input.
+
+`hash.Blake2bSecret` runs on the secret-typed state. `init_blake2b_secret`
+takes a secret key of 0 to 64 bytes, where an empty key is unkeyed hashing of
+secret input. Longer keys are rejected with `INVALID_KEY`. Input arrives as
+secret bytes through `update_blake2b_secret` or as public bytes through
+`update_blake2b_public`, and the two may be mixed. The digest is written to a
+`contracts.SecretBuffer`, and declassifying it is the caller's decision.
+`hash.mac_blake2b_secret` is the one-shot keyed form with a secret tag, and
+`hash.mac_blake2b` declassifies the tag into public output. The tag output may
+overlap the message because nothing is written until the tag is complete.
+
+The secret state, snapshot clones, lift buffers and temporary digests are
+explicitly zeroized, and the compression is checked constant-time at the
+secret instance.
 
 ## HMAC and HKDF
 

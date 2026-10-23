@@ -1,10 +1,13 @@
-# public input into std's secret-typed sha-2 states, and the length bounds
+# public input into the secret-typed sha-2 and blake2b states, and the length
+# bounds
 #
-# std's secret entries take `*^u8` only, so public bytes are lifted here in
+# the secret entries take `*^u8` only, so public bytes are lifted here in
 # block-sized steps through a secret stack buffer that is zeroized after. every
-# update reports whether the running length stays inside the algorithm's bound,
-# which callers surface as an invalid input
+# sha-2 update reports whether the running length stays inside the algorithm's
+# bound, which callers surface as an invalid input. blake2b's 128-bit counter
+# has no reachable bound
 
+use crypto.hash.blake2b;
 use crypto.hash.sha256;
 use crypto.hash.sha512;
 use std.crypto.ct;
@@ -102,4 +105,21 @@ pub fun update512_public(state: *sha512.SecretState512, data: *u8, len: usize) b
     }
     ct.zeroize(?lifted[0], sha512.BLOCK_SIZE);
     ret true;
+}
+
+pub fun update_blake2b_public(state: *blake2b.SecretState, data: *u8, len: usize) {
+    var lifted: [128]^u8;
+    var offset: usize = 0;
+    for (offset < len) {
+        var take: usize = len - offset;
+        if (take > blake2b.BLOCK_SIZE) { take = blake2b.BLOCK_SIZE; }
+        var i: usize = 0;
+        for (i < take) {
+            lifted[i] = data[offset + i];
+            i         = i + 1;
+        }
+        blake2b.update_secret(state, ?lifted[0], take);
+        offset = offset + take;
+    }
+    ct.zeroize(?lifted[0], blake2b.BLOCK_SIZE);
 }
