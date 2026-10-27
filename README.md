@@ -10,7 +10,7 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.secret` owns allocated secret storage, bounded views, explicit moves,
   allocating clones, entropy initialization, and deterministic destruction.
 - `crypto.hash` provides incremental SHA-256 and SHA-384 transcript hashing,
-  and BLAKE2b with keyed, salted, personalized and tree modes.
+  legacy SHA-1 hashing, and BLAKE2b with keyed, salted, personalized and tree modes.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384, with public or
   secret tags.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
@@ -193,6 +193,14 @@ overlap the message because nothing is written until the tag is complete.
 The secret state, snapshot clones, lift buffers and temporary digests are
 explicitly zeroized, and the compression is checked constant-time at the
 secret instance.
+
+## SHA-1 for legacy formats
+
+SHA-1 is available for interoperability with legacy formats only. `hash.Sha1`
+has the same empty, init, update, snapshot, final and destroy lifecycle as the
+other incremental hashes. `crypto.hash.sha1.SecretState` keeps password-derived
+input and digest secret-typed and must be explicitly destroyed after use. SHA-1
+must not be used for new collision-resistant designs.
 
 ## HMAC and HKDF
 

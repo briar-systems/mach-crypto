@@ -1,0 +1,190 @@
+# SHA-1 for legacy interoperability (FIPS 180-4)
+#
+# SHA-1 is not suitable for new collision-resistant designs. The secret state
+# exists for old password-based formats; it never declassifies a digest.
+
+use std.crypto.ct;
+use std.types.size.usize;
+
+pub val DIGEST_SIZE: usize = 20;
+pub val BLOCK_SIZE:  usize = 64;
+pub val MAX_BYTES:   u64   = 0x1fffffffffffffff;
+
+pub rec State {
+    h:       [5]u32;
+    buf:     [64]u8;
+    buf_len: usize;
+    total:   u64;
+}
+
+pub rec SecretState {
+    h:       [5]^u32;
+    buf:     [64]^u8;
+    buf_len: usize;
+    total:   u64;
+}
+
+#[oblivious]
+fun rotl[W](x: W, n: u32) W {
+    ret (x << n) | (x >> (32 - n));
+}
+
+#[oblivious]
+fun compress[W, B](h: *W, block: *B) {
+    var words: [80]W;
+    var i:     usize = 0;
+    for (i < 16) {
+        words[i] = (block[i * 4]::W << 24) | (block[i * 4 + 1]::W << 16) |
+            (block[i * 4 + 2]::W << 8) | block[i * 4 + 3]::W;
+        i = i + 1;
+    }
+    for (i < 80) {
+        words[i] = rotl[W](words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16], 1);
+        i        = i + 1;
+    }
+    var a: W = h[0];
+    var b: W = h[1];
+    var c: W = h[2];
+    var d: W = h[3];
+    var e: W = h[4];
+    i = 0;
+    for (i < 80) {
+        var f: W   = 0;
+        var k: u32 = 0;
+        if (i < 20) {
+            f = (b & c) | (~b & d);
+            k = 0x5a827999;
+        }
+        or (i < 40) {
+            f = b ^ c ^ d;
+            k = 0x6ed9eba1;
+        }
+        or (i < 60) {
+            f = (b & c) | (b & d) | (c & d);
+            k = 0x8f1bbcdc;
+        }
+        or {
+            f = b ^ c ^ d;
+            k = 0xca62c1d6;
+        }
+        val t: W = rotl[W](a, 5) + f + e + k + words[i];
+        e = d;
+        d = c;
+        c = rotl[W](b, 30);
+        b = a;
+        a = t;
+        i = i + 1;
+    }
+    h[0] = h[0] + a;
+    h[1] = h[1] + b;
+    h[2] = h[2] + c;
+    h[3] = h[3] + d;
+    h[4] = h[4] + e;
+    a    = 0;
+    b    = 0;
+    c    = 0;
+    d    = 0;
+    e    = 0;
+    for (i < 80) {
+        words[i] = 0;
+        i        = i + 1;
+    }
+}
+
+pub fun init() State {
+    var s: State;
+    s.h[0]    = 0x67452301;
+    s.h[1]    = 0xefcdab89;
+    s.h[2]    = 0x98badcfe;
+    s.h[3]    = 0x10325476;
+    s.h[4]    = 0xc3d2e1f0;
+    s.buf_len = 0;
+    s.total   = 0;
+    ret s;
+}
+
+pub fun init_secret() SecretState {
+    var s: SecretState;
+    s.h[0] = 0x67452301;
+    s.h[1] = 0xefcdab89;
+    s.h[2] = 0x98badcfe;
+    s.h[3] = 0x10325476;
+    s.h[4] = 0xc3d2e1f0;
+    ct.zeroize(?s.buf[0], BLOCK_SIZE);
+    s.buf_len = 0;
+    s.total   = 0;
+    ret s;
+}
+
+#[oblivious]
+fun update_inner[S, W, B](s: *S, data: *B, len: usize) {
+    var i: usize = 0;
+    s.total = s.total + len::u64;
+    for (i < len) {
+        s.buf[s.buf_len] = data[i];
+        s.buf_len        = s.buf_len + 1;
+        if (s.buf_len == BLOCK_SIZE) {
+            compress[W, B](?s.h[0], ?s.buf[0]);
+            s.buf_len = 0;
+        }
+        i = i + 1;
+    }
+}
+
+pub fun update(s: *State, data: *u8, len: usize) {
+    update_inner[State, u32, u8](s, data, len);
+}
+
+#[oblivious]
+pub fun update_secret(s: *SecretState, data: *^u8, len: usize) {
+    update_inner[SecretState, ^u32, ^u8](s, data, len);
+}
+
+#[oblivious]
+fun final_inner[S, W, B](s: *S, digest: *B) {
+    val bits: u64 = s.total * 8;
+    s.buf[s.buf_len] = 0x80;
+    s.buf_len        = s.buf_len + 1;
+    if (s.buf_len > 56) {
+        for (s.buf_len < BLOCK_SIZE) {
+            s.buf[s.buf_len] = 0;
+            s.buf_len        = s.buf_len + 1;
+        }
+        compress[W, B](?s.h[0], ?s.buf[0]);
+        s.buf_len = 0;
+    }
+    for (s.buf_len < 56) {
+        s.buf[s.buf_len] = 0;
+        s.buf_len        = s.buf_len + 1;
+    }
+    var i: usize = 0;
+    for (i < 8) {
+        s.buf[56 + i] = (bits >> (56 - 8 * i)::u64)::u8;
+        i             = i + 1;
+    }
+    compress[W, B](?s.h[0], ?s.buf[0]);
+    i = 0;
+    for (i < 5) {
+        digest[i * 4]     = (s.h[i] >> 24)::B;
+        digest[i * 4 + 1] = (s.h[i] >> 16)::B;
+        digest[i * 4 + 2] = (s.h[i] >> 8)::B;
+        digest[i * 4 + 3] = s.h[i]::B;
+        i                 = i + 1;
+    }
+}
+
+pub fun final(s: *State, digest: *u8) {
+    final_inner[State, u32, u8](s, digest);
+}
+
+#[oblivious]
+pub fun final_secret(s: *SecretState, digest: *^u8) {
+    final_inner[SecretState, ^u32, ^u8](s, digest);
+}
+
+pub fun destroy_secret(s: *SecretState) {
+    ct.zeroize((?s.h[0]):~*^u8, 5 * 4);
+    ct.zeroize(?s.buf[0], BLOCK_SIZE);
+    s.buf_len = 0;
+    s.total   = 0;
+}

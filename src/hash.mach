@@ -11,6 +11,7 @@
 
 use crypto.contracts;
 use crypto.hash.blake2b;
+use crypto.hash.sha1;
 use crypto.hash.sha256;
 use crypto.hash.sha512;
 use crypto.internal.lift;
@@ -21,6 +22,7 @@ use std.types.bool.true;
 use std.types.size.usize;
 
 pub val SHA256_DIGEST_SIZE: usize = 32;
+pub val SHA1_DIGEST_SIZE:   usize = 20;
 pub val SHA384_DIGEST_SIZE: usize = 48;
 
 pub def State: u8;
@@ -31,6 +33,75 @@ pub val ACTIVE: State = 1;
 pub rec Sha256 {
     inner: sha256.State;
     state: State;
+}
+
+# legacy SHA-1 transcript state; use only where an existing format requires it
+pub rec Sha1 {
+    inner: sha1.State;
+    state: State;
+}
+
+pub fun empty_sha1() Sha1 {
+    var context: Sha1;
+    var zero:    sha1.State;
+    context.inner = zero;
+    context.state = EMPTY;
+    ret context;
+}
+
+fun valid_sha1(context: *Sha1) bool {
+    ret context != nil && context.state == ACTIVE &&
+        context.inner.buf_len < sha1.BLOCK_SIZE &&
+        context.inner.total <= sha1.MAX_BYTES &&
+        context.inner.buf_len == (context.inner.total % sha1.BLOCK_SIZE::u64)::usize;
+}
+
+pub fun init_sha1(context: *Sha1) contracts.Error {
+    if (context == nil)         { ret contracts.INVALID_INPUT; }
+    if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
+    context.inner = sha1.init();
+    context.state = ACTIVE;
+    ret contracts.OK;
+}
+
+pub fun update_sha1(context: *Sha1, input: contracts.Bytes) contracts.Error {
+    if (context == nil)                                        { ret contracts.INVALID_INPUT; }
+    if (!valid_sha1(context))                                  { ret contracts.INVALID_STATE; }
+    if (input.len > 0 && input.data == nil)                    { ret contracts.INVALID_INPUT; }
+    if (input.len::u64 > sha1.MAX_BYTES - context.inner.total) { ret contracts.INVALID_INPUT; }
+    sha1.update(?context.inner, input.data, input.len);
+    ret contracts.OK;
+}
+
+pub fun snapshot_sha1(context: *Sha1, output: contracts.Buffer) contracts.Operation {
+    if (context == nil)       { ret contracts.Operation{error: contracts.INVALID_INPUT, written: 0}; }
+    if (!valid_sha1(context)) { ret contracts.Operation{error: contracts.INVALID_STATE, written: 0}; }
+    if (output.capacity < SHA1_DIGEST_SIZE) {
+        ret contracts.Operation{error: contracts.OUTPUT_TOO_SMALL, written: 0};
+    }
+    if (output.data == nil) { ret contracts.Operation{error: contracts.INVALID_INPUT, written: 0}; }
+    var copy: sha1.State = context.inner;
+    sha1.final(?copy, output.data);
+    ret contracts.Operation{error: contracts.OK, written: SHA1_DIGEST_SIZE};
+}
+
+pub fun final_sha1(context: *Sha1, output: contracts.Buffer) contracts.Operation {
+    val result: contracts.Operation = snapshot_sha1(context, output);
+    if (result.error != contracts.OK) { ret result; }
+    var zero: sha1.State;
+    context.inner = zero;
+    context.state = EMPTY;
+    ret result;
+}
+
+pub fun destroy_sha1(context: *Sha1) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    val valid: bool = context.state == EMPTY || context.state == ACTIVE;
+    var zero:  sha1.State;
+    context.inner = zero;
+    context.state = EMPTY;
+    if (!valid) { ret contracts.INVALID_STATE; }
+    ret contracts.OK;
 }
 
 pub rec Sha384 {

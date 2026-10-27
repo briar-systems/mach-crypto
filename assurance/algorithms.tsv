@@ -1,6 +1,7 @@
 algorithm	ct_required	vector_source	hardware_multiply
 secret-storage	yes	mach-crypto ownership contract	none
 sha-256	yes	NIST FIPS 180-4	none
+sha-1	yes	NIST FIPS 180-4	none
 sha-384	yes	NIST FIPS 180-4	none
 hmac-sha-256	yes	RFC 4231	none
 hmac-sha-384	yes	RFC 4231	none
