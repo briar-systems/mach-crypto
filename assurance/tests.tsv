@@ -1,11 +1,16 @@
 category	project	algorithm	vector_source	filter
 official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__nist_empty_and_abc_vectors_preserve_snapshots
+official-vector	.	sha-1	NIST FIPS 180-4	crypto.test.hash#sha1__fips_vectors_and_secret_state
 official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__splits_and_byte_fragments_match_nist_multiblock_vectors
 official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__million_byte_nist_vectors_span_repeated_fragments
 official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	crypto.test.mac#hmac__rfc_4231_sha_256_and_sha_384_vectors
 official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	crypto.test.mac#hmac__rfc_4231_multiblock_message_vectors
 official-vector	.	hkdf-sha-256	RFC 5869	crypto.test.mac#hkdf__rfc_5869_sha_256_case_one
+official-vector	.	pbkdf2-hmac-sha-256	published PBKDF2-HMAC-SHA256 vectors	crypto.test.pbkdf2#pbkdf2__published_and_multiblock_vectors
+differential	.	pbkdf2-hmac-sha-256	independent Python hashlib vector	crypto.test.pbkdf2#pbkdf2__long_salt_and_password_output_overlap
+invalid-input	.	pbkdf2-hmac-sha-256	mach-crypto bounded output contract	crypto.test.pbkdf2#pbkdf2__invalid_parameters_leave_output_untouched
 official-vector	.	aes-128,aes-256	NIST FIPS 197	crypto.test.cipher#aes__fips_197_blocks_through_one_keyed_context
+official-vector	.	aes-128-cbc,aes-256-cbc	NIST SP 800-38A	crypto.test.cipher#aes_cbc__nist_sp_800_38a_encrypt_decrypt_and_chunks
 official-vector	.	aes-128,aes-256	NIST FIPS 197 and SP 800-38A	crypto.internal.aes#aes__fips_197_and_sp_800_38a_blocks_on_every_member_this_host_runs
 official-vector	.	aes-128-gcm,aes-256-gcm	GCM specification test cases 1-4 and 13-16 and NIST CAVP gcmEncryptExtIV128	crypto.aead.aes_gcm#aes_gcm__gcm_spec_vectors_on_every_aes_and_ghash_member_this_host_runs
 official-vector	.	chacha20-poly1305	RFC 8439	crypto.test.aead#chacha20_poly1305__rfc_8439_aead_vector_seals_and_opens
@@ -60,11 +65,13 @@ differential	.	ecdsa-p256-sha384	independent OpenSSL-compatible signer (Python c
 differential	.	ecdsa-p521-sha256	independent OpenSSL-compatible signer (Python cryptography)	crypto.test.signature#ecdsa_p_521__openssl_sha_256_vectors
 differential	.	ecdsa-p521-sha384	independent OpenSSL-compatible signer (Python cryptography)	crypto.test.signature#ecdsa_p_521__openssl_sha_384_vectors
 invalid-input	.	sha-256,sha-384	mach-crypto bounded transcript contract	crypto.test.hash#hash__validation_and_overflow_failures_preserve_state_and_output
+invalid-input	.	sha-1	mach-crypto bounded transcript contract	crypto.test.hash#sha1__invalid_inputs_preserve_state_and_output
 invalid-input	.	hmac-sha-256,hmac-sha-384	mach-crypto bounded output contract	crypto.test.mac#hmac__output_overlap_and_failures_have_defined_behavior
 invalid-input	.	hkdf-sha-256,hkdf-sha-384	RFC 5869 and mach-crypto bounded output contract	crypto.test.mac#hkdf__limits_capacities_and_invalid_inputs_do_not_write
 invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto AEAD contract	crypto.test.aead#aes_gcm__validation_and_capacity_failures_leave_output_unchanged
 invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	crypto.test.aead#aes_gcm__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
 invalid-input	.	aes-128,aes-256	mach-crypto keyed context contract	crypto.test.cipher#aes__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
+invalid-input	.	aes-128-cbc,aes-256-cbc	mach-crypto keyed context contract	crypto.test.cipher#aes_cbc__invalid_lengths_and_lifecycle_preserve_output
 invalid-input	.	chacha20-poly1305	RFC 8439 and mach-crypto AEAD contract	crypto.test.aead#chacha20_poly1305__malformed_and_bounded_failures_do_not_write
 invalid-input	.	p-256-ecdh	SEC 1 and mach-crypto agreement contract	crypto.test.group#p256__invalid_scalars_and_sec1_points_preserve_output
 invalid-input	.	x25519	RFC 7748 and mach-crypto agreement contract	crypto.test.group#x25519__low_order_inputs_reject_without_changing_output
