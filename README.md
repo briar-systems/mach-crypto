@@ -16,8 +16,8 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
 - `crypto.pbkdf2` provides PBKDF2-HMAC-SHA256 password-based key derivation.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
-- `crypto.cipher.aes` provides the AES-128 and AES-256 block cipher under one
-  expanded key.
+- `crypto.cipher.aes` provides AES-128 and AES-256 block encryption, block
+  decryption, and CBC mode under explicit keyed contexts.
 - `crypto.aead.chacha20_poly1305` provides ChaCha20-Poly1305 record protection.
 - `crypto.group.x25519` provides X25519 key agreement.
 - `crypto.group.p256` provides SEC1 P-256 public keys and ECDH.
@@ -297,15 +297,25 @@ Intel's carry-less multiply white paper.
 
 ## AES block cipher
 
-`cipher.aes.Context` holds one AES-128 or AES-256 key schedule. Construct it
-with `aes.empty()`, expand the key once with `aes.init`, then call
-`aes.encrypt_block` for any number of 16-byte blocks. Input must be exactly
-one block, output must hold one, and they may be the same storage.
-`aes.dnit` zeroizes the schedule. The lifecycle, the `INVALID_STATE` rules and
-the welding are the same as for the AES-GCM context. This is the raw forward
-cipher for constructions such as QUIC header protection, which derives a
-five-byte mask from one encrypted packet sample. Record protection belongs to
-`crypto.aead`.
+`cipher.aes.Context` holds one AES-128 or AES-256 expanded key. Decryption reads
+the existing schedule without storing another copy. Construct it with
+`aes.empty()`, expand the key once with
+`aes.init`, then call `aes.encrypt_block` or `aes.decrypt_block` for any number
+of 16-byte blocks. Input must be exactly one block, output must hold one, and
+they may be the same secret storage. `aes.dnit` zeroizes the schedule. The
+lifecycle, `INVALID_STATE` rules, and welding are the same as for the AES-GCM
+context. The forward cipher also serves constructions such as QUIC header
+protection, which derives a five-byte mask from one encrypted packet sample.
+
+`cipher.aes.CbcContext` holds an AES key and a secret chaining value. Construct
+it with `aes.empty_cbc`, install a 16-byte or 32-byte secret key and exact
+16-byte public IV with `aes.init_cbc`, then call `aes.encrypt_cbc` or
+`aes.decrypt_cbc` on whole blocks. Calls may be split at block boundaries; the
+context carries the last ciphertext block into the next call. Input and output
+may be exactly the same secret storage or disjoint; shifted overlap is outside
+the contract. Padding is the caller's responsibility. CBC provides no
+authentication, so callers must authenticate ciphertext separately when their
+format requires it. `aes.dnit_cbc` wipes the key schedule and the IV.
 
 ## ChaCha20-Poly1305
 

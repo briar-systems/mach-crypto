@@ -167,7 +167,7 @@ fun substitute(q: *^u64) {
 
 # substitute four key-schedule bytes in place through the bitsliced circuit
 #[oblivious]
-fun substitute_word(word: *^u8) {
+pub fun substitute_word(word: *^u8) {
     var planes: [8]^u64;
     var plane:  usize = 0;
     for (plane < 8) {

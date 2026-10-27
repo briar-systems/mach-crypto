@@ -1,14 +1,16 @@
 # the aes-128 and aes-256 block cipher under one expanded key
 #
 # a Context holds the key schedule, expanded once by `init`, and
-# `encrypt_block` runs any number of blocks against it. this is the raw
-# forward cipher, for constructions such as quic header protection that need
+# `encrypt_block` and `decrypt_block` run any number of blocks against it. the
+# inverse path reads the existing schedule without storing another copy. this
+# is the raw block cipher, for constructions such as quic header protection that need
 # one block of keystream; record protection belongs to `crypto.aead`. the
 # context is welded, since every key-derived field is secret-typed, and `dnit`
 # zeroizes it.
 
 use crypto.contracts;
 use core: crypto.internal.aes;
+use crypto.internal.aes.decrypt;
 use std.crypto.ct;
 use std.types.bool.bool;
 use std.types.size.usize;
@@ -77,6 +79,22 @@ pub fun encrypt_block(context: *Context, input: contracts.SecretBytes,
     ret contracts.OK;
 }
 
+# decrypt one 16-byte block with the same keyed context as encrypt_block
+# input and output may be the same secret storage
+#[oblivious]
+pub fun decrypt_block(context: *Context, input: contracts.SecretBytes,
+    output: contracts.SecretBuffer) contracts.Error {
+    if (context == nil)                               { ret contracts.INVALID_INPUT; }
+    if (context.state != ACTIVE)                      { ret contracts.INVALID_STATE; }
+    if (input.len != BLOCK_SIZE || input.data == nil) { ret contracts.INVALID_INPUT; }
+    if (output.capacity < BLOCK_SIZE)                 { ret contracts.OUTPUT_TOO_SMALL; }
+    if (output.data == nil)                           { ret contracts.INVALID_INPUT; }
+    ct.begin();
+    decrypt.block(?context.cipher, input.data, output.data);
+    ct.end();
+    ret contracts.OK;
+}
+
 # zeroize the context and return it to empty
 #
 # idempotent. a context in an unknown state is still wiped and reported.
@@ -84,6 +102,135 @@ pub fun dnit(context: *Context) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     val valid: bool = context.state == EMPTY || context.state == ACTIVE;
     core.destroy(?context.cipher);
+    context.state = EMPTY;
+    if (!valid) { ret contracts.INVALID_STATE; }
+    ret contracts.OK;
+}
+
+# CBC maintains a secret chaining value across whole-block calls. Padding is
+# a caller concern, and CBC alone does not authenticate ciphertext.
+pub rec CbcContext {
+    cipher: Context;
+    iv:     [16]^u8;
+    state:  State;
+}
+
+pub fun empty_cbc() CbcContext {
+    var context: CbcContext;
+    context.cipher = empty();
+    ct.zeroize(?context.iv[0], BLOCK_SIZE);
+    context.state = EMPTY;
+    ret context;
+}
+
+#[oblivious]
+pub fun init_cbc(context: *CbcContext, key: contracts.SecretBytes,
+    iv: contracts.Bytes) contracts.Error {
+    if (context == nil)                         { ret contracts.INVALID_INPUT; }
+    if (context.state != EMPTY)                 { ret contracts.INVALID_STATE; }
+    if (iv.len != BLOCK_SIZE || iv.data == nil) { ret contracts.INVALID_INPUT; }
+    val initialized: contracts.Error = init(?context.cipher, key);
+    if (initialized != contracts.OK) { ret initialized; }
+    var i: usize = 0;
+    for (i < BLOCK_SIZE) {
+        context.iv[i] = iv.data[i];
+        i             = i + 1;
+    }
+    context.state = ACTIVE;
+    ret contracts.OK;
+}
+
+fun cbc_valid(context: *CbcContext, input: contracts.SecretBytes,
+    output: contracts.SecretBuffer) contracts.Error {
+    if (context == nil)                                            { ret contracts.INVALID_INPUT; }
+    if (context.state != ACTIVE || context.cipher.state != ACTIVE) { ret contracts.INVALID_STATE; }
+    if (input.len % BLOCK_SIZE != 0)                               { ret contracts.INVALID_INPUT; }
+    if (output.capacity < input.len)                               { ret contracts.OUTPUT_TOO_SMALL; }
+    if (input.len == 0)                                            { ret contracts.OK; }
+    if (input.data == nil || output.data == nil)                   { ret contracts.INVALID_INPUT; }
+    ret contracts.OK;
+}
+
+# Encrypt whole blocks. The context's IV becomes the last ciphertext block.
+#[oblivious]
+pub fun encrypt_cbc(context: *CbcContext, input: contracts.SecretBytes,
+    output: contracts.SecretBuffer) contracts.Operation {
+    val valid: contracts.Error = cbc_valid(context, input, output);
+    if (valid != contracts.OK) { ret contracts.Operation{error: valid, written: 0}; }
+    var block: [16]^u8;
+    ct.zeroize(?block[0], BLOCK_SIZE);
+    var off: usize = 0;
+    for (off < input.len) {
+        var i: usize = 0;
+        for (i < BLOCK_SIZE) {
+            block[i] = input.data[off + i] ^ context.iv[i];
+            i        = i + 1;
+        }
+        val encrypted: contracts.Error = encrypt_block(?context.cipher,
+            contracts.SecretBytes{data: ?block[0], len: BLOCK_SIZE},
+            contracts.SecretBuffer{data: ?block[0], capacity: BLOCK_SIZE});
+        if (encrypted != contracts.OK) {
+            ct.zeroize(?block[0], BLOCK_SIZE);
+            ct.zeroize(output.data, off);
+            ret contracts.Operation{error: encrypted, written: 0};
+        }
+        i = 0;
+        for (i < BLOCK_SIZE) {
+            output.data[off + i] = block[i];
+            context.iv[i]        = block[i];
+            i                    = i + 1;
+        }
+        off = off + BLOCK_SIZE;
+    }
+    ct.zeroize(?block[0], BLOCK_SIZE);
+    ret contracts.Operation{error: contracts.OK, written: off};
+}
+
+# Decrypt whole blocks. Input and output may be the same secret storage.
+#[oblivious]
+pub fun decrypt_cbc(context: *CbcContext, input: contracts.SecretBytes,
+    output: contracts.SecretBuffer) contracts.Operation {
+    val valid: contracts.Error = cbc_valid(context, input, output);
+    if (valid != contracts.OK) { ret contracts.Operation{error: valid, written: 0}; }
+    var block: [16]^u8;
+    var saved: [16]^u8;
+    ct.zeroize(?block[0], BLOCK_SIZE);
+    ct.zeroize(?saved[0], BLOCK_SIZE);
+    var off: usize = 0;
+    for (off < input.len) {
+        var i: usize = 0;
+        for (i < BLOCK_SIZE) {
+            block[i] = input.data[off + i];
+            saved[i] = block[i];
+            i        = i + 1;
+        }
+        val decrypted: contracts.Error = decrypt_block(?context.cipher,
+            contracts.SecretBytes{data: ?block[0], len: BLOCK_SIZE},
+            contracts.SecretBuffer{data: ?block[0], capacity: BLOCK_SIZE});
+        if (decrypted != contracts.OK) {
+            ct.zeroize(?block[0], BLOCK_SIZE);
+            ct.zeroize(?saved[0], BLOCK_SIZE);
+            ct.zeroize(output.data, off);
+            ret contracts.Operation{error: decrypted, written: 0};
+        }
+        i = 0;
+        for (i < BLOCK_SIZE) {
+            output.data[off + i] = block[i] ^ context.iv[i];
+            context.iv[i]        = saved[i];
+            i                    = i + 1;
+        }
+        off = off + BLOCK_SIZE;
+    }
+    ct.zeroize(?block[0], BLOCK_SIZE);
+    ct.zeroize(?saved[0], BLOCK_SIZE);
+    ret contracts.Operation{error: contracts.OK, written: off};
+}
+
+pub fun dnit_cbc(context: *CbcContext) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    val valid: bool = context.state == EMPTY || context.state == ACTIVE;
+    dnit(?context.cipher);
+    ct.zeroize(?context.iv[0], BLOCK_SIZE);
     context.state = EMPTY;
     if (!valid) { ret contracts.INVALID_STATE; }
     ret contracts.OK;
