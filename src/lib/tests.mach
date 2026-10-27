@@ -12,5 +12,6 @@ use encoding_tests:  crypto.test.encoding;
 use group_tests:     crypto.test.group;
 use hash_tests:      crypto.test.hash;
 use mac_tests:       crypto.test.mac;
+use pbkdf2_tests:    crypto.test.pbkdf2;
 use secret_tests:    crypto.test.secret;
 use signature_tests: crypto.test.signature;

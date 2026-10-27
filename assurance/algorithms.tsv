@@ -6,6 +6,7 @@ sha-384	yes	NIST FIPS 180-4	none
 hmac-sha-256	yes	RFC 4231	none
 hmac-sha-384	yes	RFC 4231	none
 hkdf-sha-256	yes	RFC 5869	none
+pbkdf2-hmac-sha-256	yes	RFC 8018 and published SHA-256 vectors	none
 hkdf-sha-384	yes	RFC 5869	none
 aes-128-gcm	yes	NIST SP 800-38D	none
 aes-256-gcm	yes	NIST SP 800-38D	none

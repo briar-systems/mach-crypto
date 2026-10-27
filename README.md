@@ -14,6 +14,7 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384, with public or
   secret tags.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
+- `crypto.pbkdf2` provides PBKDF2-HMAC-SHA256 password-based key derivation.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
 - `crypto.cipher.aes` provides the AES-128 and AES-256 block cipher under one
   expanded key.
@@ -231,6 +232,15 @@ Every validation failure returns `written = 0` without changing output. Public
 buffers cannot alias nonempty secret buffers under Mach's secret-welded pointer
 types. Internal SHA-2 state, schedules, HMAC pads, intermediate tags,
 pseudorandom key snapshots, and expansion blocks are explicitly zeroized.
+
+## PBKDF2-HMAC-SHA256
+
+`pbkdf2.sha256` takes a secret password, public salt and iteration count, and
+writes the requested number of secret bytes to a caller-owned buffer. The
+iteration count must be positive and the requested length cannot exceed
+`(2^32 - 1) * 32` bytes. The output may overlap the password because HMAC's
+keyed state is prepared before any output is written. All intermediate blocks
+and keyed states are zeroized.
 
 ## AES-GCM
 

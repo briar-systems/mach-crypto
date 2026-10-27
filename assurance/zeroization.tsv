@@ -6,6 +6,7 @@ x25519	crypto/group/x25519	yes
 sha-256,sha-384,blake2b	crypto/hash	no
 sha-1	crypto/hash/sha1	no
 hkdf-sha-256,hkdf-sha-384	crypto/hkdf	yes
+pbkdf2-hmac-sha-256	crypto/pbkdf2	yes
 hmac-sha-256,hmac-sha-384	crypto/hmac	yes
 aes-128-gcm,aes-256-gcm,aes-128,aes-256	crypto/internal/aes/hardware	yes
 aes-128-gcm,aes-256-gcm,aes-128,aes-256	crypto/internal/aes/software	yes

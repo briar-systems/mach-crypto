@@ -1,0 +1,131 @@
+# PBKDF2-HMAC-SHA256 (RFC 8018)
+#
+# The output capacity is the requested derived-key length. The password and
+# derived key are secret; the salt and iteration count are public parameters.
+
+use crypto.contracts;
+use crypto.internal.hmac;
+use crypto.internal.lift;
+use std.crypto.ct;
+use std.types.size.usize;
+
+pub val SHA256_DIGEST_SIZE: usize = 32;
+pub val SHA256_MAX_OUTPUT:  u64   = 0xffffffffu64 * 32;
+
+fun failed(error: contracts.Error) contracts.Operation {
+    ret contracts.Operation{error: error, written: 0};
+}
+
+#[oblivious]
+pub fun sha256(password: contracts.SecretBytes, salt: contracts.Bytes,
+    iterations: u32, output: contracts.SecretBuffer) contracts.Operation {
+    if (password.len != 0 && password.data == nil)  { ret failed(contracts.INVALID_INPUT); }
+    if (salt.len != 0 && salt.data == nil)          { ret failed(contracts.INVALID_INPUT); }
+    if (iterations == 0)                            { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity::u64 > SHA256_MAX_OUTPUT)   { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity != 0 && output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    # The first HMAC hashes the 64-byte key pad, salt and 4-byte block index.
+    if (salt.len::u64 > lift.SHA256_MAX_BYTES - 68) { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity == 0)                       { ret contracts.Operation{error: contracts.OK, written: 0}; }
+
+    var keyed:       hmac.Context256;
+    val initialized: contracts.Error = hmac.init256(?keyed, password);
+    if (initialized != contracts.OK) { ret failed(initialized); }
+
+    var u:    [32]^u8;
+    var next: [32]^u8;
+    var acc:  [32]^u8;
+    ct.zeroize(?u[0], SHA256_DIGEST_SIZE);
+    ct.zeroize(?next[0], SHA256_DIGEST_SIZE);
+    ct.zeroize(?acc[0], SHA256_DIGEST_SIZE);
+
+    var done:  usize = 0;
+    var index: u64   = 1;
+    for (done < output.capacity) {
+        var counter: [4]u8;
+        counter[0] = (index >> 24)::u8;
+        counter[1] = (index >> 16)::u8;
+        counter[2] = (index >> 8)::u8;
+        counter[3] = index::u8;
+
+        var mac:    hmac.Context256 = keyed;
+        val salted: contracts.Error = hmac.update256_public(?mac, salt.data, salt.len);
+        if (salted != contracts.OK) {
+            hmac.destroy256(?mac);
+            hmac.destroy256(?keyed);
+            ct.zeroize(?u[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(?next[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(?acc[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(output.data, done);
+            ret failed(salted);
+        }
+        val numbered: contracts.Error = hmac.update256_public(?mac, ?counter[0], 4);
+        if (numbered != contracts.OK) {
+            hmac.destroy256(?mac);
+            hmac.destroy256(?keyed);
+            ct.zeroize(?u[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(?next[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(?acc[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(output.data, done);
+            ret failed(numbered);
+        }
+        val first: contracts.Error = hmac.final256(?mac, ?u[0]);
+        if (first != contracts.OK) {
+            hmac.destroy256(?keyed);
+            ct.zeroize(?u[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(?next[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(?acc[0], SHA256_DIGEST_SIZE);
+            ct.zeroize(output.data, done);
+            ret failed(first);
+        }
+        var i: usize = 0;
+        for (i < SHA256_DIGEST_SIZE) {
+            acc[i] = u[i];
+            i      = i + 1;
+        }
+        var round: u32 = 1;
+        for (round < iterations) {
+            mac = keyed;
+            val updated: contracts.Error = hmac.update256_secret(?mac, ?u[0], SHA256_DIGEST_SIZE);
+            if (updated != contracts.OK) {
+                hmac.destroy256(?mac);
+                hmac.destroy256(?keyed);
+                ct.zeroize(?u[0], SHA256_DIGEST_SIZE);
+                ct.zeroize(?next[0], SHA256_DIGEST_SIZE);
+                ct.zeroize(?acc[0], SHA256_DIGEST_SIZE);
+                ct.zeroize(output.data, done);
+                ret failed(updated);
+            }
+            val finalized: contracts.Error = hmac.final256(?mac, ?next[0]);
+            if (finalized != contracts.OK) {
+                hmac.destroy256(?keyed);
+                ct.zeroize(?u[0], SHA256_DIGEST_SIZE);
+                ct.zeroize(?next[0], SHA256_DIGEST_SIZE);
+                ct.zeroize(?acc[0], SHA256_DIGEST_SIZE);
+                ct.zeroize(output.data, done);
+                ret failed(finalized);
+            }
+            i = 0;
+            for (i < SHA256_DIGEST_SIZE) {
+                u[i]   = next[i];
+                acc[i] = acc[i] ^ next[i];
+                i      = i + 1;
+            }
+            round = round + 1;
+        }
+        var take: usize = output.capacity - done;
+        if (take > SHA256_DIGEST_SIZE) { take = SHA256_DIGEST_SIZE; }
+        i = 0;
+        for (i < take) {
+            output.data[done + i] = acc[i];
+            i                     = i + 1;
+        }
+        done  = done + take;
+        index = index + 1;
+    }
+    hmac.destroy256(?keyed);
+    ct.zeroize(?u[0], SHA256_DIGEST_SIZE);
+    ct.zeroize(?next[0], SHA256_DIGEST_SIZE);
+    ct.zeroize(?acc[0], SHA256_DIGEST_SIZE);
+    ret contracts.Operation{error: contracts.OK, written: done};
+}
