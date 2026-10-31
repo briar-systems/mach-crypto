@@ -14,6 +14,7 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384, with public or
   secret tags.
 - `crypto.hkdf` provides SHA-256 and SHA-384 extract and expand operations.
+- `crypto.drbg` provides NIST SP 800-90A HMAC-DRBG with SHA-256.
 - `crypto.aead.aes_gcm` provides AES-128-GCM and AES-256-GCM record protection.
 - `crypto.cipher.aes` provides the AES-128 and AES-256 block cipher under one
   expanded key.
@@ -223,6 +224,28 @@ Every validation failure returns `written = 0` without changing output. Public
 buffers cannot alias nonempty secret buffers under Mach's secret-welded pointer
 types. Internal SHA-2 state, schedules, HMAC pads, intermediate tags,
 pseudorandom key snapshots, and expansion blocks are explicitly zeroized.
+
+## HMAC-DRBG
+
+`crypto.drbg` implements HMAC-DRBG with SHA-256 from NIST SP 800-90A revision
+1. Construct an opaque context with `drbg.empty()`, instantiate it with
+`drbg.init`, generate secret bytes with `drbg.generate`, add fresh entropy with
+`drbg.reseed`, and destroy it with `drbg.dnit`. Contexts must not be copied.
+`dnit` is idempotent and zeroizes the key, value, counter, and state.
+
+Entropy acquisition and platform policy are deliberately outside this module.
+`init` and `reseed` accept at least 32 bytes of caller-owned secret entropy;
+`init` additionally requires a public nonce of at least 16 bytes and accepts
+optional public personalization. `generate` accepts optional public additional
+input and treats the secret output capacity as the requested length. One request
+may produce at most 65,536 bytes. Zero-length output is valid and still advances
+the state.
+
+After 2^48 requests, `generate` returns `RESEED_REQUIRED` without changing the
+context or output. Validation failures likewise write nothing. An unexpected
+internal HMAC failure zeroizes the context and any partial output. The state,
+HMAC pads, intermediate values, and generated blocks are secret-typed and
+explicitly zeroized.
 
 ## AES-GCM
 

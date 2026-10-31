@@ -8,6 +8,7 @@ use crypto.lib.crypto;
 use aead_tests:      crypto.test.aead;
 use blake2b_tests:   crypto.test.blake2b;
 use cipher_tests:    crypto.test.cipher;
+use drbg_tests:      crypto.test.drbg;
 use encoding_tests:  crypto.test.encoding;
 use group_tests:     crypto.test.group;
 use hash_tests:      crypto.test.hash;

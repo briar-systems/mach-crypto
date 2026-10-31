@@ -5,6 +5,8 @@ official-vector	.	sha-256,sha-384	NIST FIPS 180-4	crypto.test.hash#hash__million
 official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	crypto.test.mac#hmac__rfc_4231_sha_256_and_sha_384_vectors
 official-vector	.	hmac-sha-256,hmac-sha-384	RFC 4231	crypto.test.mac#hmac__rfc_4231_multiblock_message_vectors
 official-vector	.	hkdf-sha-256	RFC 5869	crypto.test.mac#hkdf__rfc_5869_sha_256_case_one
+official-vector	.	hmac-drbg-sha-256	NIST CAVP DRBG800-90A	crypto.test.drbg#hmac_drbg__nist_cavp_sha_256_no_reseed_count_zero
+official-vector	.	hmac-drbg-sha-256	NIST CAVP DRBG800-90A	crypto.test.drbg#hmac_drbg__nist_cavp_sha_256_reseed_and_additional_input_count_zero
 official-vector	.	aes-128,aes-256	NIST FIPS 197	crypto.test.cipher#aes__fips_197_blocks_through_one_keyed_context
 official-vector	.	aes-128,aes-256	NIST FIPS 197 and SP 800-38A	crypto.internal.aes#aes__fips_197_and_sp_800_38a_blocks_on_every_member_this_host_runs
 official-vector	.	aes-128-gcm,aes-256-gcm	GCM specification test cases 1-4 and 13-16 and NIST CAVP gcmEncryptExtIV128	crypto.aead.aes_gcm#aes_gcm__gcm_spec_vectors_on_every_aes_and_ghash_member_this_host_runs
@@ -62,6 +64,7 @@ differential	.	ecdsa-p521-sha384	independent OpenSSL-compatible signer (Python c
 invalid-input	.	sha-256,sha-384	mach-crypto bounded transcript contract	crypto.test.hash#hash__validation_and_overflow_failures_preserve_state_and_output
 invalid-input	.	hmac-sha-256,hmac-sha-384	mach-crypto bounded output contract	crypto.test.mac#hmac__output_overlap_and_failures_have_defined_behavior
 invalid-input	.	hkdf-sha-256,hkdf-sha-384	RFC 5869 and mach-crypto bounded output contract	crypto.test.mac#hkdf__limits_capacities_and_invalid_inputs_do_not_write
+invalid-input	.	hmac-drbg-sha-256	NIST SP 800-90A and mach-crypto state contract	crypto.test.drbg#hmac_drbg__state_limits_failures_and_destruction_are_bounded
 invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto AEAD contract	crypto.test.aead#aes_gcm__validation_and_capacity_failures_leave_output_unchanged
 invalid-input	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	crypto.test.aead#aes_gcm__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
 invalid-input	.	aes-128,aes-256	mach-crypto keyed context contract	crypto.test.cipher#aes__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
@@ -89,6 +92,7 @@ zeroization	.	secret-storage	mach-crypto typed destruction contract	crypto.test.
 zeroization	.	secret-storage	mach-crypto typed destruction contract	crypto.test.secret#secret_array__wiping_allocator_owns_the_only_release_wipe
 zeroization	.	secret-storage	mach-std typed operating-system boundary	crypto.test.secret#secret_array__native_allocator_owns_deeply_secret_records
 zeroization	.	sha-256,sha-384	mach-crypto transcript lifecycle contract	crypto.test.hash#hash__snapshot_continues_and_final_consumes_only_after_success
+zeroization	.	hmac-drbg-sha-256	mach-crypto deterministic state lifecycle contract	crypto.test.drbg#hmac_drbg__state_limits_failures_and_destruction_are_bounded
 zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto authenticated release contract	crypto.test.aead#aes_gcm__authentication_failures_clear_output_before_release
 zeroization	.	aes-128-gcm,aes-256-gcm	mach-crypto keyed context contract	crypto.test.aead#aes_gcm__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it
 zeroization	.	aes-128,aes-256	mach-crypto keyed context contract	crypto.test.cipher#aes__the_context_refuses_use_outside_init_and_dnit_which_zeroizes_it

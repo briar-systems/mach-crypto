@@ -1,0 +1,263 @@
+# hmac-drbg with sha-256
+#
+# this is the deterministic core from nist sp 800-90a revision 1. entropy
+# acquisition and platform policy stay with the caller.
+
+use crypto.contracts;
+use crypto.hash.sha256;
+use core: crypto.internal.hmac;
+use std.crypto.ct;
+use std.types.bool.bool;
+use std.types.size.usize;
+
+pub val SECURITY_STRENGTH_BITS: usize = 256;
+pub val MIN_ENTROPY_SIZE:       usize = 32;
+pub val MIN_NONCE_SIZE:         usize = 16;
+pub val MAX_INPUT_SIZE:         usize = 4294967296;
+pub val MAX_REQUEST_SIZE:       usize = 65536;
+pub val RESEED_INTERVAL:        u64   = 281474976710656;
+
+pub def State: u8;
+
+pub val EMPTY:  State = 0;
+pub val ACTIVE: State = 1;
+
+# one instantiated hmac-drbg state
+#
+# callers treat the record as opaque, construct it with `empty`, and never
+# copy it directly. `dnit` zeroizes every secret field.
+pub rec Context {
+    key:            [32]^u8;
+    value:          [32]^u8;
+    reseed_counter: u64;
+    state:          State;
+}
+
+fun failed(error: contracts.Error) contracts.Operation {
+    ret contracts.Operation{error: error, written: 0};
+}
+
+fun wipe(context: *Context) {
+    ct.zeroize(?context.key[0], sha256.DIGEST_SIZE);
+    ct.zeroize(?context.value[0], sha256.DIGEST_SIZE);
+    context.reseed_counter = 0;
+    context.state          = EMPTY;
+}
+
+# an empty context holds no generated state, so use before init is refused
+pub fun empty() Context {
+    var context: Context;
+    wipe(?context);
+    ret context;
+}
+
+fun copy32(output: *^u8, input: *^u8) {
+    var i: usize = 0;
+    for (i < sha256.DIGEST_SIZE) {
+        output[i] = input[i];
+        i         = i + 1;
+    }
+}
+
+fun valid_secret(input: contracts.SecretBytes, minimum: usize) bool {
+    ret input.len >= minimum && input.len <= MAX_INPUT_SIZE && input.data != nil;
+}
+
+fun valid_public(input: contracts.Bytes, minimum: usize) bool {
+    ret input.len >= minimum && input.len <= MAX_INPUT_SIZE && input.data != nil;
+}
+
+fun valid_optional(input: contracts.Bytes) bool {
+    ret input.len <= MAX_INPUT_SIZE && (input.len == 0 || input.data != nil);
+}
+
+#[oblivious]
+fun hmac_value(context: *Context, output: *^u8) contracts.Error {
+    var hmac:  core.Context256;
+    var error: contracts.Error = core.init256(?hmac,
+        contracts.SecretBytes{data: ?context.key[0], len: sha256.DIGEST_SIZE});
+    if (error == contracts.OK) {
+        error = core.update256_secret(?hmac, ?context.value[0], sha256.DIGEST_SIZE);
+    }
+    if (error == contracts.OK) { error = core.final256(?hmac, output); }
+    if (error != contracts.OK) { core.destroy256(?hmac); }
+    ret error;
+}
+
+# hmac_drbg_update over one secret and two public provided-data fragments
+#[oblivious]
+fun update(context: *Context, secret: contracts.SecretBytes, first: contracts.Bytes,
+    second: contracts.Bytes) contracts.Error {
+    var next: [32]^u8;
+    ct.zeroize(?next[0], sha256.DIGEST_SIZE);
+    var control: [1]u8;
+    control[0] = 0;
+
+    var hmac:  core.Context256;
+    var error: contracts.Error = core.init256(?hmac,
+        contracts.SecretBytes{data: ?context.key[0], len: sha256.DIGEST_SIZE});
+    if (error == contracts.OK) {
+        error = core.update256_secret(?hmac, ?context.value[0], sha256.DIGEST_SIZE);
+    }
+    if (error == contracts.OK) { error = core.update256_public(?hmac, ?control[0], 1); }
+    if (error == contracts.OK) { error = core.update256_secret(?hmac, secret.data, secret.len); }
+    if (error == contracts.OK) { error = core.update256_public(?hmac, first.data, first.len); }
+    if (error == contracts.OK) { error = core.update256_public(?hmac, second.data, second.len); }
+    if (error == contracts.OK) { error = core.final256(?hmac, ?next[0]); }
+    if (error != contracts.OK) {
+        core.destroy256(?hmac);
+        ct.zeroize(?next[0], sha256.DIGEST_SIZE);
+        ret error;
+    }
+    copy32(?context.key[0], ?next[0]);
+    error = hmac_value(context, ?next[0]);
+    if (error != contracts.OK) {
+        ct.zeroize(?next[0], sha256.DIGEST_SIZE);
+        ret error;
+    }
+    copy32(?context.value[0], ?next[0]);
+
+    if (secret.len != 0 || first.len != 0 || second.len != 0) {
+        control[0] = 1;
+        error      = core.init256(?hmac,
+            contracts.SecretBytes{data: ?context.key[0], len: sha256.DIGEST_SIZE});
+        if (error == contracts.OK) {
+            error = core.update256_secret(?hmac, ?context.value[0], sha256.DIGEST_SIZE);
+        }
+        if (error == contracts.OK) { error = core.update256_public(?hmac, ?control[0], 1); }
+        if (error == contracts.OK) { error = core.update256_secret(?hmac, secret.data, secret.len); }
+        if (error == contracts.OK) { error = core.update256_public(?hmac, first.data, first.len); }
+        if (error == contracts.OK) { error = core.update256_public(?hmac, second.data, second.len); }
+        if (error == contracts.OK) { error = core.final256(?hmac, ?next[0]); }
+        if (error != contracts.OK) {
+            core.destroy256(?hmac);
+            ct.zeroize(?next[0], sha256.DIGEST_SIZE);
+            ret error;
+        }
+        copy32(?context.key[0], ?next[0]);
+        error = hmac_value(context, ?next[0]);
+        if (error == contracts.OK) { copy32(?context.value[0], ?next[0]); }
+    }
+    ct.zeroize(?next[0], sha256.DIGEST_SIZE);
+    ret error;
+}
+
+# instantiate from caller-provided entropy, a nonce, and optional personalization
+#
+# entropy may be released after this returns. a failure leaves the context empty.
+#[oblivious]
+pub fun init(context: *Context, entropy: contracts.SecretBytes, nonce: contracts.Bytes,
+    personalization: contracts.Bytes) contracts.Error {
+    if (context == nil)                           { ret contracts.INVALID_INPUT; }
+    if (context.state != EMPTY)                   { ret contracts.INVALID_STATE; }
+    if (!valid_secret(entropy, MIN_ENTROPY_SIZE)) { ret contracts.INVALID_INPUT; }
+    if (!valid_public(nonce, MIN_NONCE_SIZE))     { ret contracts.INVALID_INPUT; }
+    if (!valid_optional(personalization))         { ret contracts.INVALID_INPUT; }
+
+    ct.begin();
+    ct.zeroize(?context.key[0], sha256.DIGEST_SIZE);
+    var i: usize = 0;
+    for (i < sha256.DIGEST_SIZE) {
+        context.value[i] = 1;
+        i                = i + 1;
+    }
+    context.reseed_counter = 0;
+    val error: contracts.Error = update(context, entropy, nonce, personalization);
+    if (error != contracts.OK) {
+        wipe(context);
+        ct.end();
+        ret error;
+    }
+    context.reseed_counter = 1;
+    context.state          = ACTIVE;
+    ct.end();
+    ret contracts.OK;
+}
+
+# incorporate fresh caller-provided entropy and optional additional input
+#
+# a failure before update begins leaves the active context unchanged.
+#[oblivious]
+pub fun reseed(context: *Context, entropy: contracts.SecretBytes,
+    additional: contracts.Bytes) contracts.Error {
+    if (context == nil)                           { ret contracts.INVALID_INPUT; }
+    if (context.state != ACTIVE)                  { ret contracts.INVALID_STATE; }
+    if (!valid_secret(entropy, MIN_ENTROPY_SIZE)) { ret contracts.INVALID_INPUT; }
+    if (!valid_optional(additional))              { ret contracts.INVALID_INPUT; }
+
+    ct.begin();
+    val error: contracts.Error = update(context, entropy, additional,
+        contracts.Bytes{data: nil, len: 0});
+    if (error != contracts.OK) {
+        wipe(context);
+        ct.end();
+        ret error;
+    }
+    context.reseed_counter = 1;
+    ct.end();
+    ret contracts.OK;
+}
+
+# generate output.capacity secret bytes and optionally mix additional input
+#
+# zero length is valid. validation and reseed-required failures do not change
+# the context or output. an internal failure wipes both partial output and state.
+#[oblivious]
+pub fun generate(context: *Context, additional: contracts.Bytes,
+    output: contracts.SecretBuffer) contracts.Operation {
+    if (context == nil)                             { ret failed(contracts.INVALID_INPUT); }
+    if (context.state != ACTIVE)                    { ret failed(contracts.INVALID_STATE); }
+    if (!valid_optional(additional))                { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity > MAX_REQUEST_SIZE)         { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity != 0 && output.data == nil) { ret failed(contracts.INVALID_INPUT); }
+    if (context.reseed_counter > RESEED_INTERVAL)   { ret failed(contracts.RESEED_REQUIRED); }
+
+    ct.begin();
+    var error: contracts.Error = contracts.OK;
+    if (additional.len != 0) {
+        error = update(context, contracts.SecretBytes{data: nil, len: 0}, additional,
+            contracts.Bytes{data: nil, len: 0});
+    }
+    var written: usize = 0;
+    var next:    [32]^u8;
+    ct.zeroize(?next[0], sha256.DIGEST_SIZE);
+    for (error == contracts.OK && written < output.capacity) {
+        error = hmac_value(context, ?next[0]);
+        if (error == contracts.OK) {
+            copy32(?context.value[0], ?next[0]);
+            var take: usize = output.capacity - written;
+            if (take > sha256.DIGEST_SIZE) { take = sha256.DIGEST_SIZE; }
+            var i: usize = 0;
+            for (i < take) {
+                output.data[written + i] = next[i];
+                i                        = i + 1;
+            }
+            written = written + take;
+        }
+    }
+    ct.zeroize(?next[0], sha256.DIGEST_SIZE);
+    if (error == contracts.OK) {
+        error = update(context, contracts.SecretBytes{data: nil, len: 0}, additional,
+            contracts.Bytes{data: nil, len: 0});
+    }
+    if (error != contracts.OK) {
+        if (written != 0) { ct.zeroize(output.data, written); }
+        wipe(context);
+        ct.end();
+        ret failed(error);
+    }
+    context.reseed_counter = context.reseed_counter + 1;
+    ct.end();
+    ret contracts.Operation{error: contracts.OK, written: written};
+}
+
+# zeroize the context and return it to empty
+#
+# idempotent. a context in an unknown state is still wiped and reported.
+pub fun dnit(context: *Context) contracts.Error {
+    if (context == nil) { ret contracts.INVALID_INPUT; }
+    val valid: bool = context.state == EMPTY || context.state == ACTIVE;
+    wipe(context);
+    if (!valid) { ret contracts.INVALID_STATE; }
+    ret contracts.OK;
+}

@@ -14,6 +14,7 @@ pub val ENTROPY_UNAVAILABLE: Error = 6;
 pub val ALLOCATION_FAILED:   Error = 7;
 pub val DEALLOCATION_FAILED: Error = 8;
 pub val INVALID_STATE:       Error = 9;
+pub val RESEED_REQUIRED:     Error = 10;
 
 # public bytes with a stable address for an operation's duration
 pub rec Bytes {

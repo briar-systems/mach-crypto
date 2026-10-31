@@ -16,6 +16,7 @@ fwd crypto.hash.shake128;
 fwd crypto.hash.shake256;
 fwd crypto.hmac;
 fwd crypto.hkdf;
+fwd crypto.drbg;
 fwd crypto.aead;
 fwd crypto.cipher;
 fwd crypto.group;
