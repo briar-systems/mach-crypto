@@ -3,58 +3,53 @@ id = "crypto-benchmark"
 version = "0.0.0"
 mach = "^6"
 src = "src"
-out = "out/{target.name}/{profile.name}"
+work = "out/{target.name}/{profile.name}"
 
 [target.linux-x86_64]
-default = true
-isa = "x86_64"
-os = "linux"
+arch = "x86_64"
+sys = "linux"
 abi = "sysv64"
 
-[target.linux-arm64]
-isa = "aarch64"
-os = "linux"
+[target.linux-aarch64]
+arch = "aarch64"
+sys = "linux"
 abi = "aapcs64"
 
 [target.linux-riscv64]
-isa = "riscv64"
-os = "linux"
+arch = "riscv64"
+sys = "linux"
 abi = "lp64d"
 
 [target.windows-x86_64]
-isa = "x86_64"
-os = "windows"
+arch = "x86_64"
+sys = "windows"
 abi = "win64"
 
 [target.darwin-x86_64]
-isa = "x86_64"
-os = "darwin"
+arch = "x86_64"
+sys = "darwin"
 abi = "sysv64"
 
 [target.darwin-aarch64]
-isa = "aarch64"
-os = "darwin"
+arch = "aarch64"
+sys = "darwin"
 abi = "aapcs64"
 
 [profile.debug]
-opt = 0
+optimize = false
 debug = false
 simd = "scalarize"
-vectorize = true
-float_reassoc = false
 
 [profile.release]
 default = true
-opt = 2
+optimize = true
 debug = false
 simd = "scalarize"
-vectorize = true
-float_reassoc = false
 
 [artifact.benchmark]
 kind = "bin"
 entry = "main.mach"
-out = "bin/benchmark"
+out = "{project.work}/bin/benchmark"
 targets = ["*"]
 link = []
 need = []
@@ -66,4 +61,4 @@ path = "../.."
 # dependency it selects by version, and this tree is not committed
 [dep.std]
 git = "https://github.com/briar-systems/mach-std"
-ref = "tag/v9.4.1"
+ref = "branch/dev"

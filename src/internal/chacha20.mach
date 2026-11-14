@@ -17,26 +17,27 @@ pub rec Context {
     active: bool;
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun rotate_left(value: ^u32, shift: u32) ^u32 {
     ret (value << shift) | (value >> (32 - shift));
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun read_secret(input: *^u8, offset: usize) ^u32 {
     ret input[offset]::^u32 | (input[offset + 1]::^u32 << 8) |
         (input[offset + 2]::^u32 << 16) | (input[offset + 3]::^u32 << 24);
 }
 
+#[constant_time("soft")]
 fun read_public(input: *u8, offset: usize) u32 {
     ret input[offset]::u32 | (input[offset + 1]::u32 << 8) |
         (input[offset + 2]::u32 << 16) | (input[offset + 3]::u32 << 24);
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun write_secret(output: *^u8, offset: usize, value: ^u32) {
     output[offset]     = value::^u8;
     output[offset + 1] = (value >> 8)::^u8;
@@ -44,6 +45,7 @@ fun write_secret(output: *^u8, offset: usize, value: ^u32) {
     output[offset + 3] = (value >> 24)::^u8;
 }
 
+#[constant_time("soft")]
 pub fun destroy(context: *Context) {
     if (context == nil) { ret; }
     ct.zeroize((?context.key[0]):~*^u8, 32);
@@ -51,6 +53,7 @@ pub fun destroy(context: *Context) {
     context.active = false;
 }
 
+#[constant_time("soft")]
 pub fun init(context: *Context, key: contracts.SecretBytes, nonce: contracts.Bytes) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     ct.zeroize((?context.key[0]):~*^u8, 32);
@@ -74,8 +77,8 @@ pub fun init(context: *Context, key: contracts.SecretBytes, nonce: contracts.Byt
     ret contracts.OK;
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun quarter_round(state: *^u32, a: usize, b: usize, c: usize, d: usize) {
     state[a] = state[a] + state[b];
     state[d] = rotate_left(state[d] ^ state[a], 16);
@@ -87,7 +90,7 @@ fun quarter_round(state: *^u32, a: usize, b: usize, c: usize, d: usize) {
     state[b] = rotate_left(state[b] ^ state[c], 7);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun block(context: *Context, counter: u32, output: *^u8) {
     var initial: [16]^u32;
     var working: [16]^u32;

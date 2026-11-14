@@ -2,7 +2,6 @@
 
 use crypto.contracts;
 use core: crypto.internal.p256;
-use std.crypto.ct;
 use std.types.size.usize;
 
 pub val PRIVATE_KEY_SIZE:         usize = 32;
@@ -21,7 +20,7 @@ fun failed(error: contracts.Error) contracts.Operation {
 }
 
 # derive the exact uncompressed sec1 public point for a canonical scalar
-#[oblivious]
+#[constant_time("soft")]
 pub fun derive_public(private_key: contracts.SecretBytes,
     output: contracts.Buffer) contracts.Operation {
     if (private_key.len != PRIVATE_KEY_SIZE) { ret failed(contracts.INVALID_KEY); }
@@ -31,13 +30,11 @@ pub fun derive_public(private_key: contracts.SecretBytes,
     }
     if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
 
-    ct.begin();
     var scalar: core.UInt;
     core.decode_secret(?scalar, private_key.data);
     val valid: ^u8 = core.valid_scalar(?scalar);
     if (valid:>u8 != 1) {
         core.destroy_uint(?scalar);
-        ct.end();
         ret failed(contracts.INVALID_KEY);
     }
     var public_point: core.Point;
@@ -52,7 +49,6 @@ pub fun derive_public(private_key: contracts.SecretBytes,
     core.destroy_point(?public_point);
     core.destroy_uint(?x);
     core.destroy_uint(?y);
-    ct.end();
     ret contracts.Operation{error: contracts.OK, written: PUBLIC_UNCOMPRESSED_SIZE};
 }
 
@@ -60,7 +56,7 @@ pub fun derive_public(private_key: contracts.SecretBytes,
 #
 # failure leaves output unchanged. successful output may overlap the private
 # key because the scalar is snapshotted before the first output write.
-#[oblivious]
+#[constant_time("soft")]
 pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     output: contracts.SecretBuffer) contracts.Operation {
     if (private_key.len != PRIVATE_KEY_SIZE)         { ret failed(contracts.INVALID_KEY); }
@@ -71,7 +67,6 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     if (output.capacity < SHARED_SECRET_SIZE)        { ret failed(contracts.OUTPUT_TOO_SMALL); }
     if (output.data == nil)                          { ret failed(contracts.INVALID_INPUT); }
 
-    ct.begin();
     var scalar: core.UInt;
     var peer:   core.Point;
     core.decode_secret(?scalar, private_key.data);
@@ -80,7 +75,6 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     if ((scalar_valid & point_valid):>u8 != 1) {
         core.destroy_uint(?scalar);
         core.destroy_point(?peer);
-        ct.end();
         ret failed(contracts.INVALID_KEY);
     }
     var shared_point: core.Point;
@@ -95,7 +89,6 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
         core.destroy_point(?shared_point);
         core.destroy_uint(?x);
         core.destroy_uint(?y);
-        ct.end();
         ret failed(contracts.INVALID_KEY);
     }
     core.encode_secret(output.data, ?x);
@@ -104,6 +97,5 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     core.destroy_point(?shared_point);
     core.destroy_uint(?x);
     core.destroy_uint(?y);
-    ct.end();
     ret contracts.Operation{error: contracts.OK, written: SHARED_SECRET_SIZE};
 }

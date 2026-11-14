@@ -9,7 +9,6 @@
 
 use crypto.contracts;
 use core: crypto.internal.aes;
-use std.crypto.ct;
 use std.types.bool.bool;
 use std.types.size.usize;
 
@@ -43,19 +42,16 @@ pub fun empty() Context {
 #
 # the key may be released or overwritten once this returns. a failure leaves
 # the context empty.
-#[oblivious]
+#[constant_time("soft")]
 pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
     if (context == nil)         { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
-    ct.begin();
     val expanded: contracts.Error = core.init(?context.cipher, key);
     if (expanded != contracts.OK) {
         core.destroy(?context.cipher);
-        ct.end();
         ret expanded;
     }
     context.state = ACTIVE;
-    ct.end();
     ret contracts.OK;
 }
 
@@ -63,7 +59,7 @@ pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
 #
 # input must be exactly one block and output must hold one. they may be the
 # same storage, since the block is read completely before it is written.
-#[oblivious]
+#[constant_time("soft")]
 pub fun encrypt_block(context: *Context, input: contracts.SecretBytes,
     output: contracts.SecretBuffer) contracts.Error {
     if (context == nil)                               { ret contracts.INVALID_INPUT; }
@@ -71,9 +67,7 @@ pub fun encrypt_block(context: *Context, input: contracts.SecretBytes,
     if (input.len != BLOCK_SIZE || input.data == nil) { ret contracts.INVALID_INPUT; }
     if (output.capacity < BLOCK_SIZE)                 { ret contracts.OUTPUT_TOO_SMALL; }
     if (output.data == nil)                           { ret contracts.INVALID_INPUT; }
-    ct.begin();
     core.encrypt(?context.cipher, input.data, output.data);
-    ct.end();
     ret contracts.OK;
 }
 

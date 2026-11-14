@@ -138,13 +138,13 @@ pub rec Point {
     z: UInt;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun destroy_uint(value: *UInt) {
     if (value == nil) { ret; }
     ct.zeroize((?value.limb[0]):~*^u8, 32);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun destroy_point(point: *Point) {
     if (point == nil) { ret; }
     destroy_uint(?point.x);
@@ -152,13 +152,13 @@ pub fun destroy_point(point: *Point) {
     destroy_uint(?point.z);
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun nonzero_bit(value: ^u64) ^u8 {
     ret ((value | (0 - value)) >> 63)::^u8;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun is_zero(value: *UInt) ^u8 {
     var combined: ^u64 = value.limb[0] | value.limb[1] | value.limb[2] | value.limb[3];
     val result:   ^u8  = 1 ^ nonzero_bit(combined);
@@ -166,7 +166,7 @@ pub fun is_zero(value: *UInt) ^u8 {
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun equal(left: *UInt, right: *UInt) ^u8 {
     var difference: ^u64 = (left.limb[0] ^ right.limb[0]) | (left.limb[1] ^ right.limb[1]) |
         (left.limb[2] ^ right.limb[2]) | (left.limb[3] ^ right.limb[3]);
@@ -175,7 +175,7 @@ pub fun equal(left: *UInt, right: *UInt) ^u8 {
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun copy(output: *UInt, input: *UInt) {
     output.limb[0] = input.limb[0];
     output.limb[1] = input.limb[1];
@@ -183,7 +183,7 @@ pub fun copy(output: *UInt, input: *UInt) {
     output.limb[3] = input.limb[3];
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun copy_constant(output: *UInt, input: *u64) {
     output.limb[0] = input[0];
     output.limb[1] = input[1];
@@ -191,7 +191,7 @@ fun copy_constant(output: *UInt, input: *u64) {
     output.limb[3] = input[3];
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun set_small(output: *UInt, value: u64) {
     output.limb[0] = value;
     output.limb[1] = 0;
@@ -200,12 +200,12 @@ pub fun set_small(output: *UInt, value: u64) {
 }
 
 # the field's one, in montgomery form
-#[oblivious]
+#[constant_time("soft")]
 pub fun field_one(output: *UInt) {
     copy_constant(output, (?FIELD_ONE[0]):~*u64);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun select(output: *UInt, left: *UInt, right: *UInt, choose_right: ^u8) {
     val mask: ^u64 = 0 - choose_right::^u64;
     output.limb[0] = (left.limb[0] & ~mask) | (right.limb[0] & mask);
@@ -214,40 +214,40 @@ pub fun select(output: *UInt, left: *UInt, right: *UInt, choose_right: ^u8) {
     output.limb[3] = (left.limb[3] & ~mask) | (right.limb[3] & mask);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun field_add(output: *UInt, left: *UInt, right: *UInt) {
     mont.add(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun field_subtract(output: *UInt, left: *UInt, right: *UInt) {
     mont.subtract(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun field_multiply(output: *UInt, left: *UInt, right: *UInt) {
     mont.multiply(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], PRIME_FACTOR,
         LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun field_square(output: *UInt, input: *UInt) {
     mont.square(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun field_to_montgomery(output: *UInt, input: *UInt) {
     mont.to_montgomery(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, ?PRIME_R2[0],
         LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun field_from_montgomery(output: *UInt, input: *UInt) {
     mont.from_montgomery(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, LIMBS);
 }
 
 # invert by fermat's little theorem, raising to p - 2 along FIELD_CHAIN
-#[oblivious]
+#[constant_time("soft")]
 pub fun field_inverse(output: *UInt, input: *UInt) {
     var registers: [FIELD_REGISTERS]UInt;
     copy(?registers[0], input);
@@ -276,20 +276,20 @@ pub fun field_inverse(output: *UInt, input: *UInt) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun scalar_add(output: *UInt, left: *UInt, right: *UInt) {
     mont.add(?output.limb[0], ?left.limb[0], ?right.limb[0], ?ORDER[0], LIMBS);
 }
 
 # multiply canonical scalars modulo n, in and out of the ordinary domain
-#[oblivious]
+#[constant_time("soft")]
 pub fun scalar_multiply_values(output: *UInt, left: *UInt, right: *UInt) {
     mont.multiply_values(?output.limb[0], ?left.limb[0], ?right.limb[0], ?ORDER[0],
         ORDER_FACTOR, ?ORDER_R2[0], LIMBS);
 }
 
 # invert modulo n in the montgomery domain, raising to n - 2 along SCALAR_CHAIN
-#[oblivious]
+#[constant_time("soft")]
 pub fun scalar_inverse(output: *UInt, input: *UInt) {
     var registers: [SCALAR_REGISTERS]UInt;
     mont.to_montgomery(?registers[0].limb[0], ?input.limb[0], ?ORDER[0], ORDER_FACTOR,
@@ -321,7 +321,7 @@ pub fun scalar_inverse(output: *UInt, input: *UInt) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun reduce_scalar_once(value: *UInt) {
     var order: UInt;
     copy_constant(?order, (?ORDER[0]):~*u64);
@@ -331,7 +331,7 @@ pub fun reduce_scalar_once(value: *UInt) {
     destroy_uint(?order);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun decode_secret(output: *UInt, input: *^u8) {
     var limb: usize = 0;
     for (limb < 4) {
@@ -344,7 +344,7 @@ pub fun decode_secret(output: *UInt, input: *^u8) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun decode_public(output: *UInt, input: *u8, base: usize) {
     var limb: usize = 0;
     for (limb < 4) {
@@ -357,7 +357,7 @@ pub fun decode_public(output: *UInt, input: *u8, base: usize) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun encode_secret(output: *^u8, input: *UInt) {
     var limb: usize = 0;
     for (limb < 4) {
@@ -375,7 +375,7 @@ pub fun encode_secret(output: *^u8, input: *UInt) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun encode_public(output: *u8, base: usize, input: *UInt) {
     var limb: usize = 0;
     for (limb < 4) {
@@ -393,45 +393,45 @@ pub fun encode_public(output: *u8, base: usize, input: *UInt) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun valid_scalar(value: *UInt) ^u8 {
     ret mont.less_than(?value.limb[0], ?ORDER[0], LIMBS) & (is_zero(value) ^ 1);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_copy(output: *Point, input: *Point) {
     copy(?output.x, ?input.x);
     copy(?output.y, ?input.y);
     copy(?output.z, ?input.z);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_select(output: *Point, left: *Point, right: *Point, choose_right: ^u8) {
     select(?output.x, ?left.x, ?right.x, choose_right);
     select(?output.y, ?left.y, ?right.y, choose_right);
     select(?output.z, ?left.z, ?right.z, choose_right);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun point_infinity(output: *Point) {
     set_small(?output.x, 0);
     field_one(?output.y);
     set_small(?output.z, 0);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun generator(output: *Point) {
     copy_constant(?output.x, (?GENERATOR_X[0]):~*u64);
     copy_constant(?output.y, (?GENERATOR_Y[0]):~*u64);
     field_one(?output.z);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun point_is_infinity(point: *Point) ^u8 {
     ret is_zero(?point.z);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_double(output: *Point, input: *Point) {
     var delta:         UInt;
     var gamma:         UInt;
@@ -489,7 +489,7 @@ fun point_double(output: *Point, input: *Point) {
 #
 # equal finite inputs produce infinity instead of their double, so only callers
 # that exclude them, like the fixed-window ladder, may use this directly.
-#[oblivious]
+#[constant_time("soft")]
 fun point_add_distinct(output: *Point, left: *Point, right: *Point, same: *^u8) {
     var left_saved:  Point;
     var right_saved: Point;
@@ -565,7 +565,7 @@ fun point_add_distinct(output: *Point, left: *Point, right: *Point, same: *^u8) 
 }
 
 # add any two jacobian points, including equal points and infinity
-#[oblivious]
+#[constant_time("soft")]
 pub fun point_add(output: *Point, left: *Point, right: *Point) {
     var doubled: Point;
     var same:    ^u8 = 0;
@@ -581,7 +581,7 @@ pub fun point_add(output: *Point, left: *Point, right: *Point) {
 # the scalar is reduced below n first. every finite point on p-256 has order n,
 # so an accumulator 16 * k' never equals a table entry d with 0 < d < 16 and the
 # ladder's additions never meet the equal-point case.
-#[oblivious]
+#[constant_time("soft")]
 pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
     var table:    [16]Point;
     var result:   Point;
@@ -633,7 +633,7 @@ pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
 }
 
 # or the affine table entry for digit * 16^window * G into x and y under mask
-#[oblivious]
+#[constant_time("soft")]
 fun accumulate_entry(x: *UInt, y: *UInt, window: u64, digit: u64, mask: ^u64) {
     val base: usize = ((window * p256_base.DIGITS + digit - 1) * 8)::usize;
     var i:    usize = 0;
@@ -648,7 +648,7 @@ fun accumulate_entry(x: *UInt, y: *UInt, window: u64, digit: u64, mask: ^u64) {
 #
 # madd-2007-bl. an infinite left side or equal x coordinates produce garbage,
 # so callers select around both.
-#[oblivious]
+#[constant_time("soft")]
 fun point_add_mixed(output: *Point, left: *Point, x: *UInt, y: *UInt) {
     var z1z1:      UInt;
     var u2:        UInt;
@@ -710,7 +710,7 @@ fun point_add_mixed(output: *Point, left: *Point, x: *UInt, y: *UInt) {
 # so the two are never equal. they are negations only when k' + d * 16^i = n,
 # which would make the reduced scalar n. an infinite accumulator takes the lifted
 # entry, and a zero digit keeps the accumulator, both by select.
-#[oblivious]
+#[constant_time("soft")]
 pub fun scalar_multiply_base(output: *Point, scalar: *UInt) {
     var reduced: UInt;
     var result:  Point;
@@ -747,7 +747,7 @@ pub fun scalar_multiply_base(output: *Point, scalar: *UInt) {
     destroy_point(?lifted);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun to_affine(x: *UInt, y: *UInt, point: *Point) {
     var inverse:         UInt;
     var inverse_squared: UInt;
@@ -764,7 +764,7 @@ pub fun to_affine(x: *UInt, y: *UInt, point: *Point) {
     destroy_uint(?inverse_cubed);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun parse_point(output: *Point, input: *u8) ^u8 {
     decode_public(?output.x, input, 1);
     decode_public(?output.y, input, 33);

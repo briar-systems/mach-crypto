@@ -7,7 +7,7 @@ command_name=${1:-run}
 evidence_root="$root/out/assurance"
 targets=(
     linux-x86_64
-    linux-arm64
+    linux-aarch64
     linux-riscv64
     windows-x86_64
     darwin-x86_64
@@ -261,7 +261,7 @@ run_build_pass() {
             relative="logs/build/${pass}-${algorithm}-${profile}.log"
             log="$stage/$relative"
             if ! (cd "$root" && mach build "$project" -t '*' --profile "$profile" \
-                --emit-ir --emit-asm) > "$log" 2>&1; then
+                --emit ir --emit asm) > "$log" 2>&1; then
                 die "verified build failed for $project $profile during $pass; see $log"
             fi
             hash=$(sha256_file "$log")
@@ -318,11 +318,11 @@ run_leakage_negative_controls() {
                     die "could not clean the leakage control $project"
                 if [[ ",$admitted," == *",$target,"* ]]; then
                     (cd "$root" && mach build "$project" --target "$target" \
-                        --profile "$profile" --emit-ir) > "$log" 2>&1 </dev/null || \
+                        --profile "$profile" --emit ir) > "$log" 2>&1 </dev/null || \
                         die "compiler refused the control $project on the admitted target $target $profile: $log"
                     ir=$(find "$root/$project/out/$target/$profile" -type f -name '*.ir' -print -quit 2>/dev/null)
                     [[ -n "$ir" ]] || die "admitted control $project produced no IR for $target $profile"
-                    grep -q 'mul\.secret' "$ir" || \
+                    grep -qE ': \^[a-z0-9]+ = mul\(' "$ir" || \
                         die "admitted control $project carries no secret multiply in its IR for $target $profile"
                     hash=$(sha256_file "$log")
                     record_result leakage "$project" all-secret-algorithms \
@@ -330,7 +330,7 @@ run_leakage_negative_controls() {
                     continue
                 fi
                 if (cd "$root" && mach build "$project" --target "$target" \
-                    --profile "$profile" --emit-ir) > "$log" 2>&1 </dev/null; then
+                    --profile "$profile" --emit ir) > "$log" 2>&1 </dev/null; then
                     die "compiler accepted the leakage control $project for $target $profile"
                 fi
                 grep -qF -- "$expected" "$log" || \

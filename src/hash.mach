@@ -16,8 +16,6 @@ use crypto.hash.sha512;
 use crypto.internal.lift;
 use std.crypto.ct;
 use std.types.bool.bool;
-use std.types.bool.false;
-use std.types.bool.true;
 use std.types.size.usize;
 
 pub val SHA256_DIGEST_SIZE: usize = 32;
@@ -66,6 +64,7 @@ fun valid_sha256(context: *Sha256) bool {
         (context.inner.total % sha256.BLOCK_SIZE::u64)::usize;
 }
 
+#[constant_time("soft")]
 fun valid_sha384(context: *Sha384) bool {
     ret context != nil && context.state == ACTIVE &&
         context.inner.buf_len < sha512.BLOCK_SIZE &&
@@ -130,7 +129,7 @@ pub fun snapshot_sha256(context: *Sha256,
     ret contracts.Operation{error: contracts.OK, written: SHA256_DIGEST_SIZE};
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun snapshot_sha384(context: *Sha384,
     output: contracts.Buffer) contracts.Operation {
     if (context == nil) {
@@ -154,7 +153,7 @@ pub fun snapshot_sha384(context: *Sha384,
         output.data[i] = digest[i]:>u8;
         i              = i + 1;
     }
-    ct.zeroize(?digest[0], SHA384_DIGEST_SIZE);
+    $zeroize(?digest[0], SHA384_DIGEST_SIZE);
     ret contracts.Operation{error: contracts.OK, written: SHA384_DIGEST_SIZE};
 }
 
@@ -167,7 +166,7 @@ pub fun final_sha256(context: *Sha256,
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun final_sha384(context: *Sha384,
     output: contracts.Buffer) contracts.Operation {
     val result: contracts.Operation = snapshot_sha384(context, output);
@@ -235,6 +234,7 @@ pub fun empty_blake2b_secret() Blake2bSecret {
 
 # the counter holds only compressed blocks, and a block is compressed only
 # when input follows it, so a state past its first block always holds input
+#[constant_time("soft")]
 fun valid_blake2b_inner[S](inner: *S) bool {
     ret inner.buf_len <= blake2b.BLOCK_SIZE && inner.digest_len >= 1 &&
         inner.digest_len <= blake2b.MAX_DIGEST_SIZE &&
@@ -247,6 +247,7 @@ fun valid_blake2b(context: *Blake2b) bool {
         valid_blake2b_inner[blake2b.State](?context.inner);
 }
 
+#[constant_time("soft")]
 fun valid_blake2b_secret(context: *Blake2bSecret) bool {
     ret context != nil && context.state == ACTIVE &&
         valid_blake2b_inner[blake2b.SecretState](?context.inner);
@@ -318,7 +319,7 @@ pub fun snapshot_blake2b(context: *Blake2b,
 }
 
 # write the secret digest of the input so far without changing the context
-#[oblivious]
+#[constant_time("soft")]
 pub fun snapshot_blake2b_secret(context: *Blake2bSecret,
     output: contracts.SecretBuffer) contracts.Operation {
     if (context == nil)                             { ret failed(contracts.INVALID_INPUT); }
@@ -348,7 +349,7 @@ pub fun final_blake2b(context: *Blake2b,
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun final_blake2b_secret(context: *Blake2bSecret,
     output: contracts.SecretBuffer) contracts.Operation {
     val result: contracts.Operation = snapshot_blake2b_secret(context, output);

@@ -274,7 +274,7 @@ picks them where the processor has the extensions, which `std.system.cpu`
 reports (or the build target selects, in which case nothing is probed), and
 the AES and GHASH members are chosen independently. The hardware kernels are
 fixed instruction streams with no branch or secret address, checked by
-`#[oblivious]`, and GHASH reduces with shifts in the bit-reflected form of
+`#[constant_time("soft")]`, and GHASH reduces with shifts in the bit-reflected form of
 Intel's carry-less multiply white paper.
 
 ## AES block cipher

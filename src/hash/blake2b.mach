@@ -16,7 +16,7 @@
 # `*^u8`, and declassifying it is the caller's decision. neither record aliases
 # the other. lengths and parameters are public. `destroy_secret` zeroizes the
 # words and the block through `ct.zeroize` and resets the rest, so a destroyed
-# state is all zero. the compression is `#[oblivious]` at the secret instance.
+# state is all zero. the compression is `#[constant_time("soft")]` at the secret instance.
 #
 # the byte counter is the full 128 bits of the specification, so no message a
 # caller can supply overflows it. the last block is held back until `final`,
@@ -89,14 +89,14 @@ val SIGMA: [160]u8 = [160]u8{
     10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0
 };
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun rotr[W](x: W, n: u64) W {
     ret (x >> n) | (x << (64 - n));
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun read_le[W, B](buf: *B, off: usize) W {
     ret buf[off]::W | (buf[off + 1]::W << 8) |
         (buf[off + 2]::W << 16) | (buf[off + 3]::W << 24) |
@@ -104,8 +104,8 @@ fun read_le[W, B](buf: *B, off: usize) W {
         (buf[off + 6]::W << 48) | (buf[off + 7]::W << 56);
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun mix[W](v: *W, a: usize, b: usize, c: usize, d: usize, x: W, y: W) {
     v[a] = v[a] + v[b] + x;
     v[d] = rotr[W](v[d] ^ v[a], 32);
@@ -122,7 +122,7 @@ fun mix[W](v: *W, a: usize, b: usize, c: usize, d: usize, x: W, y: W) {
 # oblivious at the secret instance: the message schedule is a public table
 # and the counter and flags are public. the message and working words are
 # wiped on the way out, since at the secret instance they hold key material
-#[oblivious]
+#[constant_time("soft")]
 fun compress[W, B](h: *W, block: *B, t0: u64, t1: u64, f0: u64, f1: u64) {
     var m: [16]W;
     var v: [16]W;
@@ -189,13 +189,14 @@ pub fun valid(p: *Params) bool {
         p.depth >= 1 && p.inner_len <= MAX_DIGEST_SIZE;
 }
 
+#[constant_time("soft")]
 fun load_le(bytes: *u8) u64 {
     ret read_le[u64, u8](bytes, 0);
 }
 
 # install the parameter block into either state; `key_len` is the only field
 # not carried by `Params`
-#[oblivious]
+#[constant_time("soft")]
 fun setup[S](s: *S, p: *Params, key_len: usize) {
     var i: usize = 0;
     for (i < 8) {
@@ -217,6 +218,7 @@ fun setup[S](s: *S, p: *Params, key_len: usize) {
     s.last_node  = p.last_node;
 }
 
+#[constant_time("soft")]
 fun count[S](s: *S, n: usize) {
     s.t0 = s.t0 + n::u64;
     if (s.t0 < n::u64) { s.t1 = s.t1 + 1; }
@@ -253,7 +255,7 @@ fun absorb[S, W, B](s: *S, data: *B, len: usize) {
 }
 
 # pad the held block, compress it as the last one and write the digest
-#[oblivious]
+#[constant_time("soft")]
 fun squeeze[S, W, B](s: *S, digest: *B) {
     count[S](s, s.buf_len);
     var i: usize = s.buf_len;
@@ -353,6 +355,7 @@ pub fun update_secret(s: *SecretState, data: *^u8, len: usize) {
 # ---
 # s:      pointer to the state
 # digest: pointer to a secret output buffer of the state's digest length
+#[constant_time("soft")]
 pub fun final_secret(s: *SecretState, digest: *^u8) {
     squeeze[SecretState, ^u64, ^u8](s, digest);
 }
@@ -360,6 +363,7 @@ pub fun final_secret(s: *SecretState, digest: *^u8) {
 # wipe a secret state: words and block zeroized, everything else reset
 # ---
 # s: pointer to the state, all zero afterwards
+#[constant_time("soft")]
 pub fun destroy_secret(s: *SecretState) {
     ct.zeroize((?s.h[0]):~*^u8, 64);
     ct.zeroize(?s.buf[0], BLOCK_SIZE);

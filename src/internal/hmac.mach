@@ -22,6 +22,7 @@ pub rec Context384 {
     active:    bool;
 }
 
+#[constant_time("soft")]
 pub fun destroy256(context: *Context256) {
     if (context == nil) { ret; }
     sha256.destroy_secret(?context.inner);
@@ -29,6 +30,7 @@ pub fun destroy256(context: *Context256) {
     context.active = false;
 }
 
+#[constant_time("soft")]
 pub fun destroy384(context: *Context384) {
     if (context == nil) { ret; }
     sha512.destroy_secret384(?context.inner);
@@ -36,7 +38,7 @@ pub fun destroy384(context: *Context384) {
     context.active = false;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun init256(context: *Context256, key: contracts.SecretBytes) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     context.inner = sha256.init_secret();
@@ -101,7 +103,7 @@ pub fun init256(context: *Context256, key: contracts.SecretBytes) contracts.Erro
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun init384(context: *Context384, key: contracts.SecretBytes) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     context.inner = sha512.init_secret384();
@@ -166,6 +168,7 @@ pub fun init384(context: *Context384, key: contracts.SecretBytes) contracts.Erro
     ret contracts.OK;
 }
 
+#[constant_time("soft")]
 pub fun update256_public(context: *Context256, data: *u8, len: usize) contracts.Error {
     if (context == nil || !context.active)                 { ret contracts.INVALID_STATE; }
     if (len != 0 && data == nil)                           { ret contracts.INVALID_INPUT; }
@@ -173,6 +176,7 @@ pub fun update256_public(context: *Context256, data: *u8, len: usize) contracts.
     ret contracts.OK;
 }
 
+#[constant_time("soft")]
 pub fun update256_secret(context: *Context256, data: *^u8, len: usize) contracts.Error {
     if (context == nil || !context.active)                 { ret contracts.INVALID_STATE; }
     if (len != 0 && data == nil)                           { ret contracts.INVALID_INPUT; }
@@ -180,6 +184,7 @@ pub fun update256_secret(context: *Context256, data: *^u8, len: usize) contracts
     ret contracts.OK;
 }
 
+#[constant_time("soft")]
 pub fun update384_public(context: *Context384, data: *u8, len: usize) contracts.Error {
     if (context == nil || !context.active)                 { ret contracts.INVALID_STATE; }
     if (len != 0 && data == nil)                           { ret contracts.INVALID_INPUT; }
@@ -187,6 +192,7 @@ pub fun update384_public(context: *Context384, data: *u8, len: usize) contracts.
     ret contracts.OK;
 }
 
+#[constant_time("soft")]
 pub fun update384_secret(context: *Context384, data: *^u8, len: usize) contracts.Error {
     if (context == nil || !context.active)                 { ret contracts.INVALID_STATE; }
     if (len != 0 && data == nil)                           { ret contracts.INVALID_INPUT; }
@@ -194,6 +200,7 @@ pub fun update384_secret(context: *Context384, data: *^u8, len: usize) contracts
     ret contracts.OK;
 }
 
+#[constant_time("soft")]
 pub fun final256(context: *Context256, tag: *^u8) contracts.Error {
     if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
     if (tag == nil) {
@@ -221,6 +228,7 @@ pub fun final256(context: *Context256, tag: *^u8) contracts.Error {
     ret contracts.OK;
 }
 
+#[constant_time("soft")]
 pub fun final384(context: *Context384, tag: *^u8) contracts.Error {
     if (context == nil || !context.active) { ret contracts.INVALID_STATE; }
     if (tag == nil) {

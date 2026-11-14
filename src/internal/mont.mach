@@ -20,8 +20,8 @@ pub val LIMBS: usize = 9;
 
 # wipe count limbs of scratch: limb stores, not a byte loop, because this runs
 # on every ring operation
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun wipe(scratch: *^u64, $count: usize) {
     var i: usize = 0;
     for (i < count) {
@@ -33,7 +33,7 @@ fun wipe(scratch: *^u64, $count: usize) {
 # output = value - modulus where that does not borrow, else value. value is
 # below 2 * modulus, so one pass reduces it; high is the value's limb above
 # the ring, which forces the subtraction
-#[oblivious]
+#[constant_time("soft")]
 fun subtract_modulus(output: *^u64, value: *^u64, modulus: *u64, high: ^u64,
     $limbs: usize) {
     var reduced: [LIMBS]^u64;
@@ -58,8 +58,8 @@ fun subtract_modulus(output: *^u64, value: *^u64, modulus: *u64, high: ^u64,
 
 # the four-limb forms of the modular subtract-if-above, add and subtract, in
 # scalar temporaries
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun subtract_modulus4(output: *^u64, v0: ^u64, v1: ^u64, v2: ^u64, v3: ^u64, modulus: *u64,
     high: ^u64) {
     val m0: ^u64 = modulus[0];
@@ -85,7 +85,7 @@ fun subtract_modulus4(output: *^u64, v0: ^u64, v1: ^u64, v2: ^u64, v3: ^u64, mod
     b         = 0;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun add4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
     val l0: ^u64 = left[0];
     val l1: ^u64 = left[1];
@@ -110,7 +110,7 @@ fun add4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
     c = 0;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun subtract4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
     val l0: ^u64 = left[0];
     val l1: ^u64 = left[1];
@@ -156,8 +156,8 @@ fun subtract4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64) {
 }
 
 # output = left + right mod modulus, for both below the modulus
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun add(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
     $if (limbs == 4) {
         add4(output, left, right, modulus);
@@ -167,7 +167,7 @@ pub fun add(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usi
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun add_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
     var sum:   [LIMBS]^u64;
     var carry: ^u64  = 0;
@@ -185,8 +185,8 @@ fun add_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs:
 }
 
 # output = left - right mod modulus, for both below the modulus
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun subtract(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
     $if (limbs == 4) {
         subtract4(output, left, right, modulus);
@@ -196,7 +196,7 @@ pub fun subtract(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun subtract_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $limbs: usize) {
     var difference: [LIMBS]^u64;
     var borrow:     ^u64  = 0;
@@ -226,7 +226,7 @@ fun subtract_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, $l
 }
 
 # output = -value mod modulus, for a value below the modulus
-#[oblivious]
+#[constant_time("soft")]
 pub fun negate(output: *^u64, value: *^u64, modulus: *u64, $limbs: usize) {
     var zero: [LIMBS]^u64;
     var i:    usize = 0;
@@ -238,7 +238,7 @@ pub fun negate(output: *^u64, value: *^u64, modulus: *u64, $limbs: usize) {
 }
 
 # 1 where value is below the modulus
-#[oblivious]
+#[constant_time("soft")]
 pub fun less_than(value: *^u64, modulus: *u64, $limbs: usize) ^u8 {
     var borrow: ^u64  = 0;
     var i:      usize = 0;
@@ -255,8 +255,8 @@ pub fun less_than(value: *^u64, modulus: *u64, $limbs: usize) ^u8 {
 
 # montgomery reduction of the eight limbs p0..p7 in place, unrolled: after
 # round i limb i is zero and the carry rides into the limbs above
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun reduce4(output: *^u64, p0: ^u64, p1: ^u64, p2: ^u64, p3: ^u64, p4: ^u64, p5: ^u64,
     p6: ^u64, p7: ^u64, modulus: *u64, factor: u64) {
     val m0: ^u64  = modulus[0];
@@ -382,7 +382,7 @@ fun reduce4(output: *^u64, p0: ^u64, p1: ^u64, p2: ^u64, p3: ^u64, p4: ^u64, p5:
 
 # the four-limb product, unrolled into scalar temporaries so the limbs stay in
 # registers, then reduced
-#[oblivious]
+#[constant_time("soft")]
 fun multiply4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u64) {
     val a0: ^u64  = left[0];
     val a1: ^u64  = left[1];
@@ -455,7 +455,7 @@ fun multiply4(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u
 
 # the four-limb square, unrolled: the six cross products are formed once and
 # doubled, then the four squares are added along the diagonal
-#[oblivious]
+#[constant_time("soft")]
 fun square4(output: *^u64, value: *^u64, modulus: *u64, factor: u64) {
     val a0: ^u64  = value[0];
     val a1: ^u64  = value[1];
@@ -516,8 +516,8 @@ fun square4(output: *^u64, value: *^u64, modulus: *u64, factor: u64) {
 
 # output = left * right * 2^-(64 * limbs) mod modulus, below the modulus, for
 # left below 2^(64 * limbs) and right below the modulus
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun multiply(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u64,
     $limbs: usize) {
     $if (limbs == 4) {
@@ -529,7 +529,7 @@ pub fun multiply(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor
 }
 
 # the loop form over any limb count, the reference for the unrolled ring
-#[oblivious]
+#[constant_time("soft")]
 fun multiply_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, factor: u64,
     $limbs: usize) {
     var product: [LIMBS * 2]^u64;
@@ -560,8 +560,8 @@ fun multiply_general(output: *^u64, left: *^u64, right: *^u64, modulus: *u64, fa
 
 # output = value * value * 2^-(64 * limbs) mod modulus, for a value below the
 # modulus: the cross products are formed once and doubled
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun square(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
     $if (limbs == 4) {
         square4(output, value, modulus, factor);
@@ -571,7 +571,7 @@ pub fun square(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: 
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun square_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
     var product: [LIMBS * 2]^u64;
     var carry:   ^u128 = 0;
@@ -624,8 +624,8 @@ fun square_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $lim
 # below modulus * 2^(64 * limbs). a wider value still reduces to a single-limb
 # overflow, which the final subtraction absorbs only when the modulus is above
 # 2^(64 * limbs - 1), so callers reduce wider values in halves
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun reduce(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
     $if (limbs == 4) {
         reduce4(output, value[0], value[1], value[2], value[3], value[4], value[5], value[6],
@@ -636,7 +636,7 @@ pub fun reduce(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: 
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun reduce_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $limbs: usize) {
     var t: [LIMBS * 2 + 1]^u64;
     var i: usize = 0;
@@ -673,7 +673,7 @@ fun reduce_general(output: *^u64, value: *^u64, modulus: *u64, factor: u64, $lim
 # output = value mod modulus for a value twice the ring's width, in 2 * limbs
 # limbs: the high half enters through r2 as high * 2^(64 * limbs), the low half
 # is reduced through the ring and back, and the two are added
-#[oblivious]
+#[constant_time("soft")]
 pub fun reduce_wide(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2: *u64,
     $limbs: usize) {
     var high: [LIMBS]^u64;
@@ -697,7 +697,7 @@ pub fun reduce_wide(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2:
 
 # output = value * r2 * 2^-(64 * limbs) = value * 2^(64 * limbs) mod modulus,
 # the montgomery form of a value below 2^(64 * limbs)
-#[oblivious]
+#[constant_time("soft")]
 pub fun to_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r2: *u64,
     $limbs: usize) {
     var r2s: [LIMBS]^u64;
@@ -711,7 +711,7 @@ pub fun to_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64, r
 
 # output = value * 2^-(64 * limbs) mod modulus, the value a montgomery form
 # represents
-#[oblivious]
+#[constant_time("soft")]
 pub fun from_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64,
     $limbs: usize) {
     var one: [LIMBS]^u64;
@@ -726,7 +726,7 @@ pub fun from_montgomery(output: *^u64, value: *^u64, modulus: *u64, factor: u64,
 
 # output = left * right mod modulus, for left below 2^(64 * limbs) and right
 # below the modulus
-#[oblivious]
+#[constant_time("soft")]
 pub fun multiply_values(output: *^u64, left: *^u64, right: *^u64, modulus: *u64,
     factor: u64, r2: *u64, $limbs: usize) {
     multiply(output, left, right, modulus, factor, limbs);

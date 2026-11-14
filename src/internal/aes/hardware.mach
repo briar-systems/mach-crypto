@@ -11,7 +11,7 @@
 # and Arm list aesenc, aesenclast, aese and aesmc among the instructions whose
 # timing does not depend on their operands), and each kernel is a fixed,
 # unrolled instruction stream with no branch and no secret address, which the
-# `#[oblivious]` check verifies. each kernel clears the vector registers it
+# constant-time check verifies. each kernel clears the vector registers it
 # used before returning, so no round key or state outlives the call there.
 
 use crypto.contracts;
@@ -37,22 +37,23 @@ pub fun available() bool {
     ret extensions.aes();
 }
 
+#[constant_time("soft")]
 pub fun wipe(schedule: *Schedule) {
     ct.zeroize(?schedule.round_keys[0], 240);
 }
 
 # expand a key whose length the dispatcher has already checked, and return its
 # round count
-#[oblivious]
+#[constant_time("soft")]
 pub fun expand(schedule: *Schedule, key: contracts.SecretBytes) usize {
-    ret software.expand_round_keys(key, ?schedule.round_keys[0], substitute_word);
+    ret software.expand_round_keys(key, ?schedule.round_keys[0]);
 }
 
 # the s-box on one key-schedule word, through one hardware round
 #
 # with the word in all four columns, shift rows moves nothing, so the last
 # round against a zero round key leaves the substituted word in each column.
-#[oblivious]
+#[constant_time("soft")]
 fun substitute_word(word: *^u8) {
     var state: [16]^u8;
     var i:     usize = 0;
@@ -71,10 +72,10 @@ fun substitute_word(word: *^u8) {
 
 $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     # subbytes and shiftrows of one block in place, the last round with a zero key
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun substitute_columns(state: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {state}
             movdqu xmm0, [rax]
             pxor xmm1, xmm1
@@ -85,10 +86,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 1 block, aes-128
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt1_128(keys: *^u8, input: *^u8, output: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {keys}
             mov rcx, {input}
             mov rdx, {output}
@@ -122,10 +123,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 2 blocks, aes-128
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt2_128(keys: *^u8, input: *^u8, output: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {keys}
             mov rcx, {input}
             mov rdx, {output}
@@ -173,10 +174,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 4 blocks, aes-128
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt4_128(keys: *^u8, input: *^u8, output: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {keys}
             mov rcx, {input}
             mov rdx, {output}
@@ -252,10 +253,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 8 blocks, aes-128
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt8_128(keys: *^u8, input: *^u8, output: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {keys}
             mov rcx, {input}
             mov rdx, {output}
@@ -387,10 +388,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 1 block, aes-256
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt1_256(keys: *^u8, input: *^u8, output: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {keys}
             mov rcx, {input}
             mov rdx, {output}
@@ -432,10 +433,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 2 blocks, aes-256
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt2_256(keys: *^u8, input: *^u8, output: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {keys}
             mov rcx, {input}
             mov rdx, {output}
@@ -495,10 +496,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 4 blocks, aes-256
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt4_256(keys: *^u8, input: *^u8, output: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {keys}
             mov rcx, {input}
             mov rdx, {output}
@@ -594,10 +595,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 8 blocks, aes-256
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt8_256(keys: *^u8, input: *^u8, output: *^u8) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {keys}
             mov rcx, {input}
             mov rdx, {output}
@@ -766,10 +767,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
 }
 $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     # subbytes and shiftrows of one block in place, a round with a zero key
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun substitute_columns(state: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {state}
             ld1 {v0.16b}, [x9]
             eor v1.16b, v1.16b, v1.16b
@@ -780,10 +781,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 1 block, aes-128
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt1_128(keys: *^u8, input: *^u8, output: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {keys}
             ldr x10, {input}
             ldr x11, {output}
@@ -836,10 +837,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 2 blocks, aes-128
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt2_128(keys: *^u8, input: *^u8, output: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {keys}
             ldr x10, {input}
             ldr x11, {output}
@@ -915,10 +916,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 4 blocks, aes-128
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt4_128(keys: *^u8, input: *^u8, output: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {keys}
             ldr x10, {input}
             ldr x11, {output}
@@ -1040,10 +1041,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 8 blocks, aes-128
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt8_128(keys: *^u8, input: *^u8, output: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {keys}
             ldr x10, {input}
             ldr x11, {output}
@@ -1257,10 +1258,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 1 block, aes-256
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt1_256(keys: *^u8, input: *^u8, output: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {keys}
             ldr x10, {input}
             ldr x11, {output}
@@ -1329,10 +1330,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 2 blocks, aes-256
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt2_256(keys: *^u8, input: *^u8, output: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {keys}
             ldr x10, {input}
             ldr x11, {output}
@@ -1432,10 +1433,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 4 blocks, aes-256
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt4_256(keys: *^u8, input: *^u8, output: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {keys}
             ldr x10, {input}
             ldr x11, {output}
@@ -1597,10 +1598,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 8 blocks, aes-256
-    #[oblivious]
-    #[extensions(aes)]
+    #[constant_time("soft")]
+    #[extension("aes")]
     fun encrypt8_256(keys: *^u8, input: *^u8, output: *^u8) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {keys}
             ldr x10, {input}
             ldr x11, {output}
@@ -1889,7 +1890,7 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
 $if (extensions.ROWS && ($mach.build.arch == $mach.arch.x86_64
     || $mach.build.arch == $mach.arch.aarch64)) {
     # encrypt `count` blocks, 1, 2, 4 or 8, with the kernel of that width
-    #[oblivious]
+    #[constant_time("soft")]
     fun encrypt_width(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8,
         count: usize) {
         val keys: *^u8 = ?schedule.round_keys[0];
@@ -1912,7 +1913,7 @@ $if (extensions.ROWS && ($mach.build.arch == $mach.arch.x86_64
     # the count runs as its binary digits, eight, four, two and one blocks, each
     # through the kernel of that width. input and output may be the same
     # storage, since every kernel loads its blocks before it stores any.
-    #[oblivious]
+    #[constant_time("soft")]
     pub fun encrypt_blocks(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8,
         count: usize) {
         var done:  usize = 0;
@@ -1930,10 +1931,10 @@ $if (extensions.ROWS && ($mach.build.arch == $mach.arch.x86_64
 $or {
     # no kernel exists here, and `available` is false, so a context never
     # records this member
-    #[oblivious]
+    #[constant_time("soft")]
     fun substitute_columns(state: *^u8) {}
 
-    #[oblivious]
+    #[constant_time("soft")]
     pub fun encrypt_blocks(schedule: *Schedule, rounds: usize, input: *^u8, output: *^u8,
         count: usize) {}
 }

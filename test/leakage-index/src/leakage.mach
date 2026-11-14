@@ -7,7 +7,7 @@ val TABLE: [16]u8 = [16]u8{
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
 };
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun forbidden_secret_index(digit: ^u64) ^u8 {
     ret TABLE[digit & 15];
 }

@@ -118,6 +118,7 @@ fun secret_equal(left: *^u8, right: *^u8, len: usize) bool {
 }
 
 #[testing]
+#[constant_time("soft")]
 fun nibble(byte: u8) u8 {
     if (byte >= '0' && byte <= '9') { ret byte - '0'; }
     if (byte >= 'a' && byte <= 'f') { ret byte - 'a' + 10; }
@@ -140,7 +141,7 @@ fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
 }
 
 #[testing]
-#[oblivious]
+#[constant_time("soft")]
 fun decode_secret_hex(text: *u8, text_len: usize, output: *^u8) bool {
     if (text == nil || output == nil || text_len % 2 != 0) { ret false; }
     var i: usize = 0;

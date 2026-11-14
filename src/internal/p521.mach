@@ -78,13 +78,13 @@ rec Point {
     z: UInt;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun destroy_uint(value: *UInt) {
     if (value == nil) { ret; }
     ct.zeroize((?value.limb[0]):~*^u8, 72);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun destroy_point(point: *Point) {
     if (point == nil) { ret; }
     destroy_uint(?point.x);
@@ -92,13 +92,13 @@ fun destroy_point(point: *Point) {
     destroy_uint(?point.z);
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun nonzero_bit(value: ^u64) ^u8 {
     ret ((value | (0 - value)) >> 63)::^u8;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun is_zero(value: *UInt) ^u8 {
     var combined: ^u64  = 0;
     var i:        usize = 0;
@@ -111,7 +111,7 @@ fun is_zero(value: *UInt) ^u8 {
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun equal(left: *UInt, right: *UInt) ^u8 {
     var difference: ^u64  = 0;
     var i:          usize = 0;
@@ -124,7 +124,7 @@ fun equal(left: *UInt, right: *UInt) ^u8 {
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun copy(output: *UInt, input: *UInt) {
     var i: usize = 0;
     for (i < 9) {
@@ -133,7 +133,7 @@ fun copy(output: *UInt, input: *UInt) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun copy_constant(output: *UInt, input: *u64) {
     var i: usize = 0;
     for (i < 9) {
@@ -142,7 +142,7 @@ fun copy_constant(output: *UInt, input: *u64) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun set_small(output: *UInt, value: u64) {
     output.limb[0] = value;
     var i: usize = 1;
@@ -152,7 +152,7 @@ fun set_small(output: *UInt, value: u64) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun select(output: *UInt, left: *UInt, right: *UInt, choose_right: ^u8) {
     val mask: ^u64  = 0 - choose_right::^u64;
     var i:    usize = 0;
@@ -162,13 +162,13 @@ fun select(output: *UInt, left: *UInt, right: *UInt, choose_right: ^u8) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun less_than_modulus(value: *UInt, modulus: *u64) ^u8 {
     ret mont.less_than(?value.limb[0], modulus, LIMBS);
 }
 
 # raise a montgomery-form value to a public exponent by square-and-multiply
-#[oblivious]
+#[constant_time("soft")]
 fun power_montgomery(output: *UInt, input: *UInt, modulus: *u64,
     exponent: *u64, one: *u64, factor: u64) {
     var result: UInt;
@@ -188,52 +188,52 @@ fun power_montgomery(output: *UInt, input: *UInt, modulus: *u64,
     destroy_uint(?result);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun field_add(output: *UInt, left: *UInt, right: *UInt) {
     mont.add(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun field_subtract(output: *UInt, left: *UInt, right: *UInt) {
     mont.subtract(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun field_multiply(output: *UInt, left: *UInt, right: *UInt) {
     mont.multiply(?output.limb[0], ?left.limb[0], ?right.limb[0], ?PRIME[0], PRIME_FACTOR,
         LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun field_square(output: *UInt, input: *UInt) {
     mont.square(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun field_inverse(output: *UInt, input: *UInt) {
     power_montgomery(output, input, (?PRIME[0]):~*u64,
         (?PRIME_MINUS_TWO[0]):~*u64, (?FIELD_ONE[0]):~*u64,
         PRIME_FACTOR);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun field_to_montgomery(output: *UInt, input: *UInt) {
     mont.to_montgomery(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, ?PRIME_R2[0],
         LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun field_from_montgomery(output: *UInt, input: *UInt) {
     mont.from_montgomery(?output.limb[0], ?input.limb[0], ?PRIME[0], PRIME_FACTOR, LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun scalar_multiply_values(output: *UInt, left: *UInt, right: *UInt) {
     mont.multiply_values(?output.limb[0], ?left.limb[0], ?right.limb[0], ?ORDER[0],
         ORDER_FACTOR, ?ORDER_R2[0], LIMBS);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun scalar_inverse(output: *UInt, input: *UInt) {
     var montgomery: UInt;
     var inverse:    UInt;
@@ -247,7 +247,7 @@ fun scalar_inverse(output: *UInt, input: *UInt) {
     destroy_uint(?inverse);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun reduce_scalar_once(value: *UInt) {
     var order: UInt;
     copy_constant(?order, (?ORDER[0]):~*u64);
@@ -258,7 +258,7 @@ fun reduce_scalar_once(value: *UInt) {
 }
 
 # a 66-byte big-endian integer into nine limbs
-#[oblivious]
+#[constant_time("soft")]
 fun decode_secret(output: *UInt, input: *^u8) {
     var limb: usize = 0;
     for (limb < 9) {
@@ -274,7 +274,7 @@ fun decode_secret(output: *UInt, input: *^u8) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun decode_public(output: *UInt, input: *u8, base: usize) {
     var limb: usize = 0;
     for (limb < 9) {
@@ -290,45 +290,45 @@ fun decode_public(output: *UInt, input: *u8, base: usize) {
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun valid_scalar(value: *UInt) ^u8 {
     ret less_than_modulus(value, (?ORDER[0]):~*u64) & (is_zero(value) ^ 1);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_copy(output: *Point, input: *Point) {
     copy(?output.x, ?input.x);
     copy(?output.y, ?input.y);
     copy(?output.z, ?input.z);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_select(output: *Point, left: *Point, right: *Point, choose_right: ^u8) {
     select(?output.x, ?left.x, ?right.x, choose_right);
     select(?output.y, ?left.y, ?right.y, choose_right);
     select(?output.z, ?left.z, ?right.z, choose_right);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_infinity(output: *Point) {
     set_small(?output.x, 0);
     copy_constant(?output.y, (?FIELD_ONE[0]):~*u64);
     set_small(?output.z, 0);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun generator(output: *Point) {
     copy_constant(?output.x, (?GENERATOR_X[0]):~*u64);
     copy_constant(?output.y, (?GENERATOR_Y[0]):~*u64);
     copy_constant(?output.z, (?FIELD_ONE[0]):~*u64);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_is_infinity(point: *Point) ^u8 {
     ret is_zero(?point.z);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_double(output: *Point, input: *Point) {
     var delta:         UInt;
     var gamma:         UInt;
@@ -382,7 +382,7 @@ fun point_double(output: *Point, input: *Point) {
     destroy_point(?result);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun point_add(output: *Point, left: *Point, right: *Point) {
     var left_saved:  Point;
     var right_saved: Point;
@@ -461,7 +461,7 @@ fun point_add(output: *Point, left: *Point, right: *Point) {
     destroy_point(?doubled);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun double_scalar_multiply(output: *Point, first_scalar: *UInt,
     second_scalar: *UInt, point: *Point) {
     var result:    Point;
@@ -497,7 +497,7 @@ fun double_scalar_multiply(output: *Point, first_scalar: *UInt,
     destroy_point(?selected);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun to_affine(x: *UInt, y: *UInt, point: *Point) {
     var inverse:         UInt;
     var inverse_squared: UInt;
@@ -512,7 +512,7 @@ fun to_affine(x: *UInt, y: *UInt, point: *Point) {
     destroy_uint(?inverse_cubed);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun parse_point(output: *Point, input: *u8) ^u8 {
     var x: UInt;
     var y: UInt;
@@ -543,6 +543,7 @@ fun parse_point(output: *Point, input: *u8) ^u8 {
     ret x_canonical & y_canonical & on_curve;
 }
 
+#[constant_time("soft")]
 fun parse_der_integer(output: *UInt, input: *u8, offset: usize,
     length: usize) bool {
     if (length == 0 || length > 67)  { ret false; }
@@ -570,6 +571,7 @@ fun parse_der_integer(output: *UInt, input: *u8, offset: usize,
 }
 
 # strict der: the sequence length is short form below 128 and 0x81 above
+#[constant_time("soft")]
 fun parse_signature(r: *UInt, s: *UInt, signature: contracts.Bytes) bool {
     if (signature.len < SIGNATURE_MIN_SIZE || signature.len > SIGNATURE_MAX_SIZE) {
         ret false;
@@ -596,7 +598,7 @@ fun parse_signature(r: *UInt, s: *UInt, signature: contracts.Bytes) bool {
     ret true;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun valid_public_point(value: contracts.Bytes) bool {
     if (value.len != PUBLIC_KEY_SIZE || value.data == nil || value.data[0] != 4) {
         ret false;
@@ -609,7 +611,7 @@ pub fun valid_public_point(value: contracts.Bytes) bool {
 
 # the digest as an integer: its leftmost 66 bytes, right-aligned, so a shorter
 # digest is padded on the left. the largest digest is 64 bytes
-#[oblivious]
+#[constant_time("soft")]
 fun decode_digest(output: *UInt, digest: *^u8, digest_len: usize) {
     var block: [66]^u8;
     ct.zeroize(?block[0], 66);
@@ -625,7 +627,7 @@ fun decode_digest(output: *UInt, digest: *^u8, digest_len: usize) {
 }
 
 # verify a strict der signature over a digest the caller has already computed
-#[oblivious]
+#[constant_time("soft")]
 pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usize,
     signature: contracts.Bytes) contracts.Error {
     if (public_key.len != PUBLIC_KEY_SIZE)           { ret contracts.INVALID_KEY; }
@@ -633,12 +635,10 @@ pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usi
     if (public_key.data[0] != 0x04)                  { ret contracts.INVALID_KEY; }
     if (signature.len != 0 && signature.data == nil) { ret contracts.INVALID_INPUT; }
 
-    ct.begin();
     var peer:        Point;
     val point_valid: ^u8 = parse_point(?peer, public_key.data);
     if (point_valid:>u8 != 1) {
         destroy_point(?peer);
-        ct.end();
         ret contracts.INVALID_KEY;
     }
     var r: UInt;
@@ -647,7 +647,6 @@ pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usi
         destroy_point(?peer);
         destroy_uint(?r);
         destroy_uint(?s);
-        ct.end();
         ret contracts.AUTH_FAILED;
     }
     val r_valid: ^u8 = valid_scalar(?r);
@@ -656,7 +655,6 @@ pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usi
         destroy_point(?peer);
         destroy_uint(?r);
         destroy_uint(?s);
-        ct.end();
         ret contracts.AUTH_FAILED;
     }
     var hash_scalar: UInt;
@@ -689,6 +687,5 @@ pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usi
     destroy_point(?sum);
     destroy_uint(?x);
     destroy_uint(?y);
-    ct.end();
     ret result;
 }

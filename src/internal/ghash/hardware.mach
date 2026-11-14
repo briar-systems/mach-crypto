@@ -49,13 +49,14 @@ pub fun available() bool {
     ret extensions.carryless();
 }
 
+#[constant_time("soft")]
 pub fun wipe(key: *Key) {
     ct.zeroize((?key.powers[0]):~*^u8, 64);
 }
 
 # reduce a 256-bit product, three 128-bit partial sums of low, middle and
 # high products as low and high words, into the canonical accumulator
-#[oblivious]
+#[constant_time("soft")]
 fun reduce(product: *^u64, accumulator: *^u64) {
     val z0: ^u64 = product[0];
     var z1: ^u64 = product[1] ^ product[2];
@@ -72,7 +73,7 @@ fun reduce(product: *^u64, accumulator: *^u64) {
     z3             = 0;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun read_secret_u64_be(input: *^u8, offset: usize) ^u64 {
     var value: ^u64  = 0;
     var i:     usize = 0;
@@ -85,10 +86,10 @@ fun read_secret_u64_be(input: *^u8, offset: usize) ^u64 {
 
 $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     # 1 block against h^1..h^1, the accumulator folded into the first
-    #[oblivious]
-    #[extensions(pclmul)]
+    #[constant_time("soft")]
+    #[extension("pclmul")]
     fun multiply1(accumulator: *^u64, data: *u8, staged: *u64, powers: *^u64, product: *^u64) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {data}
             mov rcx, {powers}
             mov rdx, {accumulator}
@@ -125,10 +126,10 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
     }
 
     # 4 blocks against h^4..h^1, the accumulator folded into the first
-    #[oblivious]
-    #[extensions(pclmul)]
+    #[constant_time("soft")]
+    #[extension("pclmul")]
     fun multiply4(accumulator: *^u64, data: *u8, staged: *u64, powers: *^u64, product: *^u64) {
-        asm x86_64 {
+        asm x86-64 {
             mov rax, {data}
             mov rcx, {powers}
             mov rdx, {accumulator}
@@ -224,7 +225,7 @@ $if (extensions.ROWS && $mach.build.arch == $mach.arch.x86_64) {
 
     # multiply the accumulator, xored with the first block, through `count`
     # blocks, which is 1 or AGGREGATE
-    #[oblivious]
+    #[constant_time("soft")]
     fun absorb_group(key: *Key, accumulator: *^u64, data: *u8, count: usize) {
         var staged:  [8]u64;
         var product: [6]^u64;
@@ -242,10 +243,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     use std.math.bits;
 
     # 1 staged block against h^1..h^1
-    #[oblivious]
-    #[extensions(pmull)]
+    #[constant_time("soft")]
+    #[extension("pmull")]
     fun multiply1(staged: *^u64, powers: *^u64, swapped: *^u64, product: *^u64) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {staged}
             ldr x10, {powers}
             ldr x11, {swapped}
@@ -272,10 +273,10 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     }
 
     # 4 staged blocks against h^4..h^1
-    #[oblivious]
-    #[extensions(pmull)]
+    #[constant_time("soft")]
+    #[extension("pmull")]
     fun multiply4(staged: *^u64, powers: *^u64, swapped: *^u64, product: *^u64) {
-        asm aarch64 {
+        asm armv8-a {
             ldr x9, {staged}
             ldr x10, {powers}
             ldr x11, {swapped}
@@ -334,12 +335,13 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
         }
     }
 
-    #[oblivious]
+    #[constant_time("soft")]
     fun multiply(staged: *^u64, powers: *^u64, swapped: *^u64, product: *^u64, count: usize) {
         if (count == AGGREGATE) { multiply4(staged, powers, swapped, product); }
         or                      { multiply1(staged, powers, swapped, product); }
     }
 
+    #[constant_time("soft")]
     fun read_u64_be(input: *u8, offset: usize) u64 {
         ret bits.byte_swap(@((?input[offset]):~*u64));
     }
@@ -349,7 +351,7 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
     #
     # the vector byte reverse is not in the assembler's vocabulary, so the
     # public blocks are staged as low and high words here
-    #[oblivious]
+    #[constant_time("soft")]
     fun absorb_group(key: *Key, accumulator: *^u64, data: *u8, count: usize) {
         var staged:  [8]^u64;
         var product: [6]^u64;
@@ -382,12 +384,12 @@ $or (extensions.ROWS && $mach.build.arch == $mach.arch.aarch64) {
 $or {
     # no kernel exists here, and `available` is false, so a key never
     # records this member
-    #[oblivious]
+    #[constant_time("soft")]
     fun absorb_group(key: *Key, accumulator: *^u64, data: *u8, count: usize) {}
 }
 
 # install the 16-byte subkey, e(k, 0^128), and its powers
-#[oblivious]
+#[constant_time("soft")]
 pub fun expand(key: *Key, subkey: *^u8) {
     val high:  ^u64 = read_secret_u64_be(subkey, 0);
     val low:   ^u64 = read_secret_u64_be(subkey, 8);
@@ -411,7 +413,7 @@ pub fun expand(key: *Key, subkey: *^u8) {
 }
 
 # absorb `blocks` whole 16-byte blocks of public data
-#[oblivious]
+#[constant_time("soft")]
 pub fun absorb(key: *Key, accumulator: *^u64, data: *u8, blocks: usize) {
     var done: usize = 0;
     for (blocks - done >= AGGREGATE) {

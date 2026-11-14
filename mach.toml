@@ -3,73 +3,77 @@ id = "crypto"
 version = "0.29.0"
 mach = "^6"
 src = "src"
-out = "out/{target.name}/{profile.name}"
+work = "out/{target.name}/{profile.name}"
 
 [target.linux-x86_64]
-default = true
-isa = "x86_64"
-os = "linux"
+arch = "x86_64"
+sys = "linux"
 abi = "sysv64"
 
-[target.linux-arm64]
-isa = "aarch64"
-os = "linux"
+[target.linux-aarch64]
+arch = "aarch64"
+sys = "linux"
 abi = "aapcs64"
 
 [target.linux-riscv64]
-isa = "riscv64"
-os = "linux"
+arch = "riscv64"
+sys = "linux"
 abi = "lp64d"
 
 [target.windows-x86_64]
-isa = "x86_64"
-os = "windows"
+arch = "x86_64"
+sys = "windows"
 abi = "win64"
 
 [target.darwin-x86_64]
-isa = "x86_64"
-os = "darwin"
+arch = "x86_64"
+sys = "darwin"
 abi = "sysv64"
 
 [target.darwin-aarch64]
-isa = "aarch64"
-os = "darwin"
+arch = "aarch64"
+sys = "darwin"
 abi = "aapcs64"
 
-[profile.debug]
-default = true
-opt = 0
-debug = false
-simd = "scalarize"
-vectorize = true
-float_reassoc = false
-
-[profile.release]
-opt = 2
-debug = false
-simd = "scalarize"
-vectorize = true
-float_reassoc = false
-
-# the library, and the only artifact `mach build .` selects
+# the library, what a dependent's `use crypto;` binds
 [artifact.crypto]
 kind = "static"
 default = true
+export = true
 entry = "lib/crypto.mach"
-out = "lib/crypto"
+out = "{project.work}/lib/crypto"
 targets = ["*"]
-link = []
+link = ["kernel32"]
 need = []
-
-[dep.std]
-git = "https://github.com/briar-systems/mach-std"
-version = "^9.5"
 
 # test-only: the library and every test module, run with `mach test . -a tests`
 [artifact.tests]
 kind = "static"
 entry = "lib/tests.mach"
-out = "lib/tests"
+out = "{project.work}/lib/tests"
 targets = ["*"]
-link = []
+link = ["kernel32"]
 need = []
+
+[link.kernel32]
+source = "system"
+name = "kernel32.dll"
+sys = ["windows"]
+arch = ["*"]
+abi = ["*"]
+export = false
+
+[profile.debug]
+default = true
+optimize = false
+debug = true
+simd = "scalarize"
+
+[profile.release]
+optimize = true
+debug = false
+simd = "scalarize"
+
+[dep.std]
+git = "https://github.com/briar-systems/mach-std"
+ref = "branch/dev"

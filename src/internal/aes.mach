@@ -67,6 +67,7 @@ pub fun preferred() Backend {
     ret SOFTWARE;
 }
 
+#[constant_time("soft")]
 pub fun destroy(context: *Context) {
     if (context == nil) { ret; }
     software.wipe(?context.schedule.software);
@@ -77,7 +78,7 @@ pub fun destroy(context: *Context) {
 }
 
 # expand the key with a named backend, which tests use to force a member
-#[oblivious]
+#[constant_time("soft")]
 pub fun init_backend(context: *Context, key: contracts.SecretBytes,
     backend: Backend) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
@@ -94,7 +95,7 @@ pub fun init_backend(context: *Context, key: contracts.SecretBytes,
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
     ret init_backend(context, key, preferred());
 }
@@ -102,7 +103,7 @@ pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
 # encrypt `count` consecutive blocks, between one and PARALLEL_BLOCKS
 #
 # input and output may be the same storage.
-#[oblivious]
+#[constant_time("soft")]
 pub fun encrypt_blocks(context: *Context, input: *^u8, output: *^u8, count: usize) {
     if (context.backend == HARDWARE) {
         hardware.encrypt_blocks(?context.schedule.hardware, context.rounds, input, output, count);
@@ -119,7 +120,7 @@ pub fun encrypt_blocks(context: *Context, input: *^u8, output: *^u8, count: usiz
     }
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun encrypt(context: *Context, input: *^u8, output: *^u8) {
     encrypt_blocks(context, input, output, 1);
 }

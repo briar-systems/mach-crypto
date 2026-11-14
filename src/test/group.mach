@@ -1246,7 +1246,7 @@ val AGREE_VECTORS: [1455]u8 = [1455]u8{
 };
 
 #[testing]
-#[oblivious]
+#[constant_time("soft")]
 fun load_scalar_words(output: *ed.Scalar, bytes: *u8) {
     ed.scalar_decode_public(output, bytes, 0);
 }

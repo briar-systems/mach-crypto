@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  MACH_VERSION: 6.8.0
+  MACH_REF: 75a8ff57a275097a0b7e32413c73838dc66cf5bd
   PROFILE: ${{ inputs.profile || 'debug' }}
 
 jobs:
@@ -41,16 +41,30 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v6
-      - name: install mach
+      # until a 7.x release exists, the package is built with the compiler built from the
+      # mach commit pinned in MACH_REF. mach's own bootstrap walks the seed chain
+      # its ci tests, so mach owns seeding. MACH_REF is bumped on purpose in its
+      # own pr.
+      - name: restore the pinned mach
+        id: mach
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/mach
+          key: mach-${{ runner.os }}-${{ runner.arch }}-${{ env.MACH_REF }}
+      - name: build mach at MACH_REF
+        if: steps.mach.outputs.cache-hit != 'true'
         run: |
-          export MACH_INSTALL_DIR="$RUNNER_TEMP/mach"
-          url="https://raw.githubusercontent.com/briar-systems/mach/v$MACH_VERSION/dist"
-          if [ "$RUNNER_OS" = Windows ]; then
-            pwsh -NoProfile -Command "irm $url/install.ps1 | iex"
-          else
-            curl -fsSL "$url/install.sh" | sh
-          fi
-          echo "$MACH_INSTALL_DIR" >> "$GITHUB_PATH"
+          exe=
+          [ "$RUNNER_OS" = Windows ] && exe=.exe
+          git init --quiet "$RUNNER_TEMP/mach-src"
+          git -C "$RUNNER_TEMP/mach-src" remote add origin https://github.com/briar-systems/mach
+          git -C "$RUNNER_TEMP/mach-src" fetch --quiet --depth 1 origin "$MACH_REF"
+          git -C "$RUNNER_TEMP/mach-src" checkout --quiet FETCH_HEAD
+          (cd "$RUNNER_TEMP/mach-src" && bash .github/scripts/bootstrap.sh)
+          mkdir -p "$RUNNER_TEMP/mach"
+          cp "$(sed -n 's/^MACH=//p' "$GITHUB_ENV" | tail -n 1)" "$RUNNER_TEMP/mach/mach$exe"
+      - name: add mach to PATH
+        run: echo "$RUNNER_TEMP/mach" >> "$GITHUB_PATH"
       - run: mach dep pull .
       - if: strategy.job-index == 0
         run: mach fmt --check .
