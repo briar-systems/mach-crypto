@@ -68,9 +68,9 @@ values or records with deeply nested secret fields.
 Array initialization checks `count * $size_of(T)`, supplies `$align_of(T)` to
 the typed allocator, and returns the complete allocation zeroed, zeroing it
 itself unless the allocator sets `zeroes_on_allocate`. A zero-count
-array is active with nil data and acquires no allocation. `destroy_array[T]`
+array is active with nil data and acquires no allocation. `array_dnit[T]`
 splits the release wipe the same way. A wiping allocator zeroes every element
-itself, and for any other allocator `destroy_array[T]` wipes all elements before
+itself, and for any other allocator `array_dnit[T]` wipes all elements before
 every release attempt and rewipes any callback mutation after a failed one. A
 failed release then retains the typed pointer, count, byte size, allocator,
 and cleanup-pending state for retry. Custom `ArrayAllocator[T]` callbacks follow
@@ -133,7 +133,7 @@ Overlapping public RSA outputs are rejected.
 Private keys are move-only by contract and must be released with
 `keys.private_dnit`. A failed allocation or parse normally leaves the output
 empty. If cleanup deallocation fails, the output retains wiped cleanup-pending
-storage while the primary error is returned. Call `destroy_private` after that
+storage while the primary error is returned. Call `private_dnit` after that
 failure to retry release. Serialization reproduces the exact accepted DER, not
 a reconstructed variant. Public SPKI views borrow the caller's DER or PEM
 scratch buffer and must not outlive it.
@@ -154,7 +154,7 @@ writes the digest and consumes the state only after successful output.
 Validation, capacity, and length-overflow failures leave both state and output
 unchanged.
 
-`destroy_sha256` and `destroy_sha384` zeroize the complete state and are
+`sha256_dnit` and `sha384_dnit` zeroize the complete state and are
 idempotent. A destroyed state rejects update, snapshot, and final, but can be
 activated again with `init`. This supports the TLS HelloRetryRequest transcript
 rewrite without exposing the underlying state. State records are opaque and
@@ -175,12 +175,12 @@ not a truncation of a 64-byte digest. The byte counter is the full 128 bits of
 the specification, so no input length overflows it.
 
 `hash.Blake2b` hashes public input under any parameter block. It follows the
-transcript contract above: `empty_blake2b`, `init_blake2b`, `update_blake2b`,
-`snapshot_blake2b`, `final_blake2b` and `destroy_blake2b`. `snapshot` and
+transcript contract above: `empty_blake2b`, `blake2b_init`, `update_blake2b`,
+`snapshot_blake2b`, `final_blake2b` and `blake2b_dnit`. `snapshot` and
 `final` write exactly the configured digest length. `hash.digest_blake2b` is
 the one-shot form, and its output may overlap its input.
 
-`hash.Blake2bSecret` runs on the secret-typed state. `init_blake2b_secret`
+`hash.Blake2bSecret` runs on the secret-typed state. `blake2b_secret_init`
 takes a secret key of 0 to 64 bytes, where an empty key is unkeyed hashing of
 secret input. Longer keys are rejected with `INVALID_KEY`. Input arrives as
 secret bytes through `update_blake2b_secret` or as public bytes through
