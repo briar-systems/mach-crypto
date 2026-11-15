@@ -26,8 +26,8 @@ fun failed(error: contracts.Error) contracts.Operation {
 
 #[constant_time("soft")]
 fun wipe_contexts(chacha: *stream.Context, poly: *mac.Context, key_block: *^u8, tag: *^u8) {
-    stream.destroy(chacha);
-    mac.destroy(poly);
+    stream.dnit(chacha);
+    mac.dnit(poly);
     ct.zeroize(key_block, 64);
     ct.zeroize(tag, 16);
 }

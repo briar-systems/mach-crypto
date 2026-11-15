@@ -46,11 +46,11 @@ fun multiply_base(private_key: contracts.SecretBytes, output: *^u8) {
     core.multiply(?u, ?numerator, ?denominator);
     core.encode(output, ?u);
     ct.zeroize(?clamped[0], 32);
-    ed.destroy_scalar(?scalar);
-    ed.destroy_point(?point);
-    core.destroy(?numerator);
-    core.destroy(?denominator);
-    core.destroy(?u);
+    ed.scalar_dnit(?scalar);
+    ed.point_dnit(?point);
+    core.dnit(?numerator);
+    core.dnit(?denominator);
+    core.dnit(?u);
 }
 
 # derive the rfc 7748 public u-coordinate for a private scalar

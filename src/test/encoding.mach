@@ -400,7 +400,7 @@ test keys__rfc_8410_ed25519_and_x25519_containers_are_exact_and_bounded {
         contracts.SecretBuffer{data: ?roundtrip[0], capacity: 48});
     if (written.error != contracts.OK || written.written != 48 ||
         !secret_equal(?roundtrip[0], input.data, 48)) { ret 4; }
-    if (keys.destroy_private(?key) != contracts.OK ||
+    if (keys.private_dnit(?key) != contracts.OK ||
         probe.zeroized_releases != 1 || probe.nonzero_releases != 0) { ret 5; }
 
     if (!set_x25519_pkcs8(?encoded[0]) ||
@@ -408,7 +408,7 @@ test keys__rfc_8410_ed25519_and_x25519_containers_are_exact_and_bounded {
         key.algorithm != keys.X25519 ||
         keys.private_bytes(?key, ?private_value) != contracts.OK ||
         private_value.data[0]:>u8 != 0x77 || private_value.data[31]:>u8 != 0x2a) { ret 6; }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 2) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 2) {
         ret 7;
     }
 
@@ -477,7 +477,7 @@ test keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree {
     var private_value: contracts.SecretBytes;
     if (keys.private_bytes(?key, ?private_value) != contracts.OK ||
         private_value.len != 32 || private_value.data[31]:>u8 != 1) { ret 3; }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 1) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 1) {
         ret 4;
     }
 
@@ -502,7 +502,7 @@ test keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree {
         keys.decode_pkcs8(contracts.SecretBytes{data: ?pkcs8[0], len: 138},
         ?owner, ?key) != contracts.OK || key.algorithm != keys.P256 ||
         key.container != keys.PKCS8 || key.encoded_len != 138) { ret 6; }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 2) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 2) {
         ret 7;
     }
 
@@ -712,7 +712,7 @@ test keys__openssl_rsa_containers_preserve_exact_public_and_private_parts {
         contracts.SecretBuffer{data: key.material.data,
         capacity: key.material.len}) != contracts.OK ||
         key.material.data[0]:>u8 != 0x37) { ret 7; }
-    if (keys.destroy_private(?key) != contracts.OK ||
+    if (keys.private_dnit(?key) != contracts.OK ||
         probe.zeroized_releases != 1 || probe.nonzero_releases != 0) { ret 8; }
 
     if (!set_rsa_pkcs8(?pkcs8[0]) ||
@@ -721,7 +721,7 @@ test keys__openssl_rsa_containers_preserve_exact_public_and_private_parts {
         ?owner, ?key) != contracts.OK || key.container != keys.RSA_PRIVATE) {
         ret 9;
     }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 2) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 2) {
         ret 10;
     }
 
@@ -793,7 +793,7 @@ test keys__pem_round_trips_once_owned_private_der_and_borrowed_public_der {
         contracts.SecretBuffer{data: ?in_place_pem[0], capacity: 128},
         ?secret_block) != contracts.OK || secret_block.der.len != 48 ||
         !secret_equal(?in_place_pem[0], ?private_der[0], 48)) { ret 14; }
-    if (keys.destroy_private(?private_key) != contracts.OK ||
+    if (keys.private_dnit(?private_key) != contracts.OK ||
         probe.zeroized_releases != 1) { ret 4; }
 
     val attempts_before: usize = probe.allocation_attempts;
@@ -808,7 +808,7 @@ test keys__pem_round_trips_once_owned_private_der_and_borrowed_public_der {
         private_value.data[0]:>u8 != 0x9d || private_value.data[31]:>u8 != 0x60) {
         ret 6;
     }
-    if (keys.destroy_private(?private_key) != contracts.OK ||
+    if (keys.private_dnit(?private_key) != contracts.OK ||
         probe.zeroized_releases != 2) { ret 7; }
 
     var public_der: [44]u8;
@@ -880,7 +880,7 @@ test keys__allocation_and_cleanup_failures_retain_exact_ownership {
         !secret.cleanup_pending(?key.material) || key.algorithm != 0 ||
         probe.zeroized_releases != 1) { ret 4; }
     probe.fail_deallocate_at = 0;
-    if (keys.destroy_private(?key) != contracts.OK ||
+    if (keys.private_dnit(?key) != contracts.OK ||
         secret.cleanup_pending(?key.material)) { ret 5; }
 
     owner = probe_make(?probe);
@@ -898,7 +898,7 @@ test keys__allocation_and_cleanup_failures_retain_exact_ownership {
         !secret.cleanup_pending(?key.material) || probe.zeroized_releases != 1 ||
         probe.nonzero_releases != 0) { ret 7; }
     probe.fail_deallocate_at = 0;
-    if (keys.destroy_private(?key) != contracts.OK) { ret 8; }
+    if (keys.private_dnit(?key) != contracts.OK) { ret 8; }
     ret 0;
 }
 
@@ -927,7 +927,7 @@ test keys__private_pem_truncation_fails_before_allocation_at_every_boundary {
     if (keys.decode_private_pem(
         contracts.SecretBytes{data: ?pem_input[0], len: 118},
         ?owner, ?key) != contracts.OK || probe.allocation_attempts != 1) { ret 4; }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 1) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 1) {
         ret 5;
     }
     ret 0;

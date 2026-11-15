@@ -17,9 +17,9 @@ pub rec State {
 # initialize a new SHA3-256 state
 # ---
 # ret: initialized state
-pub fun init() State {
+pub fun make() State {
     var s: State;
-    keccak.init(?s.sp, BLOCK_SIZE);
+    keccak.make(?s.sp, BLOCK_SIZE);
     ret s;
 }
 
@@ -47,7 +47,7 @@ pub fun final(s: *State, digest: *u8) {
 # len:    number of bytes to hash
 # digest: pointer to 32-byte output buffer
 pub fun hash(data: *u8, len: usize, digest: *u8) {
-    var s: State = init();
+    var s: State = make();
     update(?s, data, len);
     final(?s, digest);
 }

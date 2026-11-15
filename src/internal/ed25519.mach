@@ -54,18 +54,18 @@ pub rec Point {
 }
 
 #[constant_time("soft")]
-pub fun destroy_scalar(value: *Scalar) {
+pub fun scalar_dnit(value: *Scalar) {
     if (value == nil) { ret; }
     ct.zeroize((?value.limb[0]):~*^u8, 32);
 }
 
 #[constant_time("soft")]
-pub fun destroy_point(point: *Point) {
+pub fun point_dnit(point: *Point) {
     if (point == nil) { ret; }
-    field.destroy(?point.x);
-    field.destroy(?point.y);
-    field.destroy(?point.z);
-    field.destroy(?point.t);
+    field.dnit(?point.x);
+    field.dnit(?point.y);
+    field.dnit(?point.z);
+    field.dnit(?point.t);
 }
 
 #[constant_time("soft")]
@@ -224,7 +224,7 @@ fun field_is_zero(value: *field.Field) ^u8 {
     var zero: field.Field;
     field.set_small(?zero, 0);
     val result: ^u8 = field_equal(value, ?zero);
-    field.destroy(?zero);
+    field.dnit(?zero);
     ret result;
 }
 
@@ -233,7 +233,7 @@ fun field_negate(output: *field.Field, input: *field.Field) {
     var zero: field.Field;
     field.set_small(?zero, 0);
     field.subtract(output, ?zero, input);
-    field.destroy(?zero);
+    field.dnit(?zero);
 }
 
 #[constant_time("soft")]
@@ -251,10 +251,10 @@ fun field_sqrt(output: *field.Field, input: *field.Field) ^u8 {
     field.square(?squared, ?result);
     val valid: ^u8 = field_equal(?squared, input);
     field.copy(output, ?result);
-    field.destroy(?result);
-    field.destroy(?squared);
-    field.destroy(?sqrt_minus_one);
-    field.destroy(?corrected);
+    field.dnit(?result);
+    field.dnit(?squared);
+    field.dnit(?sqrt_minus_one);
+    field.dnit(?corrected);
     ret valid;
 }
 
@@ -330,18 +330,18 @@ pub fun point_add(output: *Point, left: *Point, right: *Point) {
     field.multiply(?result.t, ?e, ?h);
     field.multiply(?result.z, ?f, ?g);
     point_copy(output, ?result);
-    field.destroy(?a);
-    field.destroy(?b);
-    field.destroy(?c);
-    field.destroy(?d_value);
-    field.destroy(?e);
-    field.destroy(?f);
-    field.destroy(?g);
-    field.destroy(?h);
-    field.destroy(?first);
-    field.destroy(?second);
-    field.destroy(?two_d);
-    destroy_point(?result);
+    field.dnit(?a);
+    field.dnit(?b);
+    field.dnit(?c);
+    field.dnit(?d_value);
+    field.dnit(?e);
+    field.dnit(?f);
+    field.dnit(?g);
+    field.dnit(?h);
+    field.dnit(?first);
+    field.dnit(?second);
+    field.dnit(?two_d);
+    point_dnit(?result);
 }
 
 #[constant_time("soft")]
@@ -373,16 +373,16 @@ fun point_double(output: *Point, input: *Point) {
     field.multiply(?result.t, ?e, ?h);
     field.multiply(?result.z, ?f, ?g);
     point_copy(output, ?result);
-    field.destroy(?a);
-    field.destroy(?b);
-    field.destroy(?c);
-    field.destroy(?d_value);
-    field.destroy(?e);
-    field.destroy(?f);
-    field.destroy(?g);
-    field.destroy(?h);
-    field.destroy(?temporary);
-    destroy_point(?result);
+    field.dnit(?a);
+    field.dnit(?b);
+    field.dnit(?c);
+    field.dnit(?d_value);
+    field.dnit(?e);
+    field.dnit(?f);
+    field.dnit(?g);
+    field.dnit(?h);
+    field.dnit(?temporary);
+    point_dnit(?result);
 }
 
 # multiply a point by a scalar with a fixed 4-bit window
@@ -426,11 +426,11 @@ pub fun scalar_multiply(output: *Point, scalar: *Scalar, point: *Point) {
 
     index = 0;
     for (index < 16) {
-        destroy_point(?table[index]);
+        point_dnit(?table[index]);
         index = index + 1;
     }
-    destroy_point(?result);
-    destroy_point(?selected);
+    point_dnit(?result);
+    point_dnit(?selected);
 }
 
 # a table entry in niels form: y + x, y - x and 2 * d * x * y of an affine point
@@ -500,16 +500,16 @@ fun point_add_niels(output: *Point, left: *Point, entry: *Niels) {
     field.multiply(?result.t, ?e, ?h);
     field.multiply(?result.z, ?f, ?g);
     point_copy(output, ?result);
-    field.destroy(?a);
-    field.destroy(?b);
-    field.destroy(?c);
-    field.destroy(?d_value);
-    field.destroy(?e);
-    field.destroy(?f);
-    field.destroy(?g);
-    field.destroy(?h);
-    field.destroy(?sum);
-    destroy_point(?result);
+    field.dnit(?a);
+    field.dnit(?b);
+    field.dnit(?c);
+    field.dnit(?d_value);
+    field.dnit(?e);
+    field.dnit(?f);
+    field.dnit(?g);
+    field.dnit(?h);
+    field.dnit(?sum);
+    point_dnit(?result);
 }
 
 # multiply the base point by a scalar below 2^256 with the fixed-base comb table
@@ -531,10 +531,10 @@ pub fun scalar_multiply_base(output: *Point, scalar: *Scalar) {
         window = window + 1;
     }
     point_copy(output, ?result);
-    destroy_point(?result);
-    field.destroy(?entry.plus);
-    field.destroy(?entry.minus);
-    field.destroy(?entry.product);
+    point_dnit(?result);
+    field.dnit(?entry.plus);
+    field.dnit(?entry.minus);
+    field.dnit(?entry.product);
 }
 
 #[constant_time("soft")]
@@ -558,9 +558,9 @@ fun point_encode_secret(output: *^u8, point: *Point) {
     field.encode(?x_encoded[0], ?x);
     field.encode(output, ?y);
     output[31] = output[31] | ((x_encoded[0] & 1) << 7);
-    field.destroy(?inverse);
-    field.destroy(?x);
-    field.destroy(?y);
+    field.dnit(?inverse);
+    field.dnit(?x);
+    field.dnit(?y);
     ct.zeroize(?x_encoded[0], 32);
 }
 
@@ -628,14 +628,14 @@ pub fun point_decode(output: *Point, input: *u8) ^u8 {
     ct.zeroize(?provided[0], 32);
     ct.zeroize(?canonical_y[0], 32);
     ct.zeroize(?x_encoded[0], 32);
-    field.destroy(?y_squared);
-    field.destroy(?numerator);
-    field.destroy(?denominator);
-    field.destroy(?inverse);
-    field.destroy(?x_squared);
-    field.destroy(?one);
-    field.destroy(?d_value);
-    field.destroy(?negative_x);
+    field.dnit(?y_squared);
+    field.dnit(?numerator);
+    field.dnit(?denominator);
+    field.dnit(?inverse);
+    field.dnit(?x_squared);
+    field.dnit(?one);
+    field.dnit(?d_value);
+    field.dnit(?negative_x);
     ret canonical & has_root & sign_valid;
 }
 

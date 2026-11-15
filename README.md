@@ -49,9 +49,9 @@ allocator `secret.init` zeroes the allocation.
 not outlive its owner or any move or destroy operation. Exactly one layer wipes
 each release. An allocator whose `wipes_on_release` is set wipes the whole span
 before every release attempt and leaves zeroed storage when the attempt fails,
-so `secret.destroy` hands it the storage untouched. The system allocators set
+so `secret.dnit` hands it the storage untouched. The system allocators set
 it, because `std.memory.secret` already wipes on release. For any other
-allocator `secret.destroy` wipes storage immediately before every release
+allocator `secret.dnit` wipes storage immediately before every release
 attempt, and if the deallocator mutates the allocation and fails while
 retaining ownership, wipes it again before returning. Either way the owner
 remains in a wiped cleanup-pending state, and a later destroy retries with
@@ -60,7 +60,7 @@ fully zeroed storage.
 `crypto.secret.SecretArray[T]` owns a dynamically sized typed allocation while
 preserving every field's secrecy shape. Initialize an owner with
 `secret.empty_array[T]`, construct the native allocator with
-`secret.system_array_allocator[T]`, and call `secret.init_array[T]` with the
+`secret.system_array_allocator[T]`, and call `secret.array_init[T]` with the
 element count. `secret.array_data[T]` returns `*T` only while the owner is
 active. No raw pointer or declassification cast is needed for directly secret
 values or records with deeply nested secret fields.
@@ -131,7 +131,7 @@ the private exponent first, so private output may overlap the owning key.
 Overlapping public RSA outputs are rejected.
 
 Private keys are move-only by contract and must be released with
-`keys.destroy_private`. A failed allocation or parse normally leaves the output
+`keys.private_dnit`. A failed allocation or parse normally leaves the output
 empty. If cleanup deallocation fails, the output retains wiped cleanup-pending
 storage while the primary error is returned. Call `destroy_private` after that
 failure to retry release. Serialization reproduces the exact accepted DER, not

@@ -16,7 +16,7 @@
 # - every operation is constant time: no branch or address depends on h or on
 #   the accumulator
 # - `wipe` zeroizes the whole key
-# `destroy` wipes every member's key, which covers the whole storage whichever
+# `dnit` wipes every member's key, which covers the whole storage whichever
 # member held it.
 #
 # software is the portable member and runs everywhere. hardware is pclmulqdq
@@ -70,7 +70,7 @@ pub fun preferred() Backend {
 }
 
 #[constant_time("soft")]
-pub fun destroy(key: *Key) {
+pub fun dnit(key: *Key) {
     software.wipe(?key.member.software);
     hardware.wipe(?key.member.hardware);
     key.backend = NONE;
@@ -79,7 +79,7 @@ pub fun destroy(key: *Key) {
 # install the 16-byte hash subkey with a named backend
 #[constant_time("soft")]
 pub fun init(key: *Key, subkey: *^u8, backend: Backend) contracts.Error {
-    destroy(key);
+    dnit(key);
     if (!available(backend)) { ret contracts.UNSUPPORTED; }
     if (backend == HARDWARE) { hardware.expand(?key.member.hardware, subkey); }
     or                       { software.expand(?key.member.software, subkey); }
@@ -222,8 +222,8 @@ test ghash__hardware_and_software_members_agree_over_random_keys_splits_and_bloc
             if (left[i]:>u8 != right[i]:>u8) { ret 5; }
             i = i + 1;
         }
-        destroy(?hardware);
-        destroy(?software);
+        dnit(?hardware);
+        dnit(?software);
         index = index + 1;
     }
     ret 0;

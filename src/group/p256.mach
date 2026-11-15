@@ -34,7 +34,7 @@ pub fun derive_public(private_key: contracts.SecretBytes,
     core.decode_secret(?scalar, private_key.data);
     val valid: ^u8 = core.valid_scalar(?scalar);
     if (valid:>u8 != 1) {
-        core.destroy_uint(?scalar);
+        core.uint_dnit(?scalar);
         ret failed(contracts.INVALID_KEY);
     }
     var public_point: core.Point;
@@ -45,10 +45,10 @@ pub fun derive_public(private_key: contracts.SecretBytes,
     output.data[0] = 0x04;
     core.encode_public(output.data, 1, ?x);
     core.encode_public(output.data, 33, ?y);
-    core.destroy_uint(?scalar);
-    core.destroy_point(?public_point);
-    core.destroy_uint(?x);
-    core.destroy_uint(?y);
+    core.uint_dnit(?scalar);
+    core.point_dnit(?public_point);
+    core.uint_dnit(?x);
+    core.uint_dnit(?y);
     ret contracts.Operation{error: contracts.OK, written: PUBLIC_UNCOMPRESSED_SIZE};
 }
 
@@ -73,8 +73,8 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     val scalar_valid: ^u8 = core.valid_scalar(?scalar);
     val point_valid:  ^u8 = core.parse_point(?peer, peer_public.data);
     if ((scalar_valid & point_valid):>u8 != 1) {
-        core.destroy_uint(?scalar);
-        core.destroy_point(?peer);
+        core.uint_dnit(?scalar);
+        core.point_dnit(?peer);
         ret failed(contracts.INVALID_KEY);
     }
     var shared_point: core.Point;
@@ -84,18 +84,18 @@ pub fun agree(private_key: contracts.SecretBytes, peer_public: contracts.Bytes,
     val infinity: ^u8 = core.point_is_infinity(?shared_point);
     core.to_affine(?x, ?y, ?shared_point);
     if (infinity:>u8 == 1) {
-        core.destroy_uint(?scalar);
-        core.destroy_point(?peer);
-        core.destroy_point(?shared_point);
-        core.destroy_uint(?x);
-        core.destroy_uint(?y);
+        core.uint_dnit(?scalar);
+        core.point_dnit(?peer);
+        core.point_dnit(?shared_point);
+        core.uint_dnit(?x);
+        core.uint_dnit(?y);
         ret failed(contracts.INVALID_KEY);
     }
     core.encode_secret(output.data, ?x);
-    core.destroy_uint(?scalar);
-    core.destroy_point(?peer);
-    core.destroy_point(?shared_point);
-    core.destroy_uint(?x);
-    core.destroy_uint(?y);
+    core.uint_dnit(?scalar);
+    core.point_dnit(?peer);
+    core.point_dnit(?shared_point);
+    core.uint_dnit(?x);
+    core.uint_dnit(?y);
     ret contracts.Operation{error: contracts.OK, written: SHARED_SECRET_SIZE};
 }

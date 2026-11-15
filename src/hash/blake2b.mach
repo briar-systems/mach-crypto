@@ -7,14 +7,14 @@
 # the sequential defaults and `valid` says whether a block describes an
 # instance. the digest length is a parameter, not a truncation of a 64-byte
 # digest. the key length is not a field: a key enters only through
-# `init_secret`, so a public `State` is never keyed.
+# `secret_init`, so a public `State` is never keyed.
 #
 # there are two states, with the contract of `sha256` and `sha512`. `State` is
 # public: `update` takes `*u8` and `final` writes `*u8`. `SecretState` holds
 # `^u64` words and a `[128]^u8` block, so any record embedding it is welded.
 # `update_secret` takes `*^u8` only, `final_secret` writes the digest to
 # `*^u8`, and declassifying it is the caller's decision. neither record aliases
-# the other. lengths and parameters are public. `destroy_secret` zeroizes the
+# the other. lengths and parameters are public. `secret_dnit` zeroizes the
 # words and the block through `ct.zeroize` and resets the rest, so a destroyed
 # state is all zero. the compression is `#[constant_time("soft")]` at the secret instance.
 #
@@ -278,7 +278,7 @@ fun squeeze[S, W, B](s: *S, digest: *B) {
 # ---
 # p:   parameters, which must satisfy `valid`
 # ret: initialized state
-pub fun init(p: *Params) State {
+pub fun make(p: *Params) State {
     var s: State;
     setup[State](?s, p, 0);
     ret s;
@@ -311,7 +311,7 @@ pub fun final(s: *State, digest: *u8) {
 # digest_len: digest length in bytes, 1..64
 pub fun hash(data: *u8, len: usize, digest: *u8, digest_len: usize) {
     var p: Params = params(digest_len);
-    var s: State  = init(?p);
+    var s: State  = make(?p);
     update(?s, data, len);
     final(?s, digest);
 }
@@ -322,7 +322,7 @@ pub fun hash(data: *u8, len: usize, digest: *u8, digest_len: usize) {
 # key:     pointer to the secret key, read only when `key_len` is not zero
 # key_len: key length in bytes, 0..64, public
 # ret:     initialized state holding the padded key as its first block
-pub fun init_secret(p: *Params, key: *^u8, key_len: usize) SecretState {
+pub fun secret_init(p: *Params, key: *^u8, key_len: usize) SecretState {
     var s: SecretState;
     ct.zeroize(?s.buf[0], BLOCK_SIZE);
     setup[SecretState](?s, p, key_len);
@@ -351,7 +351,7 @@ pub fun update_secret(s: *SecretState, data: *^u8, len: usize) {
 # finalize a secret state and write the digest as secret bytes
 #
 # the digest is `*^u8`. declassify it with `:>` at the caller if that is the
-# intent. the state keeps its words afterwards, so call `destroy_secret`
+# intent. the state keeps its words afterwards, so call `secret_dnit`
 # ---
 # s:      pointer to the state
 # digest: pointer to a secret output buffer of the state's digest length
@@ -364,7 +364,7 @@ pub fun final_secret(s: *SecretState, digest: *^u8) {
 # ---
 # s: pointer to the state, all zero afterwards
 #[constant_time("soft")]
-pub fun destroy_secret(s: *SecretState) {
+pub fun secret_dnit(s: *SecretState) {
     ct.zeroize((?s.h[0]):~*^u8, 64);
     ct.zeroize(?s.buf[0], BLOCK_SIZE);
     s.buf_len    = 0;

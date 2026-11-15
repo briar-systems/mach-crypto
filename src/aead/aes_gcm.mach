@@ -59,8 +59,8 @@ fun valid_key(key: contracts.SecretBytes) bool {
 
 #[constant_time("soft")]
 fun wipe(context: *Context) {
-    core.destroy(?context.cipher);
-    ghash.destroy(?context.hash);
+    core.dnit(?context.cipher);
+    ghash.dnit(?context.hash);
     context.state = EMPTY;
 }
 

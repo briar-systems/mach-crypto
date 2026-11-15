@@ -78,7 +78,7 @@ pub fun empty_private() PrivateKey {
 }
 
 #[constant_time("soft")]
-fun private_empty(key: *PrivateKey) bool {
+fun is_private_empty(key: *PrivateKey) bool {
     ret key != nil && key.algorithm == 0 && key.container == 0 &&
         key.encoded_len == 0 && key.private_offset == 0 && key.private_len == 0 &&
         key.modulus_offset == 0 && key.modulus_len == 0 &&
@@ -87,9 +87,9 @@ fun private_empty(key: *PrivateKey) bool {
         key.material.owner == nil && key.material.state == secret.EMPTY;
 }
 
-pub fun destroy_private(key: *PrivateKey) contracts.Error {
+pub fun private_dnit(key: *PrivateKey) contracts.Error {
     if (key == nil) { ret contracts.INVALID_INPUT; }
-    val status: contracts.Error = secret.destroy(?key.material);
+    val status: contracts.Error = secret.dnit(?key.material);
     key.algorithm       = 0;
     key.container       = 0;
     key.encoded_len     = 0;
@@ -180,7 +180,7 @@ fun valid_p256_public(value: contracts.Bytes) bool {
     if (value.len != 65 || value.data == nil || value.data[0] != 4) { ret false; }
     var point: p256.Point;
     val valid: ^u8 = p256.parse_point(?point, value.data);
-    p256.destroy_point(?point);
+    p256.point_dnit(?point);
     ret valid:>u8 == 1;
 }
 
@@ -543,7 +543,7 @@ fun install(input: contracts.SecretBytes, owner: *secret.Allocator,
     if (output == nil || owner == nil || descriptor == nil) {
         ret contracts.INVALID_INPUT;
     }
-    if (!private_empty(output))              { ret contracts.INVALID_STATE; }
+    if (!is_private_empty(output))           { ret contracts.INVALID_STATE; }
     if (descriptor.encoded_len != input.len) { ret contracts.INVALID_STATE; }
     var material:    secret.Secret   = secret.empty();
     val initialized: contracts.Error = secret.init(?material, owner, input.len);
@@ -560,7 +560,7 @@ fun install(input: contracts.SecretBytes, owner: *secret.Allocator,
     }
     val moved: contracts.Error = secret.move(?output.material, ?material);
     if (moved != contracts.OK) {
-        secret.destroy(?material);
+        secret.dnit(?material);
         ret moved;
     }
     output.algorithm       = descriptor.algorithm;
@@ -580,7 +580,7 @@ fun decode_private_with(input: contracts.SecretBytes, owner: *secret.Allocator,
     if (input.len == 0 || input.data == nil || output == nil || owner == nil) {
         ret contracts.INVALID_INPUT;
     }
-    if (!private_empty(output)) { ret contracts.INVALID_STATE; }
+    if (!is_private_empty(output)) { ret contracts.INVALID_STATE; }
     var descriptor: Descriptor;
     descriptor.algorithm       = 0;
     descriptor.container       = 0;
@@ -743,7 +743,7 @@ pub fun decode_private_pem(input: contracts.SecretBytes, owner: *secret.Allocato
     if (input.len == 0 || input.data == nil || owner == nil || output == nil) {
         ret contracts.INVALID_INPUT;
     }
-    if (!private_empty(output)) { ret contracts.INVALID_STATE; }
+    if (!is_private_empty(output)) { ret contracts.INVALID_STATE; }
     val required: contracts.Operation = pem.decoded_secret_len(input);
     if (required.error != contracts.OK) { ret required.error; }
     var decoded: secret.Secret   = secret.empty();
@@ -786,7 +786,7 @@ pub fun decode_private_pem(input: contracts.SecretBytes, owner: *secret.Allocato
     if (status == contracts.OK) {
         val moved: contracts.Error = secret.move(?output.material, ?decoded);
         if (moved != contracts.OK) {
-            secret.destroy(?decoded);
+            secret.dnit(?decoded);
             ret moved;
         }
         output.algorithm       = descriptor.algorithm;
@@ -800,7 +800,7 @@ pub fun decode_private_pem(input: contracts.SecretBytes, owner: *secret.Allocato
         output.exponent_len    = descriptor.exponent_len;
         ret contracts.OK;
     }
-    secret.destroy(?decoded);
+    secret.dnit(?decoded);
     if (secret.cleanup_pending(?decoded)) {
         secret.move(?output.material, ?decoded);
     }

@@ -41,7 +41,7 @@ fun wipe(scratch: *^u64, count: usize) {
 }
 
 #[constant_time("soft")]
-fun destroy(value: *UInt) {
+fun uint_dnit(value: *UInt) {
     wipe(?value.limb[0], LIMBS);
 }
 
@@ -80,13 +80,13 @@ pub fun public_less_than(left: *u8, right: *u8, len: usize) bool {
 
 #[constant_time("soft")]
 fun set_one(value: *UInt) {
-    destroy(value);
+    uint_dnit(value);
     value.limb[0] = 1;
 }
 
 #[constant_time("soft")]
 fun decode_public(output: *UInt, input: *u8, len: usize) {
-    destroy(output);
+    uint_dnit(output);
     var i: usize = 0;
     for (i < len) {
         val reverse:    usize = len - 1 - i;
@@ -100,7 +100,7 @@ fun decode_public(output: *UInt, input: *u8, len: usize) {
 
 #[constant_time("soft")]
 fun decode_secret(output: *UInt, input: *^u8, len: usize) {
-    destroy(output);
+    uint_dnit(output);
     var i: usize = 0;
     for (i < len) {
         val reverse:    usize = len - 1 - i;
@@ -157,7 +157,7 @@ fun subtract(output: *^u64, left: *^u64, right: *^u64, limbs: usize) ^u8 {
 fun less_than(left: *UInt, right: *UInt, limbs: usize) ^u8 {
     var difference: UInt;
     val result:     ^u8 = subtract(?difference.limb[0], ?left.limb[0], ?right.limb[0], limbs);
-    destroy(?difference);
+    uint_dnit(?difference);
     ret result;
 }
 
@@ -170,7 +170,7 @@ fun subtract_modulus(output: *UInt, value: *^u64, modulus: *UInt, high: ^u64,
     var reduced: UInt;
     val borrow:  ^u8 = subtract(?reduced.limb[0], value, ?modulus.limb[0], limbs);
     select(?output.limb[0], value, ?reduced.limb[0], high::^u8 | (borrow ^ 1), limbs);
-    destroy(?reduced);
+    uint_dnit(?reduced);
 }
 
 # value = 2 * value mod modulus, for a value below the modulus
@@ -314,7 +314,7 @@ fun square(output: *UInt, value: *UInt, modulus: *UInt, factor: ^u64, limbs: usi
 #[constant_time("soft")]
 fun prepare_r2(output: *UInt, modulus: *UInt, factor: ^u64, len: usize, limbs: usize) {
     val top_bit: usize = len * 8 - 1;
-    destroy(output);
+    uint_dnit(output);
     val bit_value: u64 = 1u64 << (top_bit & 63);
     output.limb[top_bit >> 6] = bit_value;
     var i: usize = top_bit;
@@ -410,13 +410,13 @@ fun exponentiate(output: *UInt, input: *UInt, exponent_public: *u8,
         window = 0;
     }
     multiply(output, ?result, ?one, modulus, factor, limbs);
-    destroy(?r2);
-    destroy(?one);
-    destroy(?entry);
-    destroy(?result);
+    uint_dnit(?r2);
+    uint_dnit(?one);
+    uint_dnit(?entry);
+    uint_dnit(?result);
     k = 0;
     for (k < TABLE) {
-        destroy(?table[k]);
+        uint_dnit(?table[k]);
         k = k + 1;
     }
 }
@@ -434,9 +434,9 @@ pub fun public_apply(output: *^u8, input: *u8, modulus_bytes: *u8,
     exponentiate(?result, ?value, exponent, nil, exponent_len, false,
         ?modulus, modulus_len, limbs);
     encode_secret(output, ?result, modulus_len);
-    destroy(?modulus);
-    destroy(?value);
-    destroy(?result);
+    uint_dnit(?modulus);
+    uint_dnit(?value);
+    uint_dnit(?result);
     ret valid;
 }
 
@@ -453,9 +453,9 @@ pub fun public_apply_secret(output: *^u8, input: *^u8, modulus_bytes: *u8,
     exponentiate(?result, ?value, exponent, nil, exponent_len, false,
         ?modulus, modulus_len, limbs);
     encode_secret(output, ?result, modulus_len);
-    destroy(?modulus);
-    destroy(?value);
-    destroy(?result);
+    uint_dnit(?modulus);
+    uint_dnit(?value);
+    uint_dnit(?result);
     ret valid;
 }
 
@@ -472,8 +472,8 @@ pub fun private_apply(output: *^u8, input: *^u8, modulus_bytes: *u8,
     exponentiate(?result, ?value, nil, exponent, exponent_len, true,
         ?modulus, modulus_len, limbs);
     encode_secret(output, ?result, modulus_len);
-    destroy(?modulus);
-    destroy(?value);
-    destroy(?result);
+    uint_dnit(?modulus);
+    uint_dnit(?value);
+    uint_dnit(?result);
     ret valid;
 }

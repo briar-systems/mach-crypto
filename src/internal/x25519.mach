@@ -15,7 +15,7 @@ pub rec Field {
 }
 
 #[constant_time("soft")]
-pub fun destroy(value: *Field) {
+pub fun dnit(value: *Field) {
     if (value == nil) { ret; }
     ct.zeroize((?value.limb[0]):~*^u8, 40);
 }
@@ -74,7 +74,7 @@ pub fun canonicalize(value: *Field) {
     }
     difference = 0;
     borrow     = 0;
-    destroy(?reduced);
+    dnit(?reduced);
 }
 
 #[constant_time("soft")]
@@ -337,9 +337,9 @@ pub fun serial_multiply(output: *Field, left: *Field, right: *Field) {
     p2 = 0;
     p3 = 0;
     p4 = 0;
-    destroy(?multiple);
-    destroy(?bits);
-    destroy(?product);
+    dnit(?multiple);
+    dnit(?bits);
+    dnit(?product);
 }
 
 # multiply by the public ladder constant (486662 - 2) / 4 = 121665
@@ -382,8 +382,8 @@ fun serial_multiply_a24(output: *Field, input: *Field) {
     normalize(?product);
     normalize(?product);
     copy(output, ?product);
-    destroy(?multiple);
-    destroy(?product);
+    dnit(?multiple);
+    dnit(?product);
 }
 
 #[constant_time("soft")]
@@ -425,10 +425,10 @@ fun raise_chain(output: *Field, eleven: *Field, input: *Field) {
     square_times(?t2, ?t2, 50);
     multiply(output, ?t2, ?t1);
     copy(eleven, ?t0);
-    destroy(?t0);
-    destroy(?t1);
-    destroy(?t2);
-    destroy(?t3);
+    dnit(?t0);
+    dnit(?t1);
+    dnit(?t2);
+    dnit(?t3);
 }
 
 #[constant_time("soft")]
@@ -438,8 +438,8 @@ pub fun invert(output: *Field, input: *Field) {
     raise_chain(?chain, ?eleven, input);
     square_times(?chain, ?chain, 5);
     multiply(output, ?chain, ?eleven);
-    destroy(?chain);
-    destroy(?eleven);
+    dnit(?chain);
+    dnit(?eleven);
 }
 
 # raise to (p + 3) / 8 = 2^252 - 2, the ed25519 square-root candidate exponent
@@ -451,8 +451,8 @@ pub fun raise_square_root(output: *Field, input: *Field) {
     square(?chain, ?chain);
     multiply(?chain, ?chain, input);
     square(output, ?chain);
-    destroy(?chain);
-    destroy(?eleven);
+    dnit(?chain);
+    dnit(?eleven);
 }
 
 #[constant_time("soft")]
@@ -577,16 +577,16 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
         add(?temporary, ?aa, ?temporary);
         multiply(?z2, ?e, ?temporary);
     }
-    destroy(?a);
-    destroy(?aa);
-    destroy(?b);
-    destroy(?bb);
-    destroy(?e);
-    destroy(?c);
-    destroy(?d);
-    destroy(?da);
-    destroy(?cb);
-    destroy(?temporary);
+    dnit(?a);
+    dnit(?aa);
+    dnit(?b);
+    dnit(?bb);
+    dnit(?e);
+    dnit(?c);
+    dnit(?d);
+    dnit(?da);
+    dnit(?cb);
+    dnit(?temporary);
     conditional_swap(swap, ?x2, ?x3);
     conditional_swap(swap, ?z2, ?z3);
     swap = 0;
@@ -597,13 +597,13 @@ pub fun scalar_multiply(private_key: contracts.SecretBytes, coordinate: *u8,
     encode(output, ?result);
 
     ct.zeroize(?scalar[0], 32);
-    destroy(?x1);
-    destroy(?x2);
-    destroy(?z2);
-    destroy(?x3);
-    destroy(?z3);
-    destroy(?inverse_z);
-    destroy(?result);
+    dnit(?x1);
+    dnit(?x2);
+    dnit(?z2);
+    dnit(?x3);
+    dnit(?z3);
+    dnit(?inverse_z);
+    dnit(?result);
 }
 
 # the field differential: the selected product against the bit-serial reference

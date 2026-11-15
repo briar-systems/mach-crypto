@@ -139,17 +139,17 @@ pub rec Point {
 }
 
 #[constant_time("soft")]
-pub fun destroy_uint(value: *UInt) {
+pub fun uint_dnit(value: *UInt) {
     if (value == nil) { ret; }
     ct.zeroize((?value.limb[0]):~*^u8, 32);
 }
 
 #[constant_time("soft")]
-pub fun destroy_point(point: *Point) {
+pub fun point_dnit(point: *Point) {
     if (point == nil) { ret; }
-    destroy_uint(?point.x);
-    destroy_uint(?point.y);
-    destroy_uint(?point.z);
+    uint_dnit(?point.x);
+    uint_dnit(?point.y);
+    uint_dnit(?point.z);
 }
 
 #[constant_time("soft")]
@@ -265,13 +265,13 @@ pub fun field_inverse(output: *UInt, input: *UInt) {
             field_multiply(?value, ?value, ?registers[current.factor]);
         }
         copy(?registers[current.dst], ?value);
-        destroy_uint(?value);
+        uint_dnit(?value);
         step = step + 1;
     }
     copy(output, ?registers[FIELD_RESULT]);
     var index: usize = 0;
     for (index < FIELD_REGISTERS) {
-        destroy_uint(?registers[index]);
+        uint_dnit(?registers[index]);
         index = index + 1;
     }
 }
@@ -309,14 +309,14 @@ pub fun scalar_inverse(output: *UInt, input: *UInt) {
                 ?ORDER[0], ORDER_FACTOR, LIMBS);
         }
         copy(?registers[current.dst], ?value);
-        destroy_uint(?value);
+        uint_dnit(?value);
         step = step + 1;
     }
     mont.from_montgomery(?output.limb[0], ?registers[SCALAR_RESULT].limb[0], ?ORDER[0],
         ORDER_FACTOR, LIMBS);
     var index: usize = 0;
     for (index < SCALAR_REGISTERS) {
-        destroy_uint(?registers[index]);
+        uint_dnit(?registers[index]);
         index = index + 1;
     }
 }
@@ -328,7 +328,7 @@ pub fun reduce_scalar_once(value: *UInt) {
     # value - n when that does not borrow, else value: the ring subtract adds
     # n back exactly when the subtraction borrows
     mont.subtract(?value.limb[0], ?value.limb[0], ?order.limb[0], ?ORDER[0], LIMBS);
-    destroy_uint(?order);
+    uint_dnit(?order);
 }
 
 #[constant_time("soft")]
@@ -474,15 +474,15 @@ fun point_double(output: *Point, input: *Point) {
     field_subtract(?result.y, ?result.y, ?temporary);
 
     point_copy(output, ?result);
-    destroy_uint(?delta);
-    destroy_uint(?gamma);
-    destroy_uint(?beta);
-    destroy_uint(?alpha);
-    destroy_uint(?first);
-    destroy_uint(?second);
-    destroy_uint(?temporary);
-    destroy_uint(?gamma_squared);
-    destroy_point(?result);
+    uint_dnit(?delta);
+    uint_dnit(?gamma);
+    uint_dnit(?beta);
+    uint_dnit(?alpha);
+    uint_dnit(?first);
+    uint_dnit(?second);
+    uint_dnit(?temporary);
+    uint_dnit(?gamma_squared);
+    point_dnit(?result);
 }
 
 # add two jacobian points whose affine values differ unless one is infinity
@@ -547,21 +547,21 @@ fun point_add_distinct(output: *Point, left: *Point, right: *Point, same: *^u8) 
     point_select(output, output, ?right_saved, left_infinity);
     point_select(output, output, ?left_saved, right_infinity);
 
-    destroy_point(?left_saved);
-    destroy_point(?right_saved);
-    destroy_uint(?z1z1);
-    destroy_uint(?z2z2);
-    destroy_uint(?u1);
-    destroy_uint(?u2);
-    destroy_uint(?s1);
-    destroy_uint(?s2);
-    destroy_uint(?h);
-    destroy_uint(?i_value);
-    destroy_uint(?j);
-    destroy_uint(?r);
-    destroy_uint(?v);
-    destroy_uint(?temporary);
-    destroy_point(?generic);
+    point_dnit(?left_saved);
+    point_dnit(?right_saved);
+    uint_dnit(?z1z1);
+    uint_dnit(?z2z2);
+    uint_dnit(?u1);
+    uint_dnit(?u2);
+    uint_dnit(?s1);
+    uint_dnit(?s2);
+    uint_dnit(?h);
+    uint_dnit(?i_value);
+    uint_dnit(?j);
+    uint_dnit(?r);
+    uint_dnit(?v);
+    uint_dnit(?temporary);
+    point_dnit(?generic);
 }
 
 # add any two jacobian points, including equal points and infinity
@@ -573,7 +573,7 @@ pub fun point_add(output: *Point, left: *Point, right: *Point) {
     point_add_distinct(output, left, right, ?same);
     point_select(output, output, ?doubled, same);
     same = 0;
-    destroy_point(?doubled);
+    point_dnit(?doubled);
 }
 
 # multiply a point by a scalar with a fixed 4-bit window
@@ -623,13 +623,13 @@ pub fun scalar_multiply(output: *Point, scalar: *UInt, point: *Point) {
 
     index = 0;
     for (index < 16) {
-        destroy_point(?table[index]);
+        point_dnit(?table[index]);
         index = index + 1;
     }
     same = 0;
-    destroy_point(?result);
-    destroy_point(?selected);
-    destroy_uint(?reduced);
+    point_dnit(?result);
+    point_dnit(?selected);
+    uint_dnit(?reduced);
 }
 
 # or the affine table entry for digit * 16^window * G into x and y under mask
@@ -690,17 +690,17 @@ fun point_add_mixed(output: *Point, left: *Point, x: *UInt, y: *UInt) {
     field_subtract(?result.z, ?result.z, ?hh);
 
     point_copy(output, ?result);
-    destroy_uint(?z1z1);
-    destroy_uint(?u2);
-    destroy_uint(?s2);
-    destroy_uint(?h);
-    destroy_uint(?hh);
-    destroy_uint(?i_value);
-    destroy_uint(?j);
-    destroy_uint(?r);
-    destroy_uint(?v);
-    destroy_uint(?temporary);
-    destroy_point(?result);
+    uint_dnit(?z1z1);
+    uint_dnit(?u2);
+    uint_dnit(?s2);
+    uint_dnit(?h);
+    uint_dnit(?hh);
+    uint_dnit(?i_value);
+    uint_dnit(?j);
+    uint_dnit(?r);
+    uint_dnit(?v);
+    uint_dnit(?temporary);
+    point_dnit(?result);
 }
 
 # multiply the generator by a scalar with the fixed-base comb table
@@ -741,10 +741,10 @@ pub fun scalar_multiply_base(output: *Point, scalar: *UInt) {
         window = window + 1;
     }
     point_copy(output, ?result);
-    destroy_uint(?reduced);
-    destroy_point(?result);
-    destroy_point(?sum);
-    destroy_point(?lifted);
+    uint_dnit(?reduced);
+    point_dnit(?result);
+    point_dnit(?sum);
+    point_dnit(?lifted);
 }
 
 #[constant_time("soft")]
@@ -759,9 +759,9 @@ pub fun to_affine(x: *UInt, y: *UInt, point: *Point) {
     field_multiply(y, ?point.y, ?inverse_cubed);
     field_from_montgomery(x, x);
     field_from_montgomery(y, y);
-    destroy_uint(?inverse);
-    destroy_uint(?inverse_squared);
-    destroy_uint(?inverse_cubed);
+    uint_dnit(?inverse);
+    uint_dnit(?inverse_squared);
+    uint_dnit(?inverse_cubed);
 }
 
 #[constant_time("soft")]
@@ -785,9 +785,9 @@ pub fun parse_point(output: *Point, input: *u8) ^u8 {
     copy_constant(?temporary, (?CURVE_B[0]):~*u64);
     field_add(?right, ?right, ?temporary);
     val on_curve: ^u8 = equal(?left, ?right);
-    destroy_uint(?left);
-    destroy_uint(?right);
-    destroy_uint(?temporary);
+    uint_dnit(?left);
+    uint_dnit(?right);
+    uint_dnit(?temporary);
     ret x_canonical & y_canonical & on_curve;
 }
 

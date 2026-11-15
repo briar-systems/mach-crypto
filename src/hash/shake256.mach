@@ -16,9 +16,9 @@ pub rec State {
 # initialize a new SHAKE256 state
 # ---
 # ret: initialized state
-pub fun init() State {
+pub fun make() State {
     var s: State;
-    keccak.init(?s.sp, BLOCK_SIZE);
+    keccak.make(?s.sp, BLOCK_SIZE);
     ret s;
 }
 
@@ -54,7 +54,7 @@ pub fun squeeze(s: *State, out: *u8, len: usize) {
 # out:     pointer to output buffer
 # out_len: number of output bytes to produce
 pub fun xof(data: *u8, len: usize, out: *u8, out_len: usize) {
-    var s: State = init();
+    var s: State = make();
     update(?s, data, len);
     finalize(?s);
     squeeze(?s, out, out_len);

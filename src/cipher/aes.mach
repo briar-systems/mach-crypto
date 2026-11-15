@@ -33,7 +33,7 @@ pub rec Context {
 # an empty context holds no key, so a use before init is refused
 pub fun empty() Context {
     var context: Context;
-    core.destroy(?context.cipher);
+    core.dnit(?context.cipher);
     context.state = EMPTY;
     ret context;
 }
@@ -48,7 +48,7 @@ pub fun init(context: *Context, key: contracts.SecretBytes) contracts.Error {
     if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
     val expanded: contracts.Error = core.init(?context.cipher, key);
     if (expanded != contracts.OK) {
-        core.destroy(?context.cipher);
+        core.dnit(?context.cipher);
         ret expanded;
     }
     context.state = ACTIVE;
@@ -77,7 +77,7 @@ pub fun encrypt_block(context: *Context, input: contracts.SecretBytes,
 pub fun dnit(context: *Context) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     val valid: bool = context.state == EMPTY || context.state == ACTIVE;
-    core.destroy(?context.cipher);
+    core.dnit(?context.cipher);
     context.state = EMPTY;
     if (!valid) { ret contracts.INVALID_STATE; }
     ret contracts.OK;

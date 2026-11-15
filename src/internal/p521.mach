@@ -79,17 +79,17 @@ rec Point {
 }
 
 #[constant_time("soft")]
-fun destroy_uint(value: *UInt) {
+fun uint_dnit(value: *UInt) {
     if (value == nil) { ret; }
     ct.zeroize((?value.limb[0]):~*^u8, 72);
 }
 
 #[constant_time("soft")]
-fun destroy_point(point: *Point) {
+fun point_dnit(point: *Point) {
     if (point == nil) { ret; }
-    destroy_uint(?point.x);
-    destroy_uint(?point.y);
-    destroy_uint(?point.z);
+    uint_dnit(?point.x);
+    uint_dnit(?point.y);
+    uint_dnit(?point.z);
 }
 
 #[constant_time("soft")]
@@ -185,7 +185,7 @@ fun power_montgomery(output: *UInt, input: *UInt, modulus: *u64,
         }
     }
     copy(output, ?result);
-    destroy_uint(?result);
+    uint_dnit(?result);
 }
 
 #[constant_time("soft")]
@@ -243,8 +243,8 @@ fun scalar_inverse(output: *UInt, input: *UInt) {
         (?ORDER_MINUS_TWO[0]):~*u64, (?SCALAR_ONE[0]):~*u64,
         ORDER_FACTOR);
     mont.from_montgomery(?output.limb[0], ?inverse.limb[0], ?ORDER[0], ORDER_FACTOR, LIMBS);
-    destroy_uint(?montgomery);
-    destroy_uint(?inverse);
+    uint_dnit(?montgomery);
+    uint_dnit(?inverse);
 }
 
 #[constant_time("soft")]
@@ -254,7 +254,7 @@ fun reduce_scalar_once(value: *UInt) {
     # value - n when that does not borrow, else value: the ring subtract adds
     # n back exactly when the subtraction borrows
     mont.subtract(?value.limb[0], ?value.limb[0], ?order.limb[0], ?ORDER[0], LIMBS);
-    destroy_uint(?order);
+    uint_dnit(?order);
 }
 
 # a 66-byte big-endian integer into nine limbs
@@ -371,15 +371,15 @@ fun point_double(output: *Point, input: *Point) {
     field_subtract(?result.y, ?result.y, ?temporary);
 
     point_copy(output, ?result);
-    destroy_uint(?delta);
-    destroy_uint(?gamma);
-    destroy_uint(?beta);
-    destroy_uint(?alpha);
-    destroy_uint(?first);
-    destroy_uint(?second);
-    destroy_uint(?temporary);
-    destroy_uint(?gamma_squared);
-    destroy_point(?result);
+    uint_dnit(?delta);
+    uint_dnit(?gamma);
+    uint_dnit(?beta);
+    uint_dnit(?alpha);
+    uint_dnit(?first);
+    uint_dnit(?second);
+    uint_dnit(?temporary);
+    uint_dnit(?gamma_squared);
+    point_dnit(?result);
 }
 
 #[constant_time("soft")]
@@ -443,22 +443,22 @@ fun point_add(output: *Point, left: *Point, right: *Point) {
     point_select(output, output, ?right_saved, left_infinity);
     point_select(output, output, ?left_saved, right_infinity);
 
-    destroy_point(?left_saved);
-    destroy_point(?right_saved);
-    destroy_uint(?z1z1);
-    destroy_uint(?z2z2);
-    destroy_uint(?u1);
-    destroy_uint(?u2);
-    destroy_uint(?s1);
-    destroy_uint(?s2);
-    destroy_uint(?h);
-    destroy_uint(?i_value);
-    destroy_uint(?j);
-    destroy_uint(?r);
-    destroy_uint(?v);
-    destroy_uint(?temporary);
-    destroy_point(?generic);
-    destroy_point(?doubled);
+    point_dnit(?left_saved);
+    point_dnit(?right_saved);
+    uint_dnit(?z1z1);
+    uint_dnit(?z2z2);
+    uint_dnit(?u1);
+    uint_dnit(?u2);
+    uint_dnit(?s1);
+    uint_dnit(?s2);
+    uint_dnit(?h);
+    uint_dnit(?i_value);
+    uint_dnit(?j);
+    uint_dnit(?r);
+    uint_dnit(?v);
+    uint_dnit(?temporary);
+    point_dnit(?generic);
+    point_dnit(?doubled);
 }
 
 #[constant_time("soft")]
@@ -491,10 +491,10 @@ fun double_scalar_multiply(output: *Point, first_scalar: *UInt,
         point_add(?result, ?result, ?selected);
     }
     point_copy(output, ?result);
-    destroy_point(?result);
-    destroy_point(?basepoint);
-    destroy_point(?combined);
-    destroy_point(?selected);
+    point_dnit(?result);
+    point_dnit(?basepoint);
+    point_dnit(?combined);
+    point_dnit(?selected);
 }
 
 #[constant_time("soft")]
@@ -507,9 +507,9 @@ fun to_affine(x: *UInt, y: *UInt, point: *Point) {
     field_multiply(?inverse_cubed, ?inverse_squared, ?inverse);
     field_multiply(x, ?point.x, ?inverse_squared);
     field_multiply(y, ?point.y, ?inverse_cubed);
-    destroy_uint(?inverse);
-    destroy_uint(?inverse_squared);
-    destroy_uint(?inverse_cubed);
+    uint_dnit(?inverse);
+    uint_dnit(?inverse_squared);
+    uint_dnit(?inverse_cubed);
 }
 
 #[constant_time("soft")]
@@ -535,11 +535,11 @@ fun parse_point(output: *Point, input: *u8) ^u8 {
     copy_constant(?temporary, (?CURVE_B[0]):~*u64);
     field_add(?right, ?right, ?temporary);
     val on_curve: ^u8 = equal(?left, ?right);
-    destroy_uint(?x);
-    destroy_uint(?y);
-    destroy_uint(?left);
-    destroy_uint(?right);
-    destroy_uint(?temporary);
+    uint_dnit(?x);
+    uint_dnit(?y);
+    uint_dnit(?left);
+    uint_dnit(?right);
+    uint_dnit(?temporary);
     ret x_canonical & y_canonical & on_curve;
 }
 
@@ -605,7 +605,7 @@ pub fun valid_public_point(value: contracts.Bytes) bool {
     }
     var point: Point;
     val valid: ^u8 = parse_point(?point, value.data);
-    destroy_point(?point);
+    point_dnit(?point);
     ret valid:>u8 == 1;
 }
 
@@ -638,23 +638,23 @@ pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usi
     var peer:        Point;
     val point_valid: ^u8 = parse_point(?peer, public_key.data);
     if (point_valid:>u8 != 1) {
-        destroy_point(?peer);
+        point_dnit(?peer);
         ret contracts.INVALID_KEY;
     }
     var r: UInt;
     var s: UInt;
     if (!parse_signature(?r, ?s, signature)) {
-        destroy_point(?peer);
-        destroy_uint(?r);
-        destroy_uint(?s);
+        point_dnit(?peer);
+        uint_dnit(?r);
+        uint_dnit(?s);
         ret contracts.AUTH_FAILED;
     }
     val r_valid: ^u8 = valid_scalar(?r);
     val s_valid: ^u8 = valid_scalar(?s);
     if ((r_valid & s_valid):>u8 != 1) {
-        destroy_point(?peer);
-        destroy_uint(?r);
-        destroy_uint(?s);
+        point_dnit(?peer);
+        uint_dnit(?r);
+        uint_dnit(?s);
         ret contracts.AUTH_FAILED;
     }
     var hash_scalar: UInt;
@@ -677,15 +677,15 @@ pub fun verify_digest(public_key: contracts.Bytes, digest: *^u8, digest_len: usi
     val matches: ^u8             = equal(?x, ?r) & (infinity ^ 1);
     var result:  contracts.Error = contracts.AUTH_FAILED;
     if (matches:>u8 == 1) { result = contracts.OK; }
-    destroy_point(?peer);
-    destroy_uint(?r);
-    destroy_uint(?s);
-    destroy_uint(?hash_scalar);
-    destroy_uint(?inverse);
-    destroy_uint(?u1);
-    destroy_uint(?u2);
-    destroy_point(?sum);
-    destroy_uint(?x);
-    destroy_uint(?y);
+    point_dnit(?peer);
+    uint_dnit(?r);
+    uint_dnit(?s);
+    uint_dnit(?hash_scalar);
+    uint_dnit(?inverse);
+    uint_dnit(?u1);
+    uint_dnit(?u2);
+    point_dnit(?sum);
+    uint_dnit(?x);
+    uint_dnit(?y);
     ret result;
 }
