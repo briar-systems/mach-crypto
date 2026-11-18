@@ -21,9 +21,10 @@ pub val TAG_SIZE:        usize = 16;
 pub val MAX_PLAINTEXT_SIZE: usize = 68719476704;
 pub val MAX_AAD_SIZE:       usize = 2305843009213693951;
 
-# keystream blocks produced per aes call, at most core.PARALLEL_BLOCKS
-val STREAM_BLOCKS: usize = 8;
-val STREAM_SIZE:   usize = 128;
+# keystream blocks produced per aes call: one call of the widest member, whose
+# encrypt_blocks takes at most core.PARALLEL_BLOCKS
+val STREAM_BLOCKS: usize = core.PARALLEL_BLOCKS;
+val STREAM_SIZE:   usize = STREAM_BLOCKS * core.BLOCK_SIZE;
 
 # seal writes ciphertext followed by the complete tag
 pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
@@ -255,8 +256,8 @@ pub fun seal_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Byte
     make_counter(nonce, ?counter[0]);
     ghash.update(?context.hash, ?state, aad.data, aad.len);
 
-    var counters:      [128]^u8;
-    var stream:        [128]^u8;
+    var counters:      [STREAM_SIZE]^u8;
+    var stream:        [STREAM_SIZE]^u8;
     var offset:        usize = 0;
     var counter_value: u32   = 2;
     start_counters(?counter[0], ?counters[0]);
@@ -269,8 +270,8 @@ pub fun seal_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Byte
         offset = offset + take;
         if (offset < plaintext.len) { counter_value = counter_value + blocks::u32; }
     }
-    ct.zeroize(?counters[0], 128);
-    ct.zeroize(?stream[0], 128);
+    ct.zeroize(?counters[0], STREAM_SIZE);
+    ct.zeroize(?stream[0], STREAM_SIZE);
     ghash.update(?context.hash, ?state, output.data, plaintext.len);
 
     ghash.lengths(?context.hash, ?state, aad.len, plaintext.len);
@@ -335,8 +336,8 @@ pub fun open_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Byte
         ret failed(contracts.AUTH_FAILED);
     }
 
-    var counters:      [128]^u8;
-    var stream:        [128]^u8;
+    var counters:      [STREAM_SIZE]^u8;
+    var stream:        [STREAM_SIZE]^u8;
     var offset:        usize = 0;
     var counter_value: u32   = 2;
     start_counters(?counter[0], ?counters[0]);
@@ -349,8 +350,8 @@ pub fun open_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Byte
         offset = offset + take;
         if (offset < ciphertext_len) { counter_value = counter_value + blocks::u32; }
     }
-    ct.zeroize(?counters[0], 128);
-    ct.zeroize(?stream[0], 128);
+    ct.zeroize(?counters[0], STREAM_SIZE);
+    ct.zeroize(?stream[0], STREAM_SIZE);
     ct.zeroize(?counter[0], 16);
     ret contracts.Operation{error: contracts.OK, written: ciphertext_len};
 }
