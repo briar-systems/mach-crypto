@@ -1131,8 +1131,10 @@ $if ($mach.build.arch == $mach.arch.x86_64 || $mach.build.arch == $mach.arch.aar
         val lengths: [7]usize = [7]usize{55, 56, 57, 63, 64, 65, 128};
         var n:       usize    = 0;
         for (n < 7) {
+            # hardware is checked against portable, never against the dispatch to itself
             var expected: [32]u8;
-            hash(?buf[0], lengths[n], ?expected[0]);
+            if (hardware) { digest_with(false, ?buf[0], lengths[n], ?expected[0]); }
+            or            { hash(?buf[0], lengths[n], ?expected[0]); }
             digest_with(hardware, ?buf[0], lengths[n], ?digest[0]);
             i = 0;
             for (i < 32) {
