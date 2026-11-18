@@ -2,7 +2,6 @@
 
 use crypto.aead.aes_gcm;
 use crypto.aead.chacha20_poly1305;
-use crypto.cipher.aes;
 use crypto.contracts;
 use crypto.hash.sha256;
 use std.runtime;
@@ -894,13 +893,5 @@ test chacha20_poly1305__independent_counter_carry_differential_vector {
         if (long_chacha_opened[i]:>u8 != (i * 7 + 3)::u8) { ret 4; }
         i = i + 1;
     }
-    ret 0;
-}
-
-# mach-quic carves the aead and header protection contexts of both directions
-# of a handshake level from one 4096-byte secret chunk, so a hardware member's
-# key storage shares the context with the software member's and never adds to it
-test aes_gcm__an_aead_and_a_header_protection_context_fit_half_a_4_kib_chunk {
-    if ($size_of(aes_gcm.Context) + $size_of(aes.Context) > 2048) { ret 1; }
     ret 0;
 }

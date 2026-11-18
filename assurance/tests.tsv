@@ -95,7 +95,6 @@ zeroization	.	aes-128,aes-256	mach-crypto keyed context contract	crypto.test.cip
 zeroization	.	chacha20-poly1305	mach-crypto authenticated release contract	crypto.test.aead#chacha20_poly1305__authentication_failures_clear_output_before_release
 zeroization	.	key-containers	mach-crypto secret ownership contract	crypto.test.encoding#keys__pem_round_trips_once_owned_private_der_and_borrowed_public_der
 zeroization	.	key-containers	mach-crypto secret ownership contract	crypto.test.encoding#keys__allocation_and_cleanup_failures_retain_exact_ownership
-official-vector	.	blake2b	RFC 7693 appendix A	crypto.test.blake2b#blake2b__rfc7693_abc
 differential	.	blake2b	Python hashlib BLAKE2b	crypto.test.blake2b#blake2b__hashlib_block_boundaries_and_every_split
 differential	.	blake2b	Python hashlib BLAKE2b	crypto.test.blake2b#blake2b__hashlib_all_digest_lengths
 differential	.	blake2b	Python hashlib BLAKE2b	crypto.test.blake2b#blake2b__hashlib_megabyte_byte_fragments

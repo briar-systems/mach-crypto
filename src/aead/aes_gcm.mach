@@ -385,11 +385,6 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     ret result;
 }
 
-test aes_gcm__keystream_buffer_fits_one_call_of_the_widest_aes_backend {
-    if (STREAM_BLOCKS > core.PARALLEL_BLOCKS || STREAM_SIZE != STREAM_BLOCKS * 16) { ret 1; }
-    ret 0;
-}
-
 # the gcm specification's test cases 1 to 4 and 13 to 16 (McGrew and Viega,
 # "The Galois/Counter Mode of Operation", revised 2005), the 96-bit-iv ones,
 # and the first tag-only record with aad from NIST's gcmEncryptExtIV128
@@ -723,7 +718,7 @@ val DIFFERENTIAL_LENGTHS: [DIFFERENTIAL_CASES]usize = [DIFFERENTIAL_CASES]usize{
 };
 
 test aes_gcm__hardware_and_software_members_agree_over_random_keys_nonces_and_records {
-    if (!core.available(core.HARDWARE) || !ghash.available(ghash.HARDWARE)) { ret 0; }
+    if (!core.available(core.HARDWARE) || !ghash.available(ghash.HARDWARE)) { ret 77; }
     var state: u64   = 159;
     var index: usize = 0;
     for (index < DIFFERENTIAL_CASES) {

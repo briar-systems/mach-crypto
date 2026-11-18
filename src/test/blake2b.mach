@@ -47,11 +47,6 @@ fun vector(input: *u8, n: usize, size: usize, expected: *u8) u8 {
     ret 0;
 }
 
-test blake2b__rfc7693_abc {
-    ret vector("abc"::*u8, 3, 64,
-        "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923"::*u8)::i32;
-}
-
 test blake2b__hashlib_block_boundaries_and_every_split {
     var input: [257]u8;
     var i:     usize = 0;

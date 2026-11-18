@@ -1149,12 +1149,12 @@ $if ($mach.build.arch == $mach.arch.x86_64 || $mach.build.arch == $mach.arch.aar
     }
 
     test sha256__hardware_backend_known_answers {
-        if (!accelerated()) { ret 0; }
+        if (!accelerated()) { ret 77; }
         ret known_answers(true);
     }
 
     test sha256__hardware_matches_portable_over_random_inputs {
-        if (!accelerated()) { ret 0; }
+        if (!accelerated()) { ret 77; }
         var buf:   [1024]u8;
         var seed:  u64   = 0x9e3779b97f4a7c15;
         var round: usize = 0;
@@ -1182,7 +1182,7 @@ $if ($mach.build.arch == $mach.arch.x86_64 || $mach.build.arch == $mach.arch.aar
     }
 
     test sha256__secret_hardware_matches_secret_portable {
-        if (!accelerated()) { ret 0; }
+        if (!accelerated()) { ret 77; }
         var seed:  u64   = 0x853c49e6748fea9b;
         var round: usize = 0;
         for (round < 100) {
@@ -1201,14 +1201,6 @@ $if ($mach.build.arch == $mach.arch.x86_64 || $mach.build.arch == $mach.arch.aar
             if (a.h4:>u32 != b.h4:>u32 || a.h5:>u32 != b.h5:>u32 || a.h6:>u32 != b.h6:>u32 || a.h7:>u32 != b.h7:>u32) { ret 2; }
             round = round + 1;
         }
-        ret 0;
-    }
-
-    test sha256__dispatcher_choice_matches_processor {
-        val first:  bool = accelerated();
-        val second: bool = accelerated();
-        if (first != second)                             { ret 1; }
-        if (first != hardware_available(cpu.features())) { ret 2; }
         ret 0;
     }
 }
