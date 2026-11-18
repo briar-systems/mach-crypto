@@ -28,6 +28,9 @@ official-vector	.	ecdsa-p384-sha512	Wycheproof ecdsa_secp384r1_sha512	crypto.tes
 official-vector	.	ecdsa-p521-sha512	Wycheproof ecdsa_secp521r1_sha512	crypto.test.signature#ecdsa_p_521__wycheproof_sha_512_vectors
 official-vector	.	rsa-pkcs1-sha512	Wycheproof rsa_signature_2048_sha512 and rsa_signature_4096_sha512	crypto.test.signature#rsa_pkcs1__wycheproof_sha_512_vectors
 official-vector	.	rsa-pss-sha512	Wycheproof rsa_pss_4096_sha512_mgf1_64	crypto.test.signature#rsa_pss__wycheproof_sha_512_vectors
+differential	.	sha-256	independent Python hashlib and coreutils vector	crypto.hash.sha256#sha256__largest_single_block_message_known_answer
+differential	.	sha-384	independent Python hashlib and coreutils vector	crypto.hash.sha512#sha384__largest_single_block_message_known_answer
+differential	.	hmac-sha-256,hmac-sha-384	independent Python hmac and OpenSSL vectors	crypto.test.mac#hmac__keys_at_and_one_past_the_block_size_match_independent_vectors
 differential	.	hkdf-sha-384	independent Python hashlib vector	crypto.test.mac#hkdf__sha_384_extract_and_expand_agree_with_independent_vectors
 differential	.	aes-128-gcm,aes-256-gcm	independent Python cryptography AES-GCM	crypto.test.aead#aes_gcm__independent_record_length_differential_vectors
 differential	.	aes-128-gcm,aes-256-gcm	mach-crypto software AES-GCM members	crypto.aead.aes_gcm#aes_gcm__hardware_and_software_members_agree_over_random_keys_nonces_and_records
