@@ -95,24 +95,20 @@ test hmac__rfc_4231_sha_256_and_sha_384_vectors {
         contracts.SecretBuffer{data: ?secret[0], capacity: 48});
     if (result.error != contracts.OK || result.written != 48) { ret 7; }
     if (!secret_equal(?secret[0], (?want384[0]):~*u8, 48))    { ret 8; }
-    ret 0;
-}
 
-test hmac__empty_key_and_message_are_supported {
-    var output:   [48]u8;
+    # an empty key and message, both nil
     val empty256: [32]u8 = [32]u8{
         0xb6, 0x13, 0x67, 0x9a, 0x08, 0x14, 0xd9, 0xec,
         0x77, 0x2f, 0x95, 0xd7, 0x78, 0xc3, 0x5f, 0xc5,
         0xff, 0x16, 0x97, 0xc4, 0x93, 0x71, 0x56, 0x53,
         0xc6, 0xc7, 0x12, 0x14, 0x42, 0x92, 0xc5, 0xad
     };
-    val result: contracts.Operation = hmac.sha256(contracts.SecretBytes{data: nil, len: 0},
+    result = hmac.sha256(contracts.SecretBytes{data: nil, len: 0},
         contracts.Bytes{data: nil, len: 0}, contracts.Buffer{data: ?output[0], capacity: 48});
-    if (result.error != contracts.OK || !public_equal(?output[0], (?empty256[0]):~*u8, 32)) { ret 1; }
-    var secret:        [32]^u8;
-    val secret_result: contracts.Operation = hmac.sha256_secret(contracts.SecretBytes{data: nil, len: 0},
+    if (result.error != contracts.OK || !public_equal(?output[0], (?empty256[0]):~*u8, 32)) { ret 9; }
+    result = hmac.sha256_secret(contracts.SecretBytes{data: nil, len: 0},
         contracts.Bytes{data: nil, len: 0}, contracts.SecretBuffer{data: ?secret[0], capacity: 32});
-    if (secret_result.error != contracts.OK || !secret_equal(?secret[0], (?empty256[0]):~*u8, 32)) { ret 2; }
+    if (result.error != contracts.OK || !secret_equal(?secret[0], (?empty256[0]):~*u8, 32)) { ret 10; }
     ret 0;
 }
 

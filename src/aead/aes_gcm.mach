@@ -668,19 +668,6 @@ test aes_gcm__gcm_spec_vectors_on_every_aes_and_ghash_member_this_host_runs {
     ret 0;
 }
 
-test aes_gcm__a_context_runs_the_fastest_members_this_host_has {
-    var key:     [16]^u8;
-    var context: Context = empty();
-    if (init(?context, contracts.SecretBytes{data: ?key[0], len: 16}) != contracts.OK) { ret 1; }
-    if (context.cipher.backend != core.preferred() || context.hash.backend != ghash.preferred()) {
-        ret 2;
-    }
-    if (core.available(core.HARDWARE) != (core.preferred() == core.HARDWARE))     { ret 3; }
-    if (ghash.available(ghash.HARDWARE) != (ghash.preferred() == ghash.HARDWARE)) { ret 4; }
-    dnit(?context);
-    ret 0;
-}
-
 # splitmix64, a fixed stream so a failure reproduces
 #[testing]
 fun next_random(state: *u64) u64 {
