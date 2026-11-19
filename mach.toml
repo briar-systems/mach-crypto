@@ -20,6 +20,12 @@ arch = "riscv64"
 sys = "linux"
 abi = "lp64d"
 
+[target.linux-riscv32]
+arch = "riscv32"
+sys = "linux"
+abi = "ilp32d"
+isa = "rv32gc"
+
 [target.windows-x86_64]
 arch = "x86_64"
 sys = "windows"
@@ -74,6 +80,12 @@ sys = "freestanding"
 abi = "lp64d"
 isa = "rv64gc"
 
+[target.freestanding-riscv32]
+arch = "riscv32"
+sys = "freestanding"
+abi = "ilp32"
+isa = "rv32imc"
+
 # the portable library, what a dependent's `use crypto;` binds: every module
 # that needs nothing but the processor, on every declared target
 [artifact.crypto]
@@ -92,7 +104,7 @@ need = []
 kind = "static"
 entry = "lib/system.mach"
 out = "{project.work}/lib/system"
-targets = ["linux-x86_64", "linux-aarch64", "linux-riscv64", "windows-x86_64", "windows-aarch64",
+targets = ["linux-x86_64", "linux-aarch64", "linux-riscv64", "linux-riscv32", "windows-x86_64", "windows-aarch64",
     "darwin-x86_64", "darwin-aarch64", "wasi-wasm32"]
 link = ["kernel32"]
 need = []
@@ -102,7 +114,7 @@ need = []
 kind = "static"
 entry = "lib/tests.mach"
 out = "{project.work}/lib/tests"
-targets = ["linux-x86_64", "linux-aarch64", "linux-riscv64", "windows-x86_64", "windows-aarch64",
+targets = ["linux-x86_64", "linux-aarch64", "linux-riscv64", "linux-riscv32", "windows-x86_64", "windows-aarch64",
     "darwin-x86_64", "darwin-aarch64", "wasi-wasm32"]
 link = ["kernel32"]
 need = []
