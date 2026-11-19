@@ -103,7 +103,7 @@ kind = "static"
 entry = "lib/tests.mach"
 out = "{project.work}/lib/tests"
 targets = ["linux-x86_64", "linux-aarch64", "linux-riscv64", "windows-x86_64", "windows-aarch64",
-    "darwin-x86_64", "darwin-aarch64"]
+    "darwin-x86_64", "darwin-aarch64", "wasi-wasm32"]
 link = ["kernel32"]
 need = []
 

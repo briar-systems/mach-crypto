@@ -20,6 +20,7 @@ use crypto.secret.init;
 use crypto.secret.init_random;
 use crypto.system.allocator;
 use crypto.system.entropy;
+use secret_memory: std.memory.secret;
 use std.runtime;
 use std.types.size.usize;
 
@@ -35,6 +36,8 @@ rec DeepSecretRecord {
 }
 
 test system__native_allocator_and_entropy_initialize_usable_storage {
+    # a host that cannot lock serves secret storage only once accepted, and locking is not what this checks
+    secret_memory.accept_unlocked();
     var owner:  Allocator = allocator.make();
     var source: Entropy   = entropy.make();
     var secret: Secret    = empty();
@@ -67,6 +70,8 @@ test system__native_allocator_and_entropy_initialize_usable_storage {
 }
 
 test system__native_allocator_owns_deeply_secret_records {
+    # a host that cannot lock serves secret storage only once accepted, and locking is not what this checks
+    secret_memory.accept_unlocked();
     var owner: ArrayAllocator[DeepSecretRecord] =
         allocator.make_array[DeepSecretRecord]();
     var array: SecretArray[DeepSecretRecord] = empty_array[DeepSecretRecord]();

@@ -2,8 +2,10 @@
 #
 # each allocation is std.memory.secret's: locked against paging, between guard
 # pages, zero-filled on allocation and wiped on release, so both allocators
-# set zeroes_on_allocate and wipes_on_release. this module needs the pages
-# capability. crypto.secret, which owns what these allocate, needs nothing
+# set zeroes_on_allocate and wipes_on_release. a host that cannot lock (wasi)
+# refuses them until the program calls std.memory.secret.accept_unlocked. this
+# module needs the pages capability. crypto.secret, which owns what these
+# allocate, needs nothing
 
 use crypto.secret;
 use std.io.error;
