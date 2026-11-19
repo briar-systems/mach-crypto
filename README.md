@@ -8,7 +8,10 @@ state machines belong in protocol repositories such as `mach-tls`.
 ## Modules
 
 - `crypto.secret` owns allocated secret storage, bounded views, explicit moves,
-  allocating clones, entropy initialization, and deterministic destruction.
+  allocating clones, entropy initialization, and deterministic destruction,
+  over an allocator and entropy source the caller supplies.
+- `crypto.system.allocator` and `crypto.system.entropy` supply the operating
+  system's locked secret allocators and its entropy source.
 - `crypto.hash` provides incremental SHA-256 and SHA-384 transcript hashing,
   and BLAKE2b with keyed, salted, personalized and tree modes.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384, with public or
@@ -28,8 +31,20 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.vectors` defines a common test vector contract.
 - `crypto.assurance` publishes the validation state of this package.
 
-`use crypto;` binds `crypto.lib.crypto`, which re-exports these modules for
-consumers that prefer one import.
+## What each module needs
+
+Every module but the two under `crypto.system` needs nothing but the processor
+and builds on every target the manifest declares, the freestanding and uefi
+targets included. `crypto.system.allocator` needs the pages capability and
+`crypto.system.entropy` the entropy capability (`std.system.capability`). On a
+target without one, the module refuses with a single diagnostic naming it, and
+no other module imports either, so a program that does not use them never
+reaches the operating system through this package. It touches no files.
+
+The `crypto` artifact (`crypto.lib.crypto`, what `use crypto;` binds)
+re-exports the portable modules and builds for every declared target. The
+`system` artifact (`crypto.lib.system`) re-exports the two operating-system
+modules and builds for the targets that have both capabilities.
 
 ## Secret ownership
 
@@ -60,7 +75,7 @@ fully zeroed storage.
 `crypto.secret.SecretArray[T]` owns a dynamically sized typed allocation while
 preserving every field's secrecy shape. Initialize an owner with
 `secret.empty_array[T]`, construct the native allocator with
-`secret.system_array_allocator[T]`, and call `secret.array_init[T]` with the
+`crypto.system.allocator.make_array[T]` (or supply your own), and call `secret.array_init[T]` with the
 element count. `secret.array_data[T]` returns `*T` only while the owner is
 active. No raw pointer or declassification cast is needed for directly secret
 values or records with deeply nested secret fields.
@@ -77,8 +92,9 @@ and cleanup-pending state for retry. Custom `ArrayAllocator[T]` callbacks follow
 the same ownership contract. A nonnil output transfers the full requested
 allocation even when allocation reports failure.
 
-The native allocator and entropy source delegate to `mach-std` secret-welded OS
-primitives. Storage remains secret-welded through every native boundary,
+The native allocators (`crypto.system.allocator.make` and `make_array[T]`) and
+entropy source (`crypto.system.entropy.make`) delegate to `mach-std`
+secret-welded OS primitives. Storage remains secret-welded through every native boundary,
 std's allocation begins zeroed, which is the only allocation zeroing on this
 path, entropy fills are complete or leave a fully wiped
 destination, and std's release wipes before returning storage to the operating
@@ -481,7 +497,7 @@ and independent review as distinct evidence layers.
 `tools/assurance run` is the fail-closed release evidence gate. It runs the
 functional, official-vector, differential, invalid-input, leakage, and
 zeroization layers independently. It then performs two clean builds of every
-project for all seven targets in debug and release mode with verified IR and
+project for every declared target in debug and release mode with verified IR and
 emitted assembly. The two artifact sets must be byte-for-byte identical.
 
 A successful run publishes an immutable machine-readable evidence directory

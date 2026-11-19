@@ -45,15 +45,13 @@ The layers run separately so one kind of evidence cannot stand in for another:
    which decide where `crypto.internal.word` computes secret products in
    hardware: `test/run/secret/hard_admitted.mach` must build on each of them
    and `test/refuse/secret/hard_target.mach` is refused on the others.
-7. Every project is built for all seven targets and both profiles with emitted
-   IR and emitted assembly (IR verification is mandatory in mach 5.0).
+7. Every project is built for every target its manifest declares and both
+   profiles with emitted IR and emitted assembly (IR verification is mandatory
+   in mach 5.0).
 8. A second clean matrix build must produce byte-identical artifacts.
 9. Every module named by `assurance/zeroization.tsv` must retain explicit
-   zeroization calls in generated IR. Security-critical release assembly named
-   by that policy must also retain the zeroization, either as a call or as the
-   inline expansion the release IR records, since mach 5.0 release builds
-   inline small helpers across modules and the wipe survives by the language's
-   zeroizing-write guarantee.
+   calls to `std.crypto.ct.zeroize` in generated IR. Security-critical release
+   assembly named by that policy must also reference it.
 
 `assurance/tests.tsv` binds each focused test to its category, algorithm, and
 vector or contract source. `assurance/algorithms.tsv` is the algorithm and

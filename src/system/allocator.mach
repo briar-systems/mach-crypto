@@ -1,0 +1,69 @@
+# the operating system's locked secret allocators
+#
+# each allocation is std.memory.secret's: locked against paging, between guard
+# pages, zero-filled on allocation and wiped on release, so both allocators
+# set zeroes_on_allocate and wipes_on_release. this module needs the pages
+# capability. crypto.secret, which owns what these allocate, needs nothing
+
+use crypto.secret;
+use std.io.error;
+use std.system.capability;
+use std.types.bool.true;
+use std.types.error.err;
+use std.types.size.usize;
+
+$if (capability.HAS_PAGES) {
+    use native: std.memory.secret;
+}
+$or {
+    $error("crypto.system.allocator needs the pages capability (std.system.capability.HAS_PAGES)");
+}
+
+fun status(result: err[error.Error]) i64 {
+    if (sel result.err) { ret -1; }
+    ret 0;
+}
+
+fun allocate(context: ptr, secret_context: *^u8, len: usize, out: **^u8) i64 {
+    if (out == nil) { ret -1; }
+    @out = nil;
+    if (len == 0) { ret 0; }
+    ret status(native.allocate(len, out));
+}
+
+fun deallocate(context: ptr, secret_context: *^u8, data: *^u8, len: usize) i64 {
+    ret status(native.deallocate(data, len));
+}
+
+fun allocate_array[T](context: ptr, secret_context: *^u8, count: usize,
+    bytes: usize, align: usize, out: **T) i64 {
+    if (out == nil) { ret -1; }
+    @out = nil;
+    if (count == 0 || $size_of(T) == 0 ||
+        count > ~(0::usize) / $size_of(T) ||
+        bytes != $size_of(T) * count || align != $align_of(T)) { ret -1; }
+    ret status(native.allocate_typed[T](count, out));
+}
+
+fun deallocate_array[T](context: ptr, secret_context: *^u8, data: *T,
+    count: usize, bytes: usize, align: usize) i64 {
+    if (data == nil || count == 0 || $size_of(T) == 0 ||
+        count > ~(0::usize) / $size_of(T) ||
+        bytes != $size_of(T) * count || align != $align_of(T)) { ret -1; }
+    ret status(native.deallocate_typed[T](data, count));
+}
+
+# construct the native secret allocator
+pub fun make() secret.Allocator {
+    ret secret.Allocator{context: nil, secret_context: nil, allocate_fn: allocate,
+        deallocate_fn:    deallocate, zeroes_on_allocate: true,
+        wipes_on_release: true, initialized: true};
+}
+
+# construct the native typed secret allocator
+pub fun make_array[T]() secret.ArrayAllocator[T] {
+    ret secret.ArrayAllocator[T]{context: nil, secret_context: nil,
+        allocate_fn:      allocate_array[T],
+        deallocate_fn:    deallocate_array[T], zeroes_on_allocate: true,
+        wipes_on_release: true, initialized: true};
+}

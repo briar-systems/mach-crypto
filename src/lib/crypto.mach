@@ -1,4 +1,6 @@
-# public module surface for mach-crypto
+# the portable surface of mach-crypto: every module that needs nothing but
+# the processor, so it builds on every target, freestanding and uefi included.
+# the modules that need the operating system are crypto.lib.system's
 
 use std.runtime;
 

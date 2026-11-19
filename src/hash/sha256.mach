@@ -41,7 +41,6 @@
 
 use std.crypto.ct;
 use std.memory;
-use std.sync.atomic;
 use std.types.bool.bool;
 use std.types.bool.false;
 use std.types.bool.true;
@@ -49,6 +48,7 @@ use std.types.size.usize;
 use std.types.string.str;
 
 $if ($mach.build.arch == $mach.arch.x86_64 || $mach.build.arch == $mach.arch.aarch64) {
+    use std.sync.atomic;
     use std.system.cpu;
 }
 
