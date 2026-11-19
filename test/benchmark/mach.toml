@@ -1,5 +1,5 @@
 [project]
-id = "crypto-benchmark"
+id = "crypto_benchmark"
 version = "0.0.0"
 mach = "^7"
 src = "src"
