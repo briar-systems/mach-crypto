@@ -10,7 +10,7 @@ pub val KEY_SIZE:   usize = 32;
 pub val NONCE_SIZE: usize = 12;
 pub val TAG_SIZE:   usize = 16;
 
-pub val MAX_PLAINTEXT_SIZE: usize = 274877906880;
+pub val MAX_PLAINTEXT_SIZE: u64 = 274877906880;
 
 # seal writes ciphertext followed by the complete tag
 pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
@@ -45,10 +45,12 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
     if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
     if (plaintext.len != 0 && plaintext.data == nil)  { ret failed(contracts.INVALID_INPUT); }
-    if (plaintext.len > MAX_PLAINTEXT_SIZE)           { ret failed(contracts.INVALID_INPUT); }
+    if (plaintext.len::u64 > MAX_PLAINTEXT_SIZE)      { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < TAG_SIZE || output.capacity - TAG_SIZE < plaintext.len) {
+        ret failed(contracts.OUTPUT_TOO_SMALL);
+    }
     val required: usize = plaintext.len + TAG_SIZE;
-    if (output.capacity < required) { ret failed(contracts.OUTPUT_TOO_SMALL); }
-    if (output.data == nil)         { ret failed(contracts.INVALID_INPUT); }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
 
     var chacha:       stream.Context;
     val stream_ready: contracts.Error = stream.init(?chacha, key, nonce);
@@ -114,7 +116,7 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
     if (input.len < TAG_SIZE || input.data == nil)    { ret failed(contracts.INVALID_INPUT); }
     val ciphertext_len: usize = input.len - TAG_SIZE;
-    if (ciphertext_len > MAX_PLAINTEXT_SIZE)       { ret failed(contracts.INVALID_INPUT); }
+    if (ciphertext_len::u64 > MAX_PLAINTEXT_SIZE)  { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity < ciphertext_len)          { ret failed(contracts.OUTPUT_TOO_SMALL); }
     if (ciphertext_len != 0 && output.data == nil) { ret failed(contracts.INVALID_INPUT); }
 

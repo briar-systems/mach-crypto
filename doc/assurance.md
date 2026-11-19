@@ -45,7 +45,7 @@ The layers run separately so one kind of evidence cannot stand in for another:
    which decide where `crypto.internal.word` computes secret products in
    hardware: `test/run/secret/hard_admitted.mach` must build on each of them
    and `test/refuse/secret/hard_target.mach` is refused on the others.
-7. Every project is built for all six targets and both profiles with emitted
+7. Every project is built for all seven targets and both profiles with emitted
    IR and emitted assembly (IR verification is mandatory in mach 5.0).
 8. A second clean matrix build must produce byte-identical artifacts.
 9. Every module named by `assurance/zeroization.tsv` must retain explicit

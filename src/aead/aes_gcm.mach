@@ -18,8 +18,8 @@ pub val AES256_KEY_SIZE: usize = 32;
 pub val NONCE_SIZE:      usize = 12;
 pub val TAG_SIZE:        usize = 16;
 
-pub val MAX_PLAINTEXT_SIZE: usize = 68719476704;
-pub val MAX_AAD_SIZE:       usize = 2305843009213693951;
+pub val MAX_PLAINTEXT_SIZE: u64 = 68719476704;
+pub val MAX_AAD_SIZE:       u64 = 2305843009213693951;
 
 # keystream blocks produced per aes call: one call of the widest member, whose
 # encrypt_blocks takes at most core.PARALLEL_BLOCKS
@@ -241,12 +241,14 @@ pub fun seal_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Byte
     if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
     if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
     if (plaintext.len != 0 && plaintext.data == nil)  { ret failed(contracts.INVALID_INPUT); }
-    if (aad.len > MAX_AAD_SIZE || plaintext.len > MAX_PLAINTEXT_SIZE) {
+    if (aad.len::u64 > MAX_AAD_SIZE || plaintext.len::u64 > MAX_PLAINTEXT_SIZE) {
         ret failed(contracts.INVALID_INPUT);
     }
+    if (output.capacity < TAG_SIZE || output.capacity - TAG_SIZE < plaintext.len) {
+        ret failed(contracts.OUTPUT_TOO_SMALL);
+    }
     val required: usize = plaintext.len + TAG_SIZE;
-    if (output.capacity < required) { ret failed(contracts.OUTPUT_TOO_SMALL); }
-    if (output.data == nil)         { ret failed(contracts.INVALID_INPUT); }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
 
     var state:   ghash.State;
     var counter: [16]^u8;
@@ -302,7 +304,7 @@ pub fun open_with(context: *Context, nonce: contracts.Bytes, aad: contracts.Byte
     if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
     if (input.len < TAG_SIZE || input.data == nil)    { ret failed(contracts.INVALID_INPUT); }
     val ciphertext_len: usize = input.len - TAG_SIZE;
-    if (aad.len > MAX_AAD_SIZE || ciphertext_len > MAX_PLAINTEXT_SIZE) {
+    if (aad.len::u64 > MAX_AAD_SIZE || ciphertext_len::u64 > MAX_PLAINTEXT_SIZE) {
         ret failed(contracts.INVALID_INPUT);
     }
     if (output.capacity < ciphertext_len)          { ret failed(contracts.OUTPUT_TOO_SMALL); }

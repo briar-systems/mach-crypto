@@ -233,16 +233,19 @@ test aes_gcm__validation_and_capacity_failures_leave_output_unchanged {
         contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
         contracts.SecretBytes{data: nil, len: 0}, contracts.Buffer{data: ?public_output[0], capacity: 15});
     if (result.error != contracts.OUTPUT_TOO_SMALL || !public_filled(?public_output[0], 0xA5, 32)) { ret 4; }
-    result = aes_gcm.seal(contracts.SecretBytes{data: ?key[0], len: 16},
-        contracts.Bytes{data: ?nonce[0], len: 12},
-        contracts.Bytes{data: ?public_byte[0], len: 0xFFFFFFFFFFFFFFFF},
-        contracts.SecretBytes{data: nil, len: 0}, contracts.Buffer{data: ?public_output[0], capacity: 32});
-    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 5; }
-    result = aes_gcm.seal(contracts.SecretBytes{data: ?key[0], len: 16},
-        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
-        contracts.SecretBytes{data: ?secret_byte[0], len: 68719476705},
-        contracts.Buffer{data: ?public_output[0], capacity: 32});
-    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 6; }
+    # a length past this limit fits only in a 64-bit usize
+    $if ($mach.build.pointer_width == 8) {
+        result = aes_gcm.seal(contracts.SecretBytes{data: ?key[0], len: 16},
+            contracts.Bytes{data: ?nonce[0], len: 12},
+            contracts.Bytes{data: ?public_byte[0], len: 0xFFFFFFFFFFFFFFFF},
+            contracts.SecretBytes{data: nil, len: 0}, contracts.Buffer{data: ?public_output[0], capacity: 32});
+        if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 5; }
+        result = aes_gcm.seal(contracts.SecretBytes{data: ?key[0], len: 16},
+            contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+            contracts.SecretBytes{data: ?secret_byte[0], len: 68719476705},
+            contracts.Buffer{data: ?public_output[0], capacity: 32});
+        if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 6; }
+    }
 
     result = aes_gcm.open(contracts.SecretBytes{data: ?key[0], len: 16},
         contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
@@ -254,11 +257,14 @@ test aes_gcm__validation_and_capacity_failures_leave_output_unchanged {
         contracts.Bytes{data: ?public_output[0], len: 32},
         contracts.SecretBuffer{data: ?secret_output[0], capacity: 15});
     if (result.error != contracts.OUTPUT_TOO_SMALL || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 8; }
-    result = aes_gcm.open(contracts.SecretBytes{data: ?key[0], len: 16},
-        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
-        contracts.Bytes{data: ?public_output[0], len: 68719476721},
-        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
-    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 9; }
+    # a length past this limit fits only in a 64-bit usize
+    $if ($mach.build.pointer_width == 8) {
+        result = aes_gcm.open(contracts.SecretBytes{data: ?key[0], len: 16},
+            contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+            contracts.Bytes{data: ?public_output[0], len: 68719476721},
+            contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+        if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 9; }
+    }
     ret 0;
 }
 
@@ -725,11 +731,14 @@ test chacha20_poly1305__malformed_and_bounded_failures_do_not_write {
         contracts.SecretBytes{data: nil, len: 0},
         contracts.Buffer{data: nil, capacity: 16});
     if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 8; }
-    result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
-        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
-        contracts.SecretBytes{data: ?secret_byte[0], len: 274877906881},
-        contracts.Buffer{data: ?public_output[0], capacity: 32});
-    if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 9; }
+    # a length past this limit fits only in a 64-bit usize
+    $if ($mach.build.pointer_width == 8) {
+        result = chacha20_poly1305.seal(contracts.SecretBytes{data: ?key[0], len: 32},
+            contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+            contracts.SecretBytes{data: ?secret_byte[0], len: 274877906881},
+            contracts.Buffer{data: ?public_output[0], capacity: 32});
+        if (result.error != contracts.INVALID_INPUT || !public_filled(?public_output[0], 0xA5, 32)) { ret 9; }
+    }
 
     result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
         contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
@@ -772,10 +781,13 @@ test chacha20_poly1305__malformed_and_bounded_failures_do_not_write {
         contracts.Bytes{data: ?public_output[0], len: 32},
         contracts.SecretBuffer{data: nil, capacity: 16});
     if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 17; }
-    result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
-        contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
-        contracts.Bytes{data: ?public_output[0], len: 274877906897},
-        contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
-    if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 18; }
+    # a length past this limit fits only in a 64-bit usize
+    $if ($mach.build.pointer_width == 8) {
+        result = chacha20_poly1305.open(contracts.SecretBytes{data: ?key[0], len: 32},
+            contracts.Bytes{data: ?nonce[0], len: 12}, contracts.Bytes{data: nil, len: 0},
+            contracts.Bytes{data: ?public_output[0], len: 274877906897},
+            contracts.SecretBuffer{data: ?secret_output[0], capacity: 32});
+        if (result.error != contracts.INVALID_INPUT || !secret_filled(?secret_output[0], 0xA5, 32)) { ret 18; }
+    }
     ret 0;
 }

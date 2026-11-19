@@ -481,7 +481,7 @@ and independent review as distinct evidence layers.
 `tools/assurance run` is the fail-closed release evidence gate. It runs the
 functional, official-vector, differential, invalid-input, leakage, and
 zeroization layers independently. It then performs two clean builds of every
-project for all six targets in debug and release mode with verified IR and
+project for all seven targets in debug and release mode with verified IR and
 emitted assembly. The two artifact sets must be byte-for-byte identical.
 
 A successful run publishes an immutable machine-readable evidence directory

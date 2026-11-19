@@ -250,15 +250,18 @@ test hmac__output_overlap_and_failures_have_defined_behavior {
     result = hmac.sha384(key_view, contracts.Bytes{data: nil, len: 0},
         contracts.Buffer{data: nil, capacity: 48});
     if (result.error != contracts.INVALID_INPUT || result.written != 0) { ret 5; }
-    result = hmac.sha256(key_view, contracts.Bytes{data: ?shared[0], len: 0xFFFFFFFFFFFFFFFF},
-        contracts.Buffer{data: ?shared[0], capacity: 64});
-    if (result.error != contracts.INVALID_INPUT || !public_filled(?shared[0], 0xA5, 64)) { ret 6; }
-    result = hmac.sha384(key_view, contracts.Bytes{data: ?shared[0], len: 0xFFFFFFFFFFFFFFFF},
-        contracts.Buffer{data: ?shared[0], capacity: 64});
-    if (result.error != contracts.INVALID_INPUT || !public_filled(?shared[0], 0xA5, 64)) { ret 7; }
-    result = hmac.sha256(contracts.SecretBytes{data: ?key[0], len: 0xFFFFFFFFFFFFFFFF},
-        contracts.Bytes{data: nil, len: 0}, contracts.Buffer{data: ?shared[0], capacity: 64});
-    if (result.error != contracts.INVALID_KEY || !public_filled(?shared[0], 0xA5, 64)) { ret 8; }
+    # a length past this limit fits only in a 64-bit usize
+    $if ($mach.build.pointer_width == 8) {
+        result = hmac.sha256(key_view, contracts.Bytes{data: ?shared[0], len: 0xFFFFFFFFFFFFFFFF},
+            contracts.Buffer{data: ?shared[0], capacity: 64});
+        if (result.error != contracts.INVALID_INPUT || !public_filled(?shared[0], 0xA5, 64)) { ret 6; }
+        result = hmac.sha384(key_view, contracts.Bytes{data: ?shared[0], len: 0xFFFFFFFFFFFFFFFF},
+            contracts.Buffer{data: ?shared[0], capacity: 64});
+        if (result.error != contracts.INVALID_INPUT || !public_filled(?shared[0], 0xA5, 64)) { ret 7; }
+        result = hmac.sha256(contracts.SecretBytes{data: ?key[0], len: 0xFFFFFFFFFFFFFFFF},
+            contracts.Bytes{data: nil, len: 0}, contracts.Buffer{data: ?shared[0], capacity: 64});
+        if (result.error != contracts.INVALID_KEY || !public_filled(?shared[0], 0xA5, 64)) { ret 8; }
+    }
 
     var secret: [64]^u8;
     i = 0;
@@ -288,9 +291,12 @@ test hmac__output_overlap_and_failures_have_defined_behavior {
     result = hmac.sha256_secret(key_view, contracts.Bytes{data: nil, len: 0},
         contracts.SecretBuffer{data: nil, capacity: 32});
     if (result.error != contracts.INVALID_INPUT || result.written != 0) { ret 13; }
-    result = hmac.sha256_secret(contracts.SecretBytes{data: ?key[0], len: 0xFFFFFFFFFFFFFFFF},
-        contracts.Bytes{data: nil, len: 0}, contracts.SecretBuffer{data: ?secret[0], capacity: 64});
-    if (result.error != contracts.INVALID_KEY || !secret_filled(?secret[0], 0xA5, 64)) { ret 14; }
+    # a length past this limit fits only in a 64-bit usize
+    $if ($mach.build.pointer_width == 8) {
+        result = hmac.sha256_secret(contracts.SecretBytes{data: ?key[0], len: 0xFFFFFFFFFFFFFFFF},
+            contracts.Bytes{data: nil, len: 0}, contracts.SecretBuffer{data: ?secret[0], capacity: 64});
+        if (result.error != contracts.INVALID_KEY || !secret_filled(?secret[0], 0xA5, 64)) { ret 14; }
+    }
     ret 0;
 }
 
@@ -477,14 +483,17 @@ test hkdf__limits_capacities_and_invalid_inputs_do_not_write {
     result = hkdf.expand_sha384(contracts.SecretBytes{data: ?prk384[0], len: 48},
         contracts.Bytes{data: nil, len: 0}, contracts.SecretBuffer{data: nil, capacity: 12241});
     if (result.error != contracts.INVALID_INPUT || result.written != 0) { ret 7; }
-    result = hkdf.expand_sha256(contracts.SecretBytes{data: ?prk256[0], len: 32},
-        contracts.Bytes{data: ?public_byte[0], len: 0xFFFFFFFFFFFFFFFF},
-        contracts.SecretBuffer{data: ?small[0], capacity: 1});
-    if (result.error != contracts.INVALID_INPUT || !secret_filled(?small[0], 0xA5, 48)) { ret 8; }
-    result = hkdf.expand_sha384(contracts.SecretBytes{data: ?prk384[0], len: 48},
-        contracts.Bytes{data: ?public_byte[0], len: 0xFFFFFFFFFFFFFFFF},
-        contracts.SecretBuffer{data: ?small[0], capacity: 1});
-    if (result.error != contracts.INVALID_INPUT || !secret_filled(?small[0], 0xA5, 48)) { ret 9; }
+    # a length past this limit fits only in a 64-bit usize
+    $if ($mach.build.pointer_width == 8) {
+        result = hkdf.expand_sha256(contracts.SecretBytes{data: ?prk256[0], len: 32},
+            contracts.Bytes{data: ?public_byte[0], len: 0xFFFFFFFFFFFFFFFF},
+            contracts.SecretBuffer{data: ?small[0], capacity: 1});
+        if (result.error != contracts.INVALID_INPUT || !secret_filled(?small[0], 0xA5, 48)) { ret 8; }
+        result = hkdf.expand_sha384(contracts.SecretBytes{data: ?prk384[0], len: 48},
+            contracts.Bytes{data: ?public_byte[0], len: 0xFFFFFFFFFFFFFFFF},
+            contracts.SecretBuffer{data: ?small[0], capacity: 1});
+        if (result.error != contracts.INVALID_INPUT || !secret_filled(?small[0], 0xA5, 48)) { ret 9; }
+    }
 
     result = hkdf.expand_sha256(contracts.SecretBytes{data: ?prk256[0], len: 32},
         contracts.Bytes{data: nil, len: 0},

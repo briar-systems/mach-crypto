@@ -398,14 +398,14 @@ test hash__validation_and_overflow_failures_preserve_state_and_output {
 
     sha256.inner.total   = 0x1fffffffffffffff;
     sha256.inner.buf_len = 63;
-    sha384.inner.total   = 1;
-    sha384.inner.buf_len = 1;
+    sha384.inner.total   = 0xffffffffffffffff;
+    sha384.inner.buf_len = 127;
     before256            = sha256;
     before384            = sha384;
     if (hash.update_sha256(?sha256,
         contracts.Bytes{data: ?output[0], len: 1}) != contracts.INVALID_INPUT ||
         hash.update_sha384(?sha384,
-        contracts.Bytes{data: ?output[0], len: 0xffffffffffffffff}) !=
+        contracts.Bytes{data: ?output[0], len: 1}) !=
         contracts.INVALID_INPUT || !equal_sha256(?sha256, ?before256) ||
         !equal_sha384(?sha384, ?before384)) { ret 5; }
 

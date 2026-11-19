@@ -10,6 +10,7 @@ targets=(
     linux-aarch64
     linux-riscv64
     windows-x86_64
+    windows-aarch64
     darwin-x86_64
     darwin-aarch64
 )
@@ -438,7 +439,7 @@ run_gate() {
     fi
     artifact_hash=$(sha256_file "$pass_b")
     record_result reproducibility . all \
-        "two clean six-target debug/release build passes" all all artifacts.tsv "$artifact_hash"
+        "two clean seven-target debug/release build passes" all all artifacts.tsv "$artifact_hash"
     rm "$difference"
 
     record_positive_leakage_evidence

@@ -118,7 +118,7 @@ pub fun expand_sha256(prk: contracts.SecretBytes, info: contracts.Bytes,
     if (prk.data == nil)                     { ret failed(contracts.INVALID_INPUT); }
     if (info.len != 0 && info.data == nil)   { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity > SHA256_MAX_OUTPUT) { ret failed(contracts.INVALID_INPUT); }
-    if (info.len::u64 > lift.SHA256_MAX_BYTES - sha256.BLOCK_SIZE - SHA256_PRK_SIZE - 1) {
+    if (info.len::u64 > lift.SHA256_MAX_BYTES - sha256.BLOCK_SIZE::u64 - SHA256_PRK_SIZE::u64 - 1) {
         ret failed(contracts.INVALID_INPUT);
     }
     if (output.capacity == 0) {
@@ -189,7 +189,7 @@ pub fun expand_sha384(prk: contracts.SecretBytes, info: contracts.Bytes,
     if (prk.data == nil)                     { ret failed(contracts.INVALID_INPUT); }
     if (info.len != 0 && info.data == nil)   { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity > SHA384_MAX_OUTPUT) { ret failed(contracts.INVALID_INPUT); }
-    if (info.len::u64 > lift.SHA384_MAX_BYTES - sha512.BLOCK_SIZE - SHA384_PRK_SIZE - 1) {
+    if (info.len::u64 > lift.SHA384_MAX_BYTES - sha512.BLOCK_SIZE::u64 - SHA384_PRK_SIZE::u64 - 1) {
         ret failed(contracts.INVALID_INPUT);
     }
     if (output.capacity == 0) {
