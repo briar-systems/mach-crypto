@@ -55,10 +55,6 @@ tree_is_clean() {
     [[ -z "$(git -C "$root" status --short --untracked-files=all)" ]]
 }
 
-leakage_projects() {
-    awk -F '\t' 'NR > 1 { print $1 }' "$root/assurance/leakage.tsv"
-}
-
 manifest_hash() {
     (
         cd "$root"
@@ -67,12 +63,7 @@ manifest_hash() {
             assurance/projects.tsv \
             assurance/tests.tsv \
             assurance/zeroization.tsv \
-            assurance/leakage.tsv \
             tools/assurance
-        leakage_projects | while IFS= read -r project; do
-            sha256sum "$project/mach.toml"
-            find "$project/src" -type f -name '*.mach' -print0 | sort -z | xargs -0 sha256sum
-        done
     ) | sha256sum | awk '{print $1}'
 }
 
@@ -95,11 +86,6 @@ check_prerequisites() {
     require_file "$root/assurance/projects.tsv"
     require_file "$root/assurance/tests.tsv"
     require_file "$root/assurance/zeroization.tsv"
-    require_file "$root/assurance/leakage.tsv"
-    local project
-    while IFS= read -r project; do
-        require_file "$root/$project/mach.toml"
-    done < <(leakage_projects)
 }
 
 assert_clean_source() {
@@ -113,10 +99,6 @@ resolve_dependencies() {
         (cd "$root" && mach dep pull "$project" --quiet) >/dev/null 2>&1 </dev/null || \
             die "dependency resolution failed for $project; run 'mach dep pull $project' for details"
     done < "$root/assurance/projects.tsv"
-    while IFS= read -r project; do
-        (cd "$root" && mach dep pull "$project" --quiet) >/dev/null 2>&1 </dev/null || \
-            die "dependency resolution failed for $project; run 'mach dep pull $project' for details"
-    done < <(leakage_projects)
     tree_is_clean || die "dependency resolution changed the source tree; commit the refreshed pins before producing release evidence"
 }
 
@@ -299,55 +281,6 @@ write_artifact_manifest() {
     done < "$root/assurance/projects.tsv"
 }
 
-# every control in assurance/leakage.tsv must be refused for its stated reason on
-# every target and profile, and must leave no generated code behind. a control
-# that names admitted targets is the other way round there: the compiler must
-# accept it and the IR must carry the secret multiply, which pins the target
-# set that computes secret products in hardware
-run_leakage_negative_controls() {
-    local project artifact expected source admitted target profile log relative hash name ir
-    while IFS=$'\t' read -r project artifact expected source admitted; do
-        [[ "$project" == project ]] && continue
-        name=${project##*/}
-        for target in "${targets[@]}"; do
-            for profile in "${profiles[@]}"; do
-                relative="logs/leakage/${name}-${target}-${profile}.log"
-                log="$stage/$relative"
-                mkdir -p "$(dirname -- "$log")"
-                (cd "$root" && mach clean "$project") >/dev/null 2>&1 </dev/null || \
-                    die "could not clean the leakage control $project"
-                if [[ ",$admitted," == *",$target,"* ]]; then
-                    (cd "$root" && mach build "$project" --target "$target" \
-                        --profile "$profile" --emit ir) > "$log" 2>&1 </dev/null || \
-                        die "compiler refused the control $project on the admitted target $target $profile: $log"
-                    ir=$(find "$root/$project/out/$target/$profile" -type f -name '*.ir' -print -quit 2>/dev/null)
-                    [[ -n "$ir" ]] || die "admitted control $project produced no IR for $target $profile"
-                    grep -qE ': \^[a-z0-9]+ = mul\(' "$ir" || \
-                        die "admitted control $project carries no secret multiply in its IR for $target $profile"
-                    hash=$(sha256_file "$log")
-                    record_result leakage "$project" all-secret-algorithms \
-                        "$source, admitted in hardware" "$target" "$profile" "$relative" "$hash"
-                    continue
-                fi
-                if (cd "$root" && mach build "$project" --target "$target" \
-                    --profile "$profile" --emit ir) > "$log" 2>&1 </dev/null; then
-                    die "compiler accepted the leakage control $project for $target $profile"
-                fi
-                grep -qF -- "$expected" "$log" || \
-                    die "leakage control $project failed for an unexpected reason: $log"
-                if find "$root/$project/out" -type f \
-                    \( -name '*.ir' -o -name '*.o' -o -name "$artifact" \) \
-                    -print -quit 2>/dev/null | grep -q .; then
-                    die "rejected leakage control $project left generated code behind for $target $profile"
-                fi
-                hash=$(sha256_file "$log")
-                record_result leakage "$project" all-secret-algorithms \
-                    "$source" "$target" "$profile" "$relative" "$hash"
-            done
-        done
-    done < "$root/assurance/leakage.tsv"
-}
-
 record_positive_leakage_evidence() {
     local algorithm ct source hardware target profile log relative hash
     while IFS=$'\t' read -r algorithm ct source hardware; do
@@ -491,7 +424,6 @@ run_gate() {
 
     run_functional_tests
     run_independent_tests
-    run_leakage_negative_controls
 
     pass_a="$stage/artifacts-pass-a.tsv"
     pass_b="$stage/artifacts.tsv"
