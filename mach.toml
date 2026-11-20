@@ -86,7 +86,7 @@ sys = "freestanding"
 abi = "ilp32"
 isa = "rv32imc"
 
-# the portable library, what a dependent's `use crypto;` binds: every module
+# the portable library, the modules its prebuilt artifact carries: every module
 # that needs nothing but the processor, on every declared target
 [artifact.crypto]
 kind = "static"

@@ -41,7 +41,7 @@ target without one, the module refuses with a single diagnostic naming it, and
 no other module imports either, so a program that does not use them never
 reaches the operating system through this package. It touches no files.
 
-The `crypto` artifact (`crypto.lib.crypto`, what `use crypto;` binds)
+The `crypto` artifact (`crypto.lib.crypto`)
 re-exports the portable modules and builds for every declared target. The
 `system` artifact (`crypto.lib.system`) re-exports the two operating-system
 modules and builds for the targets that have both capabilities.
