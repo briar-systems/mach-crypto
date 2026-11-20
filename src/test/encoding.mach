@@ -83,7 +83,7 @@ fun probe_make(probe: *ProbeAllocator) secret.Allocator {
         i                = i + 1;
     }
     ret secret.Allocator{context: probe::ptr, secret_context: nil,
-        allocate_fn: probe_allocate, deallocate_fn: probe_deallocate,
+        fn_allocate: probe_allocate, fn_deallocate: probe_deallocate,
         initialized: true};
 }
 

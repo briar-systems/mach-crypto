@@ -499,7 +499,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             rev32 v17.16b, v17.16b
             rev32 v18.16b, v18.16b
             rev32 v19.16b, v19.16b
-            # rounds 0-3
+            // rounds 0-3
             ldr q20, [x11], 16
             add v21.4s, v16.4s, v20.4s
             sha256su0 v16.4s, v17.4s
@@ -507,7 +507,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 4-7
+            // rounds 4-7
             ldr q20, [x11], 16
             add v21.4s, v17.4s, v20.4s
             sha256su0 v17.4s, v18.4s
@@ -515,7 +515,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 8-11
+            // rounds 8-11
             ldr q20, [x11], 16
             add v21.4s, v18.4s, v20.4s
             sha256su0 v18.4s, v19.4s
@@ -523,7 +523,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 12-15
+            // rounds 12-15
             ldr q20, [x11], 16
             add v21.4s, v19.4s, v20.4s
             sha256su0 v19.4s, v16.4s
@@ -531,7 +531,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 16-19
+            // rounds 16-19
             ldr q20, [x11], 16
             add v21.4s, v16.4s, v20.4s
             sha256su0 v16.4s, v17.4s
@@ -539,7 +539,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 20-23
+            // rounds 20-23
             ldr q20, [x11], 16
             add v21.4s, v17.4s, v20.4s
             sha256su0 v17.4s, v18.4s
@@ -547,7 +547,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 24-27
+            // rounds 24-27
             ldr q20, [x11], 16
             add v21.4s, v18.4s, v20.4s
             sha256su0 v18.4s, v19.4s
@@ -555,7 +555,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 28-31
+            // rounds 28-31
             ldr q20, [x11], 16
             add v21.4s, v19.4s, v20.4s
             sha256su0 v19.4s, v16.4s
@@ -563,7 +563,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 32-35
+            // rounds 32-35
             ldr q20, [x11], 16
             add v21.4s, v16.4s, v20.4s
             sha256su0 v16.4s, v17.4s
@@ -571,7 +571,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 36-39
+            // rounds 36-39
             ldr q20, [x11], 16
             add v21.4s, v17.4s, v20.4s
             sha256su0 v17.4s, v18.4s
@@ -579,7 +579,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 40-43
+            // rounds 40-43
             ldr q20, [x11], 16
             add v21.4s, v18.4s, v20.4s
             sha256su0 v18.4s, v19.4s
@@ -587,7 +587,7 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 44-47
+            // rounds 44-47
             ldr q20, [x11], 16
             add v21.4s, v19.4s, v20.4s
             sha256su0 v19.4s, v16.4s
@@ -595,25 +595,25 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 48-51
+            // rounds 48-51
             ldr q20, [x11], 16
             add v21.4s, v16.4s, v20.4s
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 52-55
+            // rounds 52-55
             ldr q20, [x11], 16
             add v21.4s, v17.4s, v20.4s
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 56-59
+            // rounds 56-59
             ldr q20, [x11], 16
             add v21.4s, v18.4s, v20.4s
             mov v22.16b, v0.16b
             sha256h q0, q1, v21.4s
             sha256h2 q1, q22, v21.4s
-            # rounds 60-63
+            // rounds 60-63
             ldr q20, [x11], 16
             add v21.4s, v19.4s, v20.4s
             mov v22.16b, v0.16b

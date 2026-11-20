@@ -25,5 +25,5 @@ fun fill(context: ptr, secret_context: *^u8, destination: *^u8, len: usize) i64 
 
 # construct the operating-system entropy source
 pub fun make() secret.Entropy {
-    ret secret.Entropy{context: nil, secret_context: nil, fill_fn: fill, initialized: true};
+    ret secret.Entropy{context: nil, secret_context: nil, fn_fill: fill, initialized: true};
 }

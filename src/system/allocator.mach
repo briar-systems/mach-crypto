@@ -57,15 +57,15 @@ fun deallocate_array[T](context: ptr, secret_context: *^u8, data: *T,
 
 # construct the native secret allocator
 pub fun make() secret.Allocator {
-    ret secret.Allocator{context: nil, secret_context: nil, allocate_fn: allocate,
-        deallocate_fn:    deallocate, zeroes_on_allocate: true,
+    ret secret.Allocator{context: nil, secret_context: nil, fn_allocate: allocate,
+        fn_deallocate:    deallocate, zeroes_on_allocate: true,
         wipes_on_release: true, initialized: true};
 }
 
 # construct the native typed secret allocator
 pub fun make_array[T]() secret.ArrayAllocator[T] {
     ret secret.ArrayAllocator[T]{context: nil, secret_context: nil,
-        allocate_fn:      allocate_array[T],
-        deallocate_fn:    deallocate_array[T], zeroes_on_allocate: true,
+        fn_allocate:      allocate_array[T],
+        fn_deallocate:    deallocate_array[T], zeroes_on_allocate: true,
         wipes_on_release: true, initialized: true};
 }
