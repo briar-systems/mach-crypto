@@ -67,24 +67,28 @@ arch = "x86_64"
 sys = "freestanding"
 abi = "sysv64"
 isa = "x86-64"
+stack_reserve = 0x10000
 
 [target.freestanding-aarch64]
 arch = "aarch64"
 sys = "freestanding"
 abi = "aapcs64"
 isa = "armv8-a+fp+simd"
+stack_reserve = 0x10000
 
 [target.freestanding-riscv64]
 arch = "riscv64"
 sys = "freestanding"
 abi = "lp64d"
 isa = "rv64gc"
+stack_reserve = 0x10000
 
 [target.freestanding-riscv32]
 arch = "riscv32"
 sys = "freestanding"
 abi = "ilp32"
 isa = "rv32imc"
+stack_reserve = 0x10000
 
 # the portable library, the modules its prebuilt artifact carries: every module
 # that needs nothing but the processor, on every declared target
