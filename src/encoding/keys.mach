@@ -77,7 +77,8 @@ pub fun empty_private() PrivateKey {
         modulus_len: 0, exponent_offset: 0, exponent_len: 0};
 }
 
-fun private_empty(key: *PrivateKey) bool {
+#[constant_time("soft")]
+fun is_private_empty(key: *PrivateKey) bool {
     ret key != nil && key.algorithm == 0 && key.container == 0 &&
         key.encoded_len == 0 && key.private_offset == 0 && key.private_len == 0 &&
         key.modulus_offset == 0 && key.modulus_len == 0 &&
@@ -86,9 +87,9 @@ fun private_empty(key: *PrivateKey) bool {
         key.material.owner == nil && key.material.state == secret.EMPTY;
 }
 
-pub fun destroy_private(key: *PrivateKey) contracts.Error {
+pub fun private_dnit(key: *PrivateKey) contracts.Error {
     if (key == nil) { ret contracts.INVALID_INPUT; }
-    val status: contracts.Error = secret.destroy(?key.material);
+    val status: contracts.Error = secret.dnit(?key.material);
     key.algorithm       = 0;
     key.container       = 0;
     key.encoded_len     = 0;
@@ -111,7 +112,7 @@ fun public_equal(value: contracts.Bytes, expected: *u8, len: usize) bool {
     ret true;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun secret_equal(value: contracts.SecretBytes, expected: *u8, len: usize) bool {
     if (value.len != len || value.data == nil) { ret false; }
     var difference: ^u8   = 0;
@@ -123,7 +124,7 @@ fun secret_equal(value: contracts.SecretBytes, expected: *u8, len: usize) bool {
     ret ct.eq[u8](difference, 0):>u8 == 1;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun version_secret(element: *der.SecretElement, expected: u8) bool {
     ret element.tag == der.INTEGER && element.content.len == 1 &&
         element.content.data[0]:>u8 == expected;
@@ -151,7 +152,7 @@ fun valid_rsa_public_parts(modulus: contracts.Bytes,
     ret true;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun valid_rsa_secret_parts(modulus: contracts.SecretBytes,
     exponent: contracts.SecretBytes) bool {
     if (modulus.len < 256 || modulus.len > 512 || modulus.len % 4 != 0 ||
@@ -174,21 +175,21 @@ fun valid_rsa_secret_parts(modulus: contracts.SecretBytes,
     ret true;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun valid_p256_public(value: contracts.Bytes) bool {
     if (value.len != 65 || value.data == nil || value.data[0] != 4) { ret false; }
     var point: p256.Point;
     val valid: ^u8 = p256.parse_point(?point, value.data);
-    p256.destroy_point(?point);
+    p256.point_dnit(?point);
     ret valid:>u8 == 1;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun valid_p384_public(value: contracts.Bytes) bool {
     ret p384.valid_public_point(value);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun valid_p521_public(value: contracts.Bytes) bool {
     ret p521.valid_public_point(value);
 }
@@ -245,7 +246,7 @@ fun parse_public_algorithm(element: *der.Element,
     ret contracts.UNSUPPORTED;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun parse_secret_algorithm(element: *der.SecretElement,
     algorithm: *Algorithm) contracts.Error {
     if (element.tag != der.SEQUENCE) { ret contracts.INVALID_INPUT; }
@@ -344,7 +345,7 @@ pub fun decode_spki(input: contracts.Bytes, output: *PublicKey) contracts.Error 
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun parse_sec1(input: contracts.SecretBytes, base: usize, descriptor: *Descriptor,
     outer_curve: bool) contracts.Error {
     var root: der.SecretElement;
@@ -419,7 +420,7 @@ fun parse_sec1(input: contracts.SecretBytes, base: usize, descriptor: *Descripto
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun parse_rsa_private(input: contracts.SecretBytes, base: usize,
     descriptor: *Descriptor) contracts.Error {
     var root: der.SecretElement;
@@ -473,7 +474,7 @@ fun parse_rsa_private(input: contracts.SecretBytes, base: usize,
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun parse_pkcs8(input: contracts.SecretBytes,
     descriptor: *Descriptor) contracts.Error {
     var root: der.SecretElement;
@@ -537,13 +538,12 @@ fun parse_pkcs8(input: contracts.SecretBytes,
     ret contracts.UNSUPPORTED;
 }
 
-#[oblivious]
 fun install(input: contracts.SecretBytes, owner: *secret.Allocator,
     descriptor: *Descriptor, output: *PrivateKey) contracts.Error {
     if (output == nil || owner == nil || descriptor == nil) {
         ret contracts.INVALID_INPUT;
     }
-    if (!private_empty(output))              { ret contracts.INVALID_STATE; }
+    if (!is_private_empty(output))           { ret contracts.INVALID_STATE; }
     if (descriptor.encoded_len != input.len) { ret contracts.INVALID_STATE; }
     var material:    secret.Secret   = secret.empty();
     val initialized: contracts.Error = secret.init(?material, owner, input.len);
@@ -560,7 +560,7 @@ fun install(input: contracts.SecretBytes, owner: *secret.Allocator,
     }
     val moved: contracts.Error = secret.move(?output.material, ?material);
     if (moved != contracts.OK) {
-        secret.destroy(?material);
+        secret.dnit(?material);
         ret moved;
     }
     output.algorithm       = descriptor.algorithm;
@@ -575,13 +575,12 @@ fun install(input: contracts.SecretBytes, owner: *secret.Allocator,
     ret contracts.OK;
 }
 
-#[oblivious]
 fun decode_private_with(input: contracts.SecretBytes, owner: *secret.Allocator,
     output: *PrivateKey, container: Container) contracts.Error {
     if (input.len == 0 || input.data == nil || output == nil || owner == nil) {
         ret contracts.INVALID_INPUT;
     }
-    if (!private_empty(output)) { ret contracts.INVALID_STATE; }
+    if (!is_private_empty(output)) { ret contracts.INVALID_STATE; }
     var descriptor: Descriptor;
     descriptor.algorithm       = 0;
     descriptor.container       = 0;
@@ -636,7 +635,7 @@ fun public_regions_overlap(first: *u8, first_len: usize, second: *u8,
     ret first_start < second_end && second_start < first_end;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun copy_rsa(key: *PrivateKey, modulus: contracts.Buffer,
     exponent: contracts.Buffer, private_exponent: contracts.SecretBuffer) contracts.Error {
     if (key == nil || key.algorithm != RSA || !secret.active(?key.material)) {
@@ -707,7 +706,7 @@ pub fun encode_public_der(key: *PublicKey,
     ret contracts.Operation{error: contracts.OK, written: key.encoded.len};
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun encode_private_der(key: *PrivateKey,
     output: contracts.SecretBuffer) contracts.Operation {
     if (key == nil || !secret.active(?key.material) || key.encoded_len == 0 ||
@@ -739,13 +738,12 @@ fun label_equals(label: *u8, label_len: usize, expected: *u8,
     ret true;
 }
 
-#[oblivious]
 pub fun decode_private_pem(input: contracts.SecretBytes, owner: *secret.Allocator,
     output: *PrivateKey) contracts.Error {
     if (input.len == 0 || input.data == nil || owner == nil || output == nil) {
         ret contracts.INVALID_INPUT;
     }
-    if (!private_empty(output)) { ret contracts.INVALID_STATE; }
+    if (!is_private_empty(output)) { ret contracts.INVALID_STATE; }
     val required: contracts.Operation = pem.decoded_secret_len(input);
     if (required.error != contracts.OK) { ret required.error; }
     var decoded: secret.Secret   = secret.empty();
@@ -788,7 +786,7 @@ pub fun decode_private_pem(input: contracts.SecretBytes, owner: *secret.Allocato
     if (status == contracts.OK) {
         val moved: contracts.Error = secret.move(?output.material, ?decoded);
         if (moved != contracts.OK) {
-            secret.destroy(?decoded);
+            secret.dnit(?decoded);
             ret moved;
         }
         output.algorithm       = descriptor.algorithm;
@@ -802,7 +800,7 @@ pub fun decode_private_pem(input: contracts.SecretBytes, owner: *secret.Allocato
         output.exponent_len    = descriptor.exponent_len;
         ret contracts.OK;
     }
-    secret.destroy(?decoded);
+    secret.dnit(?decoded);
     if (secret.cleanup_pending(?decoded)) {
         secret.move(?output.material, ?decoded);
     }
@@ -831,7 +829,7 @@ pub fun encode_public_pem(key: *PublicKey,
     ret pem.encode(?block, output);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun encode_private_pem(key: *PrivateKey,
     output: contracts.SecretBuffer) contracts.Operation {
     if (key == nil || !secret.active(?key.material)) {

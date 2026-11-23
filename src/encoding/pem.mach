@@ -55,7 +55,7 @@ fun value(byte: u8) u8 {
     ret 255;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun secret_decode_value(byte: ^u8) ^u8 {
     var result: ^u8   = 255;
     var i:      usize = 0;
@@ -68,7 +68,7 @@ fun secret_decode_value(byte: ^u8) ^u8 {
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun secret_encode_value(index: ^u8) ^u8 {
     var result: ^u8   = 0;
     var i:      usize = 0;
@@ -110,7 +110,7 @@ fun matches(data: *u8, offset: usize, len: usize, text: *u8,
     ret true;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun secret_matches(data: *^u8, offset: usize, len: usize, text: *u8,
     text_len: usize) bool {
     if (offset > len || text_len > len - offset) { ret false; }
@@ -135,7 +135,7 @@ fun newline(data: *u8, len: usize, offset: usize, next: *usize) bool {
     ret false;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun secret_newline(data: *^u8, len: usize, offset: usize, next: *usize) bool {
     if (offset >= len) { ret false; }
     if (data[offset]:>u8 == '\n') {
@@ -161,7 +161,7 @@ fun validate_tail(last: *u8, pad: usize) bool {
     ret value(last[3]) != 255;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun validate_secret_tail(last: *^u8, pad: usize) bool {
     val a:     ^u8 = secret_decode_value(last[0]);
     val b:     ^u8 = secret_decode_value(last[1]);
@@ -284,7 +284,7 @@ fun parse(input: contracts.Bytes, layout: *Layout) contracts.Error {
     ret contracts.INVALID_INPUT;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun parse_secret(input: contracts.SecretBytes,
     layout: *SecretLayout) contracts.Error {
     val begin: [11]u8 = [11]u8{'-', '-', '-', '-', '-', 'B', 'E', 'G', 'I', 'N', ' '};
@@ -445,7 +445,7 @@ pub fun decoded_len(input: contracts.Bytes) contracts.Operation {
     ret contracts.Operation{error: contracts.OK, written: layout.decoded_len};
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun decoded_secret_len(input: contracts.SecretBytes) contracts.Operation {
     var layout: SecretLayout;
     val status: contracts.Error = parse_secret(input, ?layout);
@@ -455,7 +455,7 @@ pub fun decoded_secret_len(input: contracts.SecretBytes) contracts.Operation {
     ret contracts.Operation{error: contracts.OK, written: layout.decoded_len};
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun decode_secret_body(input: contracts.SecretBytes, layout: *SecretLayout,
     output: *^u8) {
     var quartet: [4]^u8;
@@ -505,7 +505,7 @@ pub fun decode(input: contracts.Bytes, output: contracts.Buffer,
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun decode_secret(input: contracts.SecretBytes, output: contracts.SecretBuffer,
     block: *SecretBlock) contracts.Error {
     if (block == nil) { ret contracts.INVALID_INPUT; }
@@ -642,7 +642,7 @@ fun encode_public_body(der: contracts.Bytes, output: *u8, position: usize) usize
     ret next;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun encode_secret_body(der: contracts.SecretBytes, output: *^u8,
     position: usize) usize {
     var next:   usize = position;
@@ -712,7 +712,7 @@ pub fun encode(block: *Block, output: contracts.Buffer) contracts.Operation {
     ret contracts.Operation{error: contracts.OK, written: position};
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun encode_secret(label: contracts.Bytes, der: contracts.SecretBytes,
     output: contracts.SecretBuffer) contracts.Operation {
     if (!valid_label(label) || der.len == 0 || der.data == nil) {

@@ -5,14 +5,8 @@ set -euo pipefail
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 command_name=${1:-run}
 evidence_root="$root/out/assurance"
-targets=(
-    linux-x86_64
-    linux-arm64
-    linux-riscv64
-    windows-x86_64
-    darwin-x86_64
-    darwin-aarch64
-)
+# every target the manifest declares, which the portable library builds for
+mapfile -t targets < <(sed -n 's/^\[target\.\(.*\)\]$/\1/p' "$root/mach.toml")
 profiles=(debug release)
 temporary=
 
@@ -55,10 +49,6 @@ tree_is_clean() {
     [[ -z "$(git -C "$root" status --short --untracked-files=all)" ]]
 }
 
-leakage_projects() {
-    awk -F '\t' 'NR > 1 { print $1 }' "$root/assurance/leakage.tsv"
-}
-
 manifest_hash() {
     (
         cd "$root"
@@ -67,12 +57,7 @@ manifest_hash() {
             assurance/projects.tsv \
             assurance/tests.tsv \
             assurance/zeroization.tsv \
-            assurance/leakage.tsv \
             tools/assurance
-        leakage_projects | while IFS= read -r project; do
-            sha256sum "$project/mach.toml"
-            find "$project/src" -type f -name '*.mach' -print0 | sort -z | xargs -0 sha256sum
-        done
     ) | sha256sum | awk '{print $1}'
 }
 
@@ -95,11 +80,6 @@ check_prerequisites() {
     require_file "$root/assurance/projects.tsv"
     require_file "$root/assurance/tests.tsv"
     require_file "$root/assurance/zeroization.tsv"
-    require_file "$root/assurance/leakage.tsv"
-    local project
-    while IFS= read -r project; do
-        require_file "$root/$project/mach.toml"
-    done < <(leakage_projects)
 }
 
 assert_clean_source() {
@@ -113,10 +93,6 @@ resolve_dependencies() {
         (cd "$root" && mach dep pull "$project" --quiet) >/dev/null 2>&1 </dev/null || \
             die "dependency resolution failed for $project; run 'mach dep pull $project' for details"
     done < "$root/assurance/projects.tsv"
-    while IFS= read -r project; do
-        (cd "$root" && mach dep pull "$project" --quiet) >/dev/null 2>&1 </dev/null || \
-            die "dependency resolution failed for $project; run 'mach dep pull $project' for details"
-    done < <(leakage_projects)
     tree_is_clean || die "dependency resolution changed the source tree; commit the refreshed pins before producing release evidence"
 }
 
@@ -236,15 +212,28 @@ project_output() {
     fi
 }
 
+# the arch a declared target names
+target_arch() {
+    awk -v table="[target.$1]" '$0 == table { inside = 1; next } /^\[/ { inside = 0 }
+        inside && $1 == "arch" { gsub(/"/, "", $3); print $3; exit }' "$root/mach.toml"
+}
+
+# whether the target's back end writes an assembly listing: mirl's wasm family writes none
+lists_assembly() {
+    [[ "$(target_arch "$1")" != wasm32 ]]
+}
+
 require_generated_tree() {
     local project=$1
     local target=$2
     local profile=$3
     local base directory kind
+    local -a kinds=(ir obj)
+    lists_assembly "$target" && kinds+=(asm)
     base=$(project_output "$project")
     directory="$base/$target/$profile"
     [[ -d "$directory" ]] || die "build output is missing: ${directory#"$root"/}"
-    for kind in ir asm obj; do
+    for kind in "${kinds[@]}"; do
         [[ -d "$directory/$kind" ]] || die "$kind output is missing: ${directory#"$root"/}/$kind"
         find "$directory/$kind" -type f -print -quit | grep -q . || \
             die "$kind output is empty: ${directory#"$root"/}/$kind"
@@ -254,18 +243,21 @@ require_generated_tree() {
 run_build_pass() {
     local pass=$1
     local project algorithm profile log relative hash target
+    local -a emit
     clean_build_projects
     while IFS=$'\t' read -r project algorithm; do
         [[ "$project" == project ]] && continue
         for profile in "${profiles[@]}"; do
-            relative="logs/build/${pass}-${algorithm}-${profile}.log"
-            log="$stage/$relative"
-            if ! (cd "$root" && mach build "$project" -t '*' --profile "$profile" \
-                --emit-ir --emit-asm) > "$log" 2>&1; then
-                die "verified build failed for $project $profile during $pass; see $log"
-            fi
-            hash=$(sha256_file "$log")
             for target in "${targets[@]}"; do
+                emit=(--emit ir)
+                lists_assembly "$target" && emit+=(--emit asm)
+                relative="logs/build/${pass}-${algorithm}-${target}-${profile}.log"
+                log="$stage/$relative"
+                if ! (cd "$root" && mach build "$project" -t "$target" --profile "$profile" \
+                    "${emit[@]}") > "$log" 2>&1; then
+                    die "verified build failed for $project $target $profile during $pass; see $log"
+                fi
+                hash=$(sha256_file "$log")
                 require_generated_tree "$project" "$target" "$profile"
                 record_result generated-code "$project" "$algorithm" \
                     "Mach IR verifier and code generator, $pass" "$target" "$profile" "$relative" "$hash"
@@ -299,55 +291,6 @@ write_artifact_manifest() {
     done < "$root/assurance/projects.tsv"
 }
 
-# every control in assurance/leakage.tsv must be refused for its stated reason on
-# every target and profile, and must leave no generated code behind. a control
-# that names admitted targets is the other way round there: the compiler must
-# accept it and the IR must carry the secret multiply, which pins the target
-# set that computes secret products in hardware
-run_leakage_negative_controls() {
-    local project artifact expected source admitted target profile log relative hash name ir
-    while IFS=$'\t' read -r project artifact expected source admitted; do
-        [[ "$project" == project ]] && continue
-        name=${project##*/}
-        for target in "${targets[@]}"; do
-            for profile in "${profiles[@]}"; do
-                relative="logs/leakage/${name}-${target}-${profile}.log"
-                log="$stage/$relative"
-                mkdir -p "$(dirname -- "$log")"
-                (cd "$root" && mach clean "$project") >/dev/null 2>&1 </dev/null || \
-                    die "could not clean the leakage control $project"
-                if [[ ",$admitted," == *",$target,"* ]]; then
-                    (cd "$root" && mach build "$project" --target "$target" \
-                        --profile "$profile" --emit-ir) > "$log" 2>&1 </dev/null || \
-                        die "compiler refused the control $project on the admitted target $target $profile: $log"
-                    ir=$(find "$root/$project/out/$target/$profile" -type f -name '*.ir' -print -quit 2>/dev/null)
-                    [[ -n "$ir" ]] || die "admitted control $project produced no IR for $target $profile"
-                    grep -q 'mul\.secret' "$ir" || \
-                        die "admitted control $project carries no secret multiply in its IR for $target $profile"
-                    hash=$(sha256_file "$log")
-                    record_result leakage "$project" all-secret-algorithms \
-                        "$source, admitted in hardware" "$target" "$profile" "$relative" "$hash"
-                    continue
-                fi
-                if (cd "$root" && mach build "$project" --target "$target" \
-                    --profile "$profile" --emit-ir) > "$log" 2>&1 </dev/null; then
-                    die "compiler accepted the leakage control $project for $target $profile"
-                fi
-                grep -qF -- "$expected" "$log" || \
-                    die "leakage control $project failed for an unexpected reason: $log"
-                if find "$root/$project/out" -type f \
-                    \( -name '*.ir' -o -name '*.o' -o -name "$artifact" \) \
-                    -print -quit 2>/dev/null | grep -q .; then
-                    die "rejected leakage control $project left generated code behind for $target $profile"
-                fi
-                hash=$(sha256_file "$log")
-                record_result leakage "$project" all-secret-algorithms \
-                    "$source" "$target" "$profile" "$relative" "$hash"
-            done
-        done
-    done < "$root/assurance/leakage.tsv"
-}
-
 record_positive_leakage_evidence() {
     local algorithm ct source hardware target profile log relative hash
     while IFS=$'\t' read -r algorithm ct source hardware; do
@@ -359,7 +302,7 @@ record_positive_leakage_evidence() {
         [[ "$ct" == yes ]] || continue
         for target in "${targets[@]}"; do
             for profile in "${profiles[@]}"; do
-                relative="logs/build/pass-b-package-${profile}.log"
+                relative="logs/build/pass-b-package-${target}-${profile}.log"
                 log="$stage/$relative"
                 require_file "$log"
                 hash=$(sha256_file "$log")
@@ -379,7 +322,7 @@ inspect_zeroization() {
             for profile in "${profiles[@]}"; do
                 ir="$root/out/$target/$profile/ir/$module.ir"
                 require_file "$ir"
-                ir_calls=$(grep -cE 'call [^@]*@"?std\.crypto\.ct\.zeroize"?' "$ir" || true)
+                ir_calls=$(grep -cE '^[[:space:]]*call std\.crypto\.ct\.zeroize\(' "$ir" || true)
                 [[ "$ir_calls" -gt 0 ]] || die "zeroization call is absent from ${ir#"$root"/}"
                 relative_ir="generated/$target/$profile/$module.ir"
                 destination="$stage/$relative_ir"
@@ -390,25 +333,18 @@ inspect_zeroization() {
                     "generated IR retains $ir_calls explicit zeroization call(s)" \
                     "$target" "$profile" "$relative_ir" "$hash"
             done
-            if [[ "$assembly_required" == yes ]]; then
+            if [[ "$assembly_required" == yes ]] && lists_assembly "$target"; then
                 asm="$root/out/$target/release/asm/$module.s"
                 require_file "$asm"
-                # 5.0 release builds inline small helpers across modules, so the wipe
-                # reaches the assembly either as a call or as an expansion the release IR
-                # records under inline_sites. the stores themselves survive by the
-                # language's zeroizing-write guarantee (doc/language/secrecy.md)
-                release_ir="$root/out/$target/release/ir/$module.ir"
-                require_file "$release_ir"
-                asm_calls=$(grep -c 'std.crypto.ct.zeroize' "$asm" || true)
-                inlined=$(grep -c 'callee="std.crypto.ct.zeroize"' "$release_ir" || true)
-                [[ "$asm_calls" -gt 0 || "$inlined" -gt 0 ]] || die "zeroization is absent from ${asm#"$root"/} and not inlined per ${release_ir#"$root"/}"
+                asm_calls=$(grep -c 'std\.crypto\.ct\.zeroize' "$asm" || true)
+                [[ "$asm_calls" -gt 0 ]] || die "zeroization is absent from ${asm#"$root"/}"
                 relative_asm="generated/$target/release/$module.s"
                 destination="$stage/$relative_asm"
                 mkdir -p "$(dirname -- "$destination")"
                 cp "$asm" "$destination"
                 hash=$(sha256_file "$destination")
                 record_result zeroization . "$algorithm" \
-                    "release assembly retains $asm_calls zeroization call(s) and $inlined inline expansion(s)" \
+                    "release assembly retains $asm_calls zeroization reference(s)" \
                     "$target" release "$relative_asm" "$hash"
             fi
         done
@@ -491,7 +427,6 @@ run_gate() {
 
     run_functional_tests
     run_independent_tests
-    run_leakage_negative_controls
 
     pass_a="$stage/artifacts-pass-a.tsv"
     pass_b="$stage/artifacts.tsv"
@@ -506,7 +441,7 @@ run_gate() {
     fi
     artifact_hash=$(sha256_file "$pass_b")
     record_result reproducibility . all \
-        "two clean six-target debug/release build passes" all all artifacts.tsv "$artifact_hash"
+        "two clean debug/release build passes over every declared target" all all artifacts.tsv "$artifact_hash"
     rm "$difference"
 
     record_positive_leakage_evidence

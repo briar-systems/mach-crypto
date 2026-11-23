@@ -38,7 +38,7 @@ pub fun sha256_secret(key: contracts.SecretBytes, message: contracts.Bytes,
     ct.zeroize(?tag[0], SHA256_TAG_SIZE);
     val updated: contracts.Error = core.update256_public(?context, message.data, message.len);
     if (updated != contracts.OK) {
-        core.destroy256(?context);
+        core.dnit256(?context);
         ct.zeroize(?tag[0], SHA256_TAG_SIZE);
         ret failed(updated);
     }
@@ -74,7 +74,7 @@ pub fun sha384_secret(key: contracts.SecretBytes, message: contracts.Bytes,
     ct.zeroize(?tag[0], SHA384_TAG_SIZE);
     val updated: contracts.Error = core.update384_public(?context, message.data, message.len);
     if (updated != contracts.OK) {
-        core.destroy384(?context);
+        core.dnit384(?context);
         ct.zeroize(?tag[0], SHA384_TAG_SIZE);
         ret failed(updated);
     }

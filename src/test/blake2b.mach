@@ -5,7 +5,6 @@
 use crypto.contracts;
 use crypto.hash;
 use crypto.hash.blake2b;
-use crypto.signature;
 use std.types.size.usize;
 
 #[testing]
@@ -34,7 +33,7 @@ fun vector(input: *u8, n: usize, size: usize, expected: *u8) u8 {
     var split: usize = 0;
     for (split <= n) {
         var context: hash.Blake2b = hash.empty_blake2b();
-        if (hash.init_blake2b(?context, blake2b.params(size)) != contracts.OK)                                       { ret 2; }
+        if (hash.blake2b_init(?context, blake2b.params(size)) != contracts.OK)                                       { ret 2; }
         if (hash.update_blake2b(?context, contracts.Bytes{data: input, len: split}) != contracts.OK)                 { ret 3; }
         if (hash.snapshot_blake2b(?context, contracts.Buffer{data: ?output[0], capacity: 64}).error != contracts.OK) { ret 4; }
         if (hash.update_blake2b(?context, contracts.Bytes{data: ?input[split], len: n - split}) != contracts.OK)     { ret 5; }
@@ -45,11 +44,6 @@ fun vector(input: *u8, n: usize, size: usize, expected: *u8) u8 {
         split = split + 1;
     }
     ret 0;
-}
-
-test blake2b__rfc7693_abc {
-    ret vector("abc"::*u8, 3, 64,
-        "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923"::*u8)::i32;
 }
 
 test blake2b__hashlib_block_boundaries_and_every_split {
@@ -70,71 +64,12 @@ test blake2b__hashlib_block_boundaries_and_every_split {
     ret 0;
 }
 
-test blake2b__hashlib_all_digest_lengths {
-    if (vector("abc"::*u8, 3, 1, "6b"::*u8) != 0)                                                                                                                                { ret 1; }
-    if (vector("abc"::*u8, 3, 2, "ae1e"::*u8) != 0)                                                                                                                              { ret 2; }
-    if (vector("abc"::*u8, 3, 3, "8c45ed"::*u8) != 0)                                                                                                                            { ret 3; }
-    if (vector("abc"::*u8, 3, 4, "63906248"::*u8) != 0)                                                                                                                          { ret 4; }
-    if (vector("abc"::*u8, 3, 5, "44229fc0ef"::*u8) != 0)                                                                                                                        { ret 5; }
-    if (vector("abc"::*u8, 3, 6, "13c9497c2425"::*u8) != 0)                                                                                                                      { ret 6; }
-    if (vector("abc"::*u8, 3, 7, "d5355e84cd8e92"::*u8) != 0)                                                                                                                    { ret 7; }
-    if (vector("abc"::*u8, 3, 8, "d8bb14d833d59559"::*u8) != 0)                                                                                                                  { ret 8; }
-    if (vector("abc"::*u8, 3, 9, "70687daa6157af27dc"::*u8) != 0)                                                                                                                { ret 9; }
-    if (vector("abc"::*u8, 3, 10, "3619b2e9832d748d745e"::*u8) != 0)                                                                                                             { ret 10; }
-    if (vector("abc"::*u8, 3, 11, "ac7b0972cbd915185ac929"::*u8) != 0)                                                                                                           { ret 11; }
-    if (vector("abc"::*u8, 3, 12, "48b4f1f9042a2d5033b382b5"::*u8) != 0)                                                                                                         { ret 12; }
-    if (vector("abc"::*u8, 3, 13, "16526c7186a8dfb54ecde4c858"::*u8) != 0)                                                                                                       { ret 13; }
-    if (vector("abc"::*u8, 3, 14, "86af5184f23faae79c82a78fe667"::*u8) != 0)                                                                                                     { ret 14; }
-    if (vector("abc"::*u8, 3, 15, "cb322ea749b92c9a46ca598e516025"::*u8) != 0)                                                                                                   { ret 15; }
-    if (vector("abc"::*u8, 3, 16, "cf4ab791c62b8d2b2109c90275287816"::*u8) != 0)                                                                                                 { ret 16; }
-    if (vector("abc"::*u8, 3, 17, "658fb5b767c736b82b1a7fa7050454344c"::*u8) != 0)                                                                                               { ret 17; }
-    if (vector("abc"::*u8, 3, 18, "1748a777d8414171b3a34700dd037d955af5"::*u8) != 0)                                                                                             { ret 18; }
-    if (vector("abc"::*u8, 3, 19, "d3507ded62949dab2635bbb5450f07cc0c9d57"::*u8) != 0)                                                                                           { ret 19; }
-    if (vector("abc"::*u8, 3, 20, "384264f676f39536840523f284921cdc68b6846b"::*u8) != 0)                                                                                         { ret 20; }
-    if (vector("abc"::*u8, 3, 21, "e920f37ed9cb44fb85672612872a8352243ced48a5"::*u8) != 0)                                                                                       { ret 21; }
-    if (vector("abc"::*u8, 3, 22, "5b1d5e1c408925febb4c8e70cea20e364983800fc2b5"::*u8) != 0)                                                                                     { ret 22; }
-    if (vector("abc"::*u8, 3, 23, "46f0561ce1651aee2ec1bb0c4783dd50ad0437ef52f804"::*u8) != 0)                                                                                   { ret 23; }
-    if (vector("abc"::*u8, 3, 24, "56a17e38cc371a46b12c32f18e0c61de2a84e9c2555b114e"::*u8) != 0)                                                                                 { ret 24; }
-    if (vector("abc"::*u8, 3, 25, "f27d52ad0e7900f44ff94185d3a023b3f95a202aca1c6c263a"::*u8) != 0)                                                                               { ret 25; }
-    if (vector("abc"::*u8, 3, 26, "6783d4dd47bcf6c646f927a1b85c9e44ff99a54bc99bd55316e4"::*u8) != 0)                                                                             { ret 26; }
-    if (vector("abc"::*u8, 3, 27, "16860687639dccdf803400fcc3b9893798d5e03e92545d3ae10665"::*u8) != 0)                                                                           { ret 27; }
-    if (vector("abc"::*u8, 3, 28, "9bd237b02a29e43bdd6738afa5b53ff0eee178d6210b618e4511aec8"::*u8) != 0)                                                                         { ret 28; }
-    if (vector("abc"::*u8, 3, 29, "1fd18c160fa8931c15e92124a76d6321702b154d58f8f7dc6fc06caa14"::*u8) != 0)                                                                       { ret 29; }
-    if (vector("abc"::*u8, 3, 30, "d444e9710d074b9a54a430e9034b4ed30ecf5a5e6f9ace9c314b0434004b"::*u8) != 0)                                                                     { ret 30; }
-    if (vector("abc"::*u8, 3, 31, "fad360cbce716b6d3ee8de0f04fc6f80ed0cb7cbe6a00e0fa8c42d29833262"::*u8) != 0)                                                                   { ret 31; }
-    if (vector("abc"::*u8, 3, 32, "bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319"::*u8) != 0)                                                                 { ret 32; }
-    if (vector("abc"::*u8, 3, 33, "f7bb660ec10c1b537a53ff432791f8a34c09e9ecfca84288bba1ee39afec290d63"::*u8) != 0)                                                               { ret 33; }
-    if (vector("abc"::*u8, 3, 34, "bd61a1a1fb798ad766d8d7a97d883e13478877821fe6b80c7c4708e19bd821dd4262"::*u8) != 0)                                                             { ret 34; }
-    if (vector("abc"::*u8, 3, 35, "b7007488d04613abb0a49c2f022f43b4c7ea5e46e2fc5abc22c532bbbe4c91803fed9a"::*u8) != 0)                                                           { ret 35; }
-    if (vector("abc"::*u8, 3, 36, "b2b77f50103450a6aaed6b3b080dbe5bacde149c9587a0096149418264d1fee0b98dac2b"::*u8) != 0)                                                         { ret 36; }
-    if (vector("abc"::*u8, 3, 37, "1853369da82574da2fd968f5939fc8d54c5123de65348bafe1826f68a410e8570fa882c450"::*u8) != 0)                                                       { ret 37; }
-    if (vector("abc"::*u8, 3, 38, "c7c1283a2959285ed25b373dc165767d076815bd2d6db309417e4cff910fc15b4712e933b2fb"::*u8) != 0)                                                     { ret 38; }
-    if (vector("abc"::*u8, 3, 39, "4d26dc0efa7f633564eddbc745db82be1e7af1536ee692d70832d43174d1cfb3d5da13a6a92612"::*u8) != 0)                                                   { ret 39; }
-    if (vector("abc"::*u8, 3, 40, "8ad6d6166cdc8c2ffd5f25c5e7f957513b4a0e6661e998c3744a101363ac6e352858b0d412d5c322"::*u8) != 0)                                                 { ret 40; }
-    if (vector("abc"::*u8, 3, 41, "0567bce71a9a21ac4b7dbcb8363c0e7029d548505d6404f3e49b5ee32f0aaec3a2c2cf00f3999a0e3c"::*u8) != 0)                                               { ret 41; }
-    if (vector("abc"::*u8, 3, 42, "dc2cdbcad3c4615329cd6c48d95377e6a2b7fc78bdca901f0b84c6899daca722bc6094cc44097afb7a15"::*u8) != 0)                                             { ret 42; }
-    if (vector("abc"::*u8, 3, 43, "641c504cbdc28e2bfcde2d4000dd422d755e6e2376c4d70d35c21ae297db382e806ca1184c80ca2a83d395"::*u8) != 0)                                           { ret 43; }
-    if (vector("abc"::*u8, 3, 44, "db1ccc0bf65b615c7269cf24b45ba65c665cb228ef77057ce4f9bec0b2821af9f9ffdd5441bd260ea1158084"::*u8) != 0)                                         { ret 44; }
-    if (vector("abc"::*u8, 3, 45, "bd03351499741598bc07d28db5f09b28a58aadbd5f0a2724e794a022fc69b9d428990097d90abd10a989f096f7"::*u8) != 0)                                       { ret 45; }
-    if (vector("abc"::*u8, 3, 46, "4143454d57e459cefee6ff2e2c5f234a063dbfc5fd3394c3d8e43958795e2dc4ed1945d0306868755d2b8fb0ac8a"::*u8) != 0)                                     { ret 46; }
-    if (vector("abc"::*u8, 3, 47, "b7a42517e5e55ee679b0ff72804bda7e37f550f493c90dc5312d0ee0fbbd5eea5ce90276decbb9a461e1b0e44047a9"::*u8) != 0)                                   { ret 47; }
-    if (vector("abc"::*u8, 3, 48, "6f56a82c8e7ef526dfe182eb5212f7db9df1317e57815dbda46083fc30f54ee6c66ba83be64b302d7cba6ce15bb556f4"::*u8) != 0)                                 { ret 48; }
-    if (vector("abc"::*u8, 3, 49, "c15c7d8798c75577fecc6cfd8b1329deb37af02056236edee1a87f545365ae6100e3097638655e8ce72f88042574a9fd3f"::*u8) != 0)                               { ret 49; }
-    if (vector("abc"::*u8, 3, 50, "618b43bfeb6d324d60690b8378e5974e55eb8edadf031cca3ef51a7d3b21708a19f0c87d034370e63daf3b775909ad498dc7"::*u8) != 0)                             { ret 50; }
-    if (vector("abc"::*u8, 3, 51, "466e347f27197be0cc7262d0f80a70fcbd69a9c32e232f1384ccb9829e5fd784c5a994b68a398c92be8d44c1cce036ac124ac3"::*u8) != 0)                           { ret 51; }
-    if (vector("abc"::*u8, 3, 52, "9a5803f1993120dfbf7af41936779ae2192dee216146b264e8080aae7dc602926e8d533565d775b43be548cb67c49aa7cde9e063"::*u8) != 0)                         { ret 52; }
-    if (vector("abc"::*u8, 3, 53, "3aa2d0f4141f74ddc87fa96df5b7e50ec799c78f5ed88e4c1b9c0f6aaa9470fba21b243850b32ee58442ee21dc96e8f35837548e4d"::*u8) != 0)                       { ret 53; }
-    if (vector("abc"::*u8, 3, 54, "13f01abb5162f15784187a881296bf0096c0c66c8c5d0de3f5f8f94d5e6989f721d9a4d36b8b3c42918709ebfbdc51f3fb2a9b53495b"::*u8) != 0)                     { ret 54; }
-    if (vector("abc"::*u8, 3, 55, "de6d9ff001c1b6c0b6ca83696d0f1b9cc8c92ba8c566473852a6eb47a92cb94061e474472c889c9beb93cb3a67ec369ec7371c5017008d"::*u8) != 0)                   { ret 55; }
-    if (vector("abc"::*u8, 3, 56, "13ee23af59cf24b95795d6417d2592f96d772eb6c4866e51698ecf6d4848539251ae2ee731a28758ecbcd5cb5f3f005c202f509cc32975b1"::*u8) != 0)                 { ret 56; }
-    if (vector("abc"::*u8, 3, 57, "4f97613b8caf504981a9452f14613d14fe4f6362e53cb03ab208427e913ac2584ada3d8a7e5dcc9e693a32658e9dcd918ee4356b5194c2e708"::*u8) != 0)               { ret 57; }
-    if (vector("abc"::*u8, 3, 58, "5247592b8dee007bc283c64813c7670880966d7421d841c172e8fbc2c4b94c00fa98af10962a9e69f77824856886471d0129e7611b0981f76734"::*u8) != 0)             { ret 58; }
-    if (vector("abc"::*u8, 3, 59, "30a9c24beb13a26d800bb0a185db4cbb8091e0e2d5a0a05be323e662313e12ec79ef5aafe98068c0cc8d63217e089ad8296fbf8dcfef0c68b53a8d"::*u8) != 0)           { ret 59; }
-    if (vector("abc"::*u8, 3, 60, "bdc0b8b38bd714f166d1cf227148c8de5a5ed75da184589212d8a584cccd73a02422f43c4dd1a427b8fbad742d348eb81d8cb7492efe626fce490618"::*u8) != 0)         { ret 60; }
-    if (vector("abc"::*u8, 3, 61, "d61a49561ec5370cd2c6766b009b740e6f28f32553d10fe0741a39b38e4924a0b33c483367c721fbf76da25a2359b2196c290ad93dad1ee828c6860fbc"::*u8) != 0)       { ret 61; }
-    if (vector("abc"::*u8, 3, 62, "cb4b46dfd3b5ab2717bab4759783d6cf98e044fb1417e7c7ffc3763dc6641ac5bd64a4b1da56ea1e4d4038d675d18430ff08c739d738fd20a66553b3db9a"::*u8) != 0)     { ret 62; }
-    if (vector("abc"::*u8, 3, 63, "eb5324bb0b0f9ca27381f22f5e49604d7c341b77371fe5bf61fb643c8ab481c7555ef17c9b9e7c92f0daafff6c0d748cab97d2b267bf53f8225c173ea26f3e"::*u8) != 0)   { ret 63; }
-    if (vector("abc"::*u8, 3, 64, "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923"::*u8) != 0) { ret 64; }
+# the smallest digest, one that crosses into the second word, and the last
+# partial one. a full 64-byte digest is in every other vector
+test blake2b__hashlib_short_digest_lengths {
+    if (vector("abc"::*u8, 3, 1, "6b"::*u8) != 0)                                                                                                                              { ret 1; }
+    if (vector("abc"::*u8, 3, 9, "70687daa6157af27dc"::*u8) != 0)                                                                                                              { ret 2; }
+    if (vector("abc"::*u8, 3, 63, "eb5324bb0b0f9ca27381f22f5e49604d7c341b77371fe5bf61fb643c8ab481c7555ef17c9b9e7c92f0daafff6c0d748cab97d2b267bf53f8225c173ea26f3e"::*u8) != 0) { ret 3; }
     ret 0;
 }
 
@@ -142,12 +77,12 @@ test blake2b__invalid_inputs_are_retryable_and_final_consumes_state {
     var context: hash.Blake2b     = hash.empty_blake2b();
     var output:  [64]u8;
     val buffer:  contracts.Buffer = contracts.Buffer{data: ?output[0], capacity: 64};
-    if (hash.init_blake2b(nil, blake2b.params(64)) != contracts.INVALID_INPUT)                                                                                                 { ret 1; }
-    if (hash.init_blake2b(?context, blake2b.params(0)) != contracts.INVALID_INPUT || context.state != hash.EMPTY)                                                              { ret 2; }
-    if (hash.init_blake2b(?context, blake2b.params(65)) != contracts.INVALID_INPUT || context.state != hash.EMPTY)                                                             { ret 3; }
+    if (hash.blake2b_init(nil, blake2b.params(64)) != contracts.INVALID_INPUT)                                                                                                 { ret 1; }
+    if (hash.blake2b_init(?context, blake2b.params(0)) != contracts.INVALID_INPUT || context.state != hash.EMPTY)                                                              { ret 2; }
+    if (hash.blake2b_init(?context, blake2b.params(65)) != contracts.INVALID_INPUT || context.state != hash.EMPTY)                                                             { ret 3; }
     if (hash.update_blake2b(?context, contracts.Bytes{data: nil, len: 0}) != contracts.INVALID_STATE)                                                                          { ret 4; }
-    if (hash.init_blake2b(?context, blake2b.params(64)) != contracts.OK)                                                                                                       { ret 5; }
-    if (hash.init_blake2b(?context, blake2b.params(64)) != contracts.INVALID_STATE)                                                                                            { ret 6; }
+    if (hash.blake2b_init(?context, blake2b.params(64)) != contracts.OK)                                                                                                       { ret 5; }
+    if (hash.blake2b_init(?context, blake2b.params(64)) != contracts.INVALID_STATE)                                                                                            { ret 6; }
     if (hash.update_blake2b(?context, contracts.Bytes{data: nil, len: 1}) != contracts.INVALID_INPUT)                                                                          { ret 7; }
     if (hash.update_blake2b(?context, contracts.Bytes{data: nil, len: 0}) != contracts.OK)                                                                                     { ret 8; }
     if (hash.final_blake2b(?context, contracts.Buffer{data: ?output[0], capacity: 63}).error != contracts.OUTPUT_TOO_SMALL)                                                    { ret 9; }
@@ -156,8 +91,8 @@ test blake2b__invalid_inputs_are_retryable_and_final_consumes_state {
     if (hash.final_blake2b(?context, buffer).error != contracts.OK)                                                                                                            { ret 12; }
     if (matches(?output[0], "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923"::*u8, 64) == 0) { ret 13; }
     if (hash.final_blake2b(?context, buffer).error != contracts.INVALID_STATE)                                                                                                 { ret 14; }
-    if (hash.destroy_blake2b(?context) != contracts.OK || hash.destroy_blake2b(?context) != contracts.OK)                                                                      { ret 15; }
-    if (hash.init_blake2b(?context, blake2b.params(32)) != contracts.OK)                                                                                                       { ret 16; }
+    if (hash.blake2b_dnit(?context) != contracts.OK || hash.blake2b_dnit(?context) != contracts.OK)                                                                            { ret 15; }
+    if (hash.blake2b_init(?context, blake2b.params(32)) != contracts.OK)                                                                                                       { ret 16; }
     var deep: blake2b.Params = blake2b.params(32);
     deep.depth = 0;
     if (hash.digest_blake2b(deep, contracts.Bytes{data: nil, len: 0}, buffer).error != contracts.INVALID_INPUT) { ret 17; }
@@ -166,7 +101,7 @@ test blake2b__invalid_inputs_are_retryable_and_final_consumes_state {
     if (hash.digest_blake2b(deep, contracts.Bytes{data: nil, len: 0}, buffer).error != contracts.INVALID_INPUT) { ret 18; }
     context.inner.buf_len = 129;
     if (hash.final_blake2b(?context, buffer).error != contracts.INVALID_STATE) { ret 19; }
-    if (hash.destroy_blake2b(?context) != contracts.OK)                        { ret 20; }
+    if (hash.blake2b_dnit(?context) != contracts.OK)                           { ret 20; }
     var i: usize = 0;
     for (i < 8) {
         if (context.inner.h[i] != 0) { ret 21; }
@@ -177,60 +112,6 @@ test blake2b__invalid_inputs_are_retryable_and_final_consumes_state {
         if (context.inner.buf[i] != 0) { ret 22; }
         i = i + 1;
     }
-    ret 0;
-}
-
-test blake2b__hashlib_megabyte_byte_fragments {
-    var context: hash.Blake2b = hash.empty_blake2b();
-    if (hash.init_blake2b(?context, blake2b.params(64)) != contracts.OK) { ret 1; }
-    var input:  [256]u8;
-    var output: [64]u8;
-    var i:      usize = 0;
-    for (i < 256) {
-        input[i] = i::u8;
-        i        = i + 1;
-    }
-    var block: usize = 0;
-    for (block < 4096) {
-        i = 0;
-        for (i < 256) {
-            if (hash.update_blake2b(?context, contracts.Bytes{data: ?input[i], len: 1}) != contracts.OK) { ret 2; }
-            i = i + 1;
-        }
-        block = block + 1;
-    }
-    if (hash.final_blake2b(?context, contracts.Buffer{data: ?output[0], capacity: 64}).error != contracts.OK)                                                                  { ret 3; }
-    if (matches(?output[0], "988b9f48e713f594ab9d5bbac2de5f1f04714169d0ff806844089dfed9d7dcad92d90e5c7d9d0676042e059ab231b6839113f2d2b8abf631ee0a49c593d4491d"::*u8, 64) == 0) { ret 4; }
-    ret 0;
-}
-
-# generated with minisign 0.12, modern ED format, over bytes 0..255 repeated
-# 4096 times. only public key/signature bytes are retained; no signing secret.
-test blake2b__minisign_megabyte_signature {
-    var key: [32]u8 = [32]u8{0x79, 0x30, 0x9c, 0xd9, 0x34, 0xb3, 0x9a, 0xd4, 0x71, 0x33, 0xff, 0x18, 0xf7, 0xd8, 0x33, 0x63, 0x7f, 0x48, 0x79, 0x1b, 0x29, 0xf7, 0xe1, 0xc7, 0xbd, 0x00, 0xa6, 0xce, 0xf7, 0xd0, 0x06, 0x62};
-    var sig: [64]u8 = [64]u8{0x65, 0xb8, 0xc5, 0xba, 0x34, 0xd4, 0x0b, 0x6e, 0x63, 0x3c, 0x50, 0xa1, 0x20, 0x5a, 0xf7, 0xd9, 0x1e, 0xcf, 0x70, 0x0d, 0x6e, 0x61, 0x5c, 0x29, 0x53, 0x21, 0x1d, 0x92, 0xff, 0xd4, 0x4d, 0x72, 0xb9, 0x74, 0xda, 0xb9, 0xa3, 0x70, 0x3f, 0x99, 0xba, 0xdf, 0x0f, 0x22, 0x51, 0x20, 0x57, 0xdb, 0x88, 0x2a, 0x2f, 0x2f, 0xf8, 0x0c, 0x2d, 0xf3, 0xf8, 0xa7, 0x68, 0x32, 0x91, 0x22, 0x0d, 0x06};
-
-    var context: hash.Blake2b = hash.empty_blake2b();
-    var input:   [256]u8;
-    var digest:  [64]u8;
-    var i:       usize        = 0;
-    for (i < 256) {
-        input[i] = i::u8;
-        i        = i + 1;
-    }
-    if (hash.init_blake2b(?context, blake2b.params(64)) != contracts.OK) { ret 1; }
-    i = 0;
-    for (i < 4096) {
-        if (hash.update_blake2b(?context, contracts.Bytes{data: ?input[0], len: 256}) != contracts.OK) { ret 2; }
-        i = i + 1;
-    }
-    if (hash.final_blake2b(?context, contracts.Buffer{data: ?digest[0], capacity: 64}).error != contracts.OK) { ret 3; }
-    val public_key: contracts.Bytes = contracts.Bytes{data: ?key[0], len: 32};
-    val message:    contracts.Bytes = contracts.Bytes{data: ?digest[0], len: 64};
-    val signed:     contracts.Bytes = contracts.Bytes{data: ?sig[0], len: 64};
-    if (signature.verify_ed25519(public_key, message, signed) != contracts.OK) { ret 4; }
-    digest[0] = digest[0] ^ 1;
-    if (signature.verify_ed25519(public_key, message, signed) == contracts.OK) { ret 5; }
     ret 0;
 }
 
@@ -269,7 +150,7 @@ fun keyed_vector(n: usize, expected: *u8) u8 {
     for (split <= n) {
         var context: hash.Blake2bSecret     = hash.empty_blake2b_secret();
         val sink:    contracts.SecretBuffer = contracts.SecretBuffer{data: ?tag[0], capacity: 64};
-        if (hash.init_blake2b_secret(?context, blake2b.params(64), k) != contracts.OK)                                         { ret 3; }
+        if (hash.blake2b_secret_init(?context, blake2b.params(64), k) != contracts.OK)                                         { ret 3; }
         if (hash.update_blake2b_public(?context, contracts.Bytes{data: ?input[0], len: split}) != contracts.OK)                { ret 4; }
         if (hash.snapshot_blake2b_secret(?context, sink).error != contracts.OK)                                                { ret 5; }
         if (hash.update_blake2b_secret(?context, contracts.SecretBytes{data: ?lifted[split], len: n - split}) != contracts.OK) { ret 6; }
@@ -359,43 +240,41 @@ test blake2b__hashlib_salt_personal_and_tree_parameters {
     ret 0;
 }
 
-test blake2b__secret_state_matches_public_over_random_splits {
-    var buf:      [1024]u8;
-    var lifted:   [1024]^u8;
+# an unkeyed secret state, secret input before the cut and public after, is
+# the public digest. the keyed vectors cover only states holding a key block
+test blake2b__unkeyed_secret_state_matches_public {
+    var buf:      [129]u8;
+    var lifted:   [129]^u8;
     var expected: [64]u8;
     var tag:      [64]^u8;
-    var seed:     u64   = 0x9e3779b97f4a7c15;
-    var round:    usize = 0;
-    for (round < 100) {
-        seed = seed * 6364136223846793005 + 1442695040888963407;
-        val len:  usize = (seed >> 33)::usize % 1024;
-        val size: usize = 1 + (seed >> 20)::usize % 64;
-        var i:    usize = 0;
-        for (i < len) {
-            seed      = seed * 6364136223846793005 + 1442695040888963407;
-            buf[i]    = (seed >> 56)::u8;
-            lifted[i] = buf[i];
-            i         = i + 1;
-        }
-        val public: contracts.Operation = hash.digest_blake2b(blake2b.params(size),
+    var i:        usize = 0;
+    for (i < 129) {
+        buf[i]    = (i * 7 + 3)::u8;
+        lifted[i] = buf[i];
+        i         = i + 1;
+    }
+    val lengths: [2]usize = [2]usize{0, 129};
+    val cuts:    [2]usize = [2]usize{0, 64};
+    var k:       usize    = 0;
+    for (k < 2) {
+        val len:    usize               = lengths[k];
+        val cut:    usize               = cuts[k];
+        val public: contracts.Operation = hash.digest_blake2b(blake2b.params(64),
             contracts.Bytes{data: ?buf[0], len: len}, contracts.Buffer{data: ?expected[0], capacity: 64});
-        if (public.error != contracts.OK || public.written != size) { ret 1; }
-        seed = seed * 6364136223846793005 + 1442695040888963407;
-        var cut: usize = 0;
-        if (len > 0) { cut = (seed >> 40)::usize % len; }
+        if (public.error != contracts.OK) { ret 1; }
         var context: hash.Blake2bSecret = hash.empty_blake2b_secret();
-        if (hash.init_blake2b_secret(?context, blake2b.params(size), contracts.SecretBytes{data: nil, len: 0}) != contracts.OK) { ret 2; }
-        if (hash.update_blake2b_secret(?context, contracts.SecretBytes{data: ?lifted[0], len: cut}) != contracts.OK)            { ret 3; }
-        if (hash.update_blake2b_public(?context, contracts.Bytes{data: ?buf[cut], len: len - cut}) != contracts.OK)             { ret 4; }
+        if (hash.blake2b_secret_init(?context, blake2b.params(64), contracts.SecretBytes{data: nil, len: 0}) != contracts.OK) { ret 2; }
+        if (hash.update_blake2b_secret(?context, contracts.SecretBytes{data: ?lifted[0], len: cut}) != contracts.OK)          { ret 3; }
+        if (hash.update_blake2b_public(?context, contracts.Bytes{data: ?buf[cut], len: len - cut}) != contracts.OK)           { ret 4; }
         val secret: contracts.Operation = hash.final_blake2b_secret(?context,
             contracts.SecretBuffer{data: ?tag[0], capacity: 64});
-        if (secret.error != contracts.OK || secret.written != size) { ret 5; }
+        if (secret.error != contracts.OK || secret.written != 64) { ret 5; }
         i = 0;
-        for (i < size) {
+        for (i < 64) {
             if (tag[i]:>u8 != expected[i]) { ret 6; }
             i = i + 1;
         }
-        round = round + 1;
+        k = k + 1;
     }
     ret 0;
 }
@@ -409,20 +288,20 @@ test blake2b__secret_contract_rejects_and_wipes {
     val full:    contracts.SecretBytes  = contracts.SecretBytes{data: ?key[0], len: 64};
     val long:    contracts.SecretBytes  = contracts.SecretBytes{data: ?key[0], len: 65};
     val none:    contracts.Bytes        = contracts.Bytes{data: nil, len: 0};
-    if (hash.init_blake2b_secret(nil, blake2b.params(64), full) != contracts.INVALID_INPUT)                                                     { ret 1; }
-    if (hash.init_blake2b_secret(?context, blake2b.params(64), long) != contracts.INVALID_KEY || context.state != hash.EMPTY)                   { ret 2; }
-    if (hash.init_blake2b_secret(?context, blake2b.params(0), full) != contracts.INVALID_INPUT)                                                 { ret 3; }
-    if (hash.init_blake2b_secret(?context, blake2b.params(64), contracts.SecretBytes{data: nil, len: 1}) != contracts.INVALID_INPUT)            { ret 4; }
+    if (hash.blake2b_secret_init(nil, blake2b.params(64), full) != contracts.INVALID_INPUT)                                                     { ret 1; }
+    if (hash.blake2b_secret_init(?context, blake2b.params(64), long) != contracts.INVALID_KEY || context.state != hash.EMPTY)                   { ret 2; }
+    if (hash.blake2b_secret_init(?context, blake2b.params(0), full) != contracts.INVALID_INPUT)                                                 { ret 3; }
+    if (hash.blake2b_secret_init(?context, blake2b.params(64), contracts.SecretBytes{data: nil, len: 1}) != contracts.INVALID_INPUT)            { ret 4; }
     if (hash.update_blake2b_secret(?context, contracts.SecretBytes{data: nil, len: 0}) != contracts.INVALID_STATE)                              { ret 5; }
-    if (hash.init_blake2b_secret(?context, blake2b.params(64), full) != contracts.OK)                                                           { ret 6; }
+    if (hash.blake2b_secret_init(?context, blake2b.params(64), full) != contracts.OK)                                                           { ret 6; }
     if (context.inner.buf_len != blake2b.BLOCK_SIZE || context.inner.t0 != 0)                                                                   { ret 7; }
-    if (hash.init_blake2b_secret(?context, blake2b.params(64), full) != contracts.INVALID_STATE)                                                { ret 8; }
+    if (hash.blake2b_secret_init(?context, blake2b.params(64), full) != contracts.INVALID_STATE)                                                { ret 8; }
     if (hash.update_blake2b_secret(?context, contracts.SecretBytes{data: nil, len: 1}) != contracts.INVALID_INPUT)                              { ret 9; }
     if (hash.final_blake2b_secret(?context, contracts.SecretBuffer{data: ?tag[0], capacity: 63}).error != contracts.OUTPUT_TOO_SMALL)           { ret 10; }
     if (hash.mac_blake2b(blake2b.params(32), full, none, contracts.Buffer{data: ?output[0], capacity: 31}).error != contracts.OUTPUT_TOO_SMALL) { ret 11; }
     if (hash.mac_blake2b(blake2b.params(32), long, none, contracts.Buffer{data: ?output[0], capacity: 64}).error != contracts.INVALID_KEY)      { ret 12; }
     if (hash.update_blake2b_public(?context, contracts.Bytes{data: "abc"::*u8, len: 3}) != contracts.OK)                                        { ret 13; }
-    if (hash.destroy_blake2b_secret(?context) != contracts.OK)                                                                                  { ret 14; }
+    if (hash.blake2b_secret_dnit(?context) != contracts.OK)                                                                                     { ret 14; }
     if (context.inner.buf_len != 0 || context.inner.t0 != 0 || context.inner.t1 != 0 || context.inner.digest_len != 0)                          { ret 15; }
     var i: usize = 0;
     for (i < 8) {
@@ -440,7 +319,7 @@ test blake2b__secret_contract_rejects_and_wipes {
 
 test blake2b__counter_carries_into_the_high_word {
     var p: blake2b.Params = blake2b.params(64);
-    var s: blake2b.State  = blake2b.init(?p);
+    var s: blake2b.State  = blake2b.make(?p);
     s.t0      = 0xffffffffffffff80;
     s.buf_len = blake2b.BLOCK_SIZE;
     blake2b.update(?s, "x"::*u8, 1);

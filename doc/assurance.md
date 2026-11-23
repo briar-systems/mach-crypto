@@ -34,30 +34,26 @@ The layers run separately so one kind of evidence cannot stand in for another:
 3. Each independent or differential test runs alone in both profiles.
 4. Each hostile or invalid-input test runs alone in both profiles.
 5. Each behavioral zeroization test runs alone in both profiles.
-6. Every leakage control in `assurance/leakage.tsv` must be rejected for every
-   target and profile, with the diagnostic that row names. Rejection for any
-   other reason fails. The controls are a secret-dependent branch
-   (`test/leakage-negative`), a table read at a secret index
-   (`test/leakage-index`), which is the shape the fixed-base comb tables must
-   never take: they read every entry under a mask, and a bare secret multiply
-   (`test/multiply-negative`). That last row names the targets on which mach
-   admits the multiply as constant-time hardware (`admitted`). On those the
-   control must compile and its IR must carry the secret multiply, so the row
-   is the record of where `crypto.internal.word` computes secret products in
-   hardware, and a change in mach's catalog fails the run until the record is
-   updated on purpose.
-7. Every project is built for all six targets and both profiles with emitted
-   IR and emitted assembly (IR verification is mandatory in mach 5.0).
+6. Every constant-time algorithm in `assurance/algorithms.tsv` is recorded as
+   accepted by mach's secret-flow checker in the verified build of every
+   target and profile. That the checker refuses what it must, among it a
+   secret-dependent branch and a table read at a secret index, which is the
+   shape the fixed-base comb tables must never take (they read every entry
+   under a mask), is checked by mach's own test corpus, in `test/refuse/secret/`
+   of the mach repository, which every compiler release runs. So are the
+   targets on which mach admits a secret multiply as constant-time hardware,
+   which decide where `crypto.internal.word` computes secret products in
+   hardware: `test/run/secret/hard_admitted.mach` must build on each of them
+   and `test/refuse/secret/hard_target.mach` is refused on the others.
+7. Every project is built for every target its manifest declares and both
+   profiles with emitted IR and emitted assembly (IR verification is mandatory
+   in mach 5.0).
 8. A second clean matrix build must produce byte-identical artifacts.
 9. Every module named by `assurance/zeroization.tsv` must retain explicit
-   zeroization calls in generated IR. Security-critical release assembly named
-   by that policy must also retain the zeroization, either as a call or as the
-   inline expansion the release IR records, since mach 5.0 release builds
-   inline small helpers across modules and the wipe survives by the language's
-   zeroizing-write guarantee.
+   calls to `std.crypto.ct.zeroize` in generated IR. Security-critical release
+   assembly named by that policy must also reference it.
 
-`assurance/leakage.tsv` lists the leakage controls and the rejection each must
-produce. `assurance/tests.tsv` binds each focused test to its category, algorithm, and
+`assurance/tests.tsv` binds each focused test to its category, algorithm, and
 vector or contract source. `assurance/algorithms.tsv` is the algorithm and
 constant-time coverage inventory; its `hardware_multiply` column is `word`
 when the algorithm's secret products go through `crypto.internal.word`

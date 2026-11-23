@@ -144,16 +144,16 @@ fun median(op: fun(*Bench) bool, calls: i64) i64 {
     var samples: [5]i64;
     var batch:   usize = 0;
     for (batch < BATCHES) {
-        val started: time.InstantClock = time.instant();
-        if (sel started.err) { ret -1; }
+        val res_started: time.InstantClock = time.instant();
+        if (sel res_started.err) { ret -1; }
         var call: i64 = 0;
         for (call < calls) {
             if (!op(?bench)) { ret -1; }
             call = call + 1;
         }
-        val took: time.Elapsed = time.elapsed(started.ok);
-        if (sel took.err) { ret -1; }
-        samples[batch] = took.ok / calls;
+        val res_took: time.Elapsed = time.elapsed(res_started.ok);
+        if (sel res_took.err) { ret -1; }
+        samples[batch] = res_took.ok / calls;
         batch          = batch + 1;
     }
     var i: usize = 1;
@@ -185,9 +185,9 @@ fun report(name: str, op: fun(*Bench) bool, calls: i64) bool {
 
 fun calls_from_args(argc: i64, argv: **u8) i64 {
     if (argc < 2) { ret DEFAULT_CALLS; }
-    val parsed: res[i64, parse.ParseError] = parse.parse_i64(argv[1]::str, 10);
-    if (sel parsed.err) { ret DEFAULT_CALLS; }
-    val calls: i64 = parsed.ok;
+    val res_parsed: res[i64, parse.ParseError] = parse.parse_i64(argv[1]::str, 10);
+    if (sel res_parsed.err) { ret DEFAULT_CALLS; }
+    val calls: i64 = res_parsed.ok;
     if (calls < 1) { ret DEFAULT_CALLS; }
     ret calls;
 }

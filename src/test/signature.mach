@@ -402,58 +402,6 @@ test ecdsa_p_384__nist_sha_384_verification_vector {
     ret 0;
 }
 
-#[testing]
-fun set_openssl_p384_public(output: *u8) bool {
-    ret decode_hex(
-        "049816a286606cea1874f2f550d4121c96027902525ddbbca64f7d720f58218f2a84bcf9767890e6e9e4bdf0b328d37892f2565f1ebf645970e24c194b47c797bca53720c2c6fcc9c065ca85d3f23a89bfaf5209247c536d6facd3102f0bb17209"::*u8,
-        194, output);
-}
-
-#[testing]
-fun set_openssl_p384_signature(output: *u8) bool {
-    ret decode_hex(
-        "306502303adc7480a491147009ff35616cef36c90a3724b915deb9ad1b807e44d568e221da28d876ef3b3de4b664a3ce2901244b023100e1d37af608875c086063043afa1500fb2c6b15955feff2a2f28b35d331d3331cec7740e56b6875042790371a4ef5ee9c"::*u8,
-        206, output);
-}
-
-test ecdsa_p_384__independent_openssl_vector_rejects_tampering {
-    var public_key: [97]u8;
-    var encoded:    [103]u8;
-    var message:    [32]u8;
-    copy_public(?message[0], "mach-crypto P-384 OpenSSL vector"::*u8, 32);
-    if (!set_openssl_p384_public(?public_key[0]) ||
-        !set_openssl_p384_signature(?encoded[0])) { ret 1; }
-    if (signature.verify_ecdsa_p384_sha384(
-        contracts.Bytes{data: ?public_key[0], len: 97},
-        contracts.Bytes{data: ?message[0], len: 32},
-        contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.OK) { ret 2; }
-
-    message[31] = message[31] ^ 1;
-    if (signature.verify_ecdsa_p384_sha384(
-        contracts.Bytes{data: ?public_key[0], len: 97},
-        contracts.Bytes{data: ?message[0], len: 32},
-        contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.AUTH_FAILED) {
-        ret 3;
-    }
-    message[31]  = message[31] ^ 1;
-    encoded[102] = encoded[102] ^ 1;
-    if (signature.verify_ecdsa_p384_sha384(
-        contracts.Bytes{data: ?public_key[0], len: 97},
-        contracts.Bytes{data: ?message[0], len: 32},
-        contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.AUTH_FAILED) {
-        ret 4;
-    }
-    encoded[102]   = encoded[102] ^ 1;
-    public_key[96] = public_key[96] ^ 1;
-    if (signature.verify_ecdsa_p384_sha384(
-        contracts.Bytes{data: ?public_key[0], len: 97},
-        contracts.Bytes{data: ?message[0], len: 32},
-        contracts.Bytes{data: ?encoded[0], len: 103}) != contracts.INVALID_KEY) {
-        ret 5;
-    }
-    ret 0;
-}
-
 test ecdsa_p_384__scalars_strict_der_points_and_nil_inputs_are_bounded {
     var public_key: [97]u8;
     var encoded:    [104]u8;
@@ -793,33 +741,16 @@ test ecdsa_p_521__wycheproof_sha_512_vectors {
     ret 0;
 }
 
-test ecdsa_p_256__openssl_sha_384_vectors {
-    val key0: *u8 = "0476dc67776cb013997928757aa93bc1e40053389e3e9ab8aadd56f2cbe60c4cf4e18b4044f6be0250d7fbac44fc583a8f7cd276e95cb83c93824443bebf80b0ac"::*u8;
-    if (!ecdsa_case(signature.CURVE_P256, signature.HASH_SHA384, key0, 130, ""::*u8, 0, "304502202d89df9ac20c688df92bee5a8a7e3f6ef3adff575e4eb7a981e1365906ce3592022100d4ab363993c4eada31cecc0edea64e360eb288bf715186c149408f8c377c0418"::*u8, 142, true))                                                                                                                                                                                                              { ret 1; }
-    if (!ecdsa_case(signature.CURVE_P256, signature.HASH_SHA384, key0, 130, "6d6163682d63727970746f"::*u8, 22, "30450220497bd7335d8b44ddbcdd48c74f05704b0f0a2a82c22d48f2d3121c78787f73b7022100e1dd34929c95ea3ca201bfff5d9e38f12c24232806a4f8cefd69cb66701f2099"::*u8, 142, true))                                                                                                                                                                                       { ret 2; }
-    if (!ecdsa_case(signature.CURVE_P256, signature.HASH_SHA384, key0, 130, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "3046022100fe67afd02759493853f08c6d2db0686f1c25e4cc5ce8c9405709881a9b6613c00221009c2a2e93ecf01c11d8c4f5e8e316c4552b2090eedf3cd78eceb434dddf26ef9b"::*u8, 144, true))  { ret 3; }
-    if (!ecdsa_case(signature.CURVE_P256, signature.HASH_SHA384, key0, 130, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616264"::*u8, 200, "3046022100fe67afd02759493853f08c6d2db0686f1c25e4cc5ce8c9405709881a9b6613c00221009c2a2e93ecf01c11d8c4f5e8e316c4552b2090eedf3cd78eceb434dddf26ef9b"::*u8, 144, false)) { ret 4; }
-    if (!ecdsa_case(signature.CURVE_P256, signature.HASH_SHA384, key0, 130, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "3046022100fe67afd02759493853f08c6d2db0686f1c25e4cc5ce8c9405709881a9b6613c00221009c2a2e93ecf01c11d8c4f5e8e316c4552b2090eedf3cd78eceb434dddf26ef9a"::*u8, 144, false)) { ret 5; }
-    ret 0;
-}
-
-test ecdsa_p_521__openssl_sha_256_vectors {
-    val key0: *u8 = "0401838db4de97cf8e1730b207d5b22ef3b7af4f2f85f3465687b2f1121e28f124b78aef0b6db3705187f85c803854b03b641baeeafad258a1704f45cb77d6d178d6760021169b27af9a9124b43e69c996fbe417de1e4dcee7875cdbc0a03683bf9e850b53fe562ce9d7ec314c4b5a9bedb23653ec402b28b9f621769682829ee8dae9bc67"::*u8;
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA256, key0, 266, ""::*u8, 0, "30818802420199207c7f2aa3a6b5f97ef98e8058f65ce167c8def0abff130dcfe1308db193dad7ddf14ef50ab8420127aa8ff418aaf54c4b24e8b327553376a6122addb010c2550242013125ae457522476cf1ebaa897a1969adb854d0cfae20fa0bc886cad82b9f9ca33cd54f3d52a6de0a1c382e638fdf1613422a337ce77c0f6f6085f6e349cb968227"::*u8, 278, true))                                                                                                                                                                                                          { ret 1; }
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA256, key0, 266, "6d6163682d63727970746f"::*u8, 22, "30818802420122df3f8e85d41960f123b75eff6a63b16feb9fd7e430b17537c81c16b82460e735435e0688550bce304245a3f086de738a3ab12cda24debc0e1bd935537bcfbedf024201b119e857ef3451ba2844a70379bdf1488a56ad31409a78d1b919f1c4394e6cb4d39b3e1f5d6ec6c6002c5aa1a11d0f8b5ca5cc14d92bb863650524131bb0813d47"::*u8, 278, true))                                                                                                                                                                                   { ret 2; }
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA256, key0, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "308187024201ab15596d6eb429c8ee9bd1247d3aa00c77191442e483a155eaf8b211e7d1b924e894920d44d933a1abf672d373733aea9a28228aeca36428a5aa7af6dd1fa44252024156ca1489a869e58ae12667dbcd04d0106780fea56deff09d80ec4d856fb89363d6ca3aafb0cdb61d83b8e02c2b19e5f3682ae6fb39248f51fa0339d9a6baeab688"::*u8, 276, true))  { ret 3; }
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA256, key0, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616264"::*u8, 200, "308187024201ab15596d6eb429c8ee9bd1247d3aa00c77191442e483a155eaf8b211e7d1b924e894920d44d933a1abf672d373733aea9a28228aeca36428a5aa7af6dd1fa44252024156ca1489a869e58ae12667dbcd04d0106780fea56deff09d80ec4d856fb89363d6ca3aafb0cdb61d83b8e02c2b19e5f3682ae6fb39248f51fa0339d9a6baeab688"::*u8, 276, false)) { ret 4; }
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA256, key0, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "308187024201ab15596d6eb429c8ee9bd1247d3aa00c77191442e483a155eaf8b211e7d1b924e894920d44d933a1abf672d373733aea9a28228aeca36428a5aa7af6dd1fa44252024156ca1489a869e58ae12667dbcd04d0106780fea56deff09d80ec4d856fb89363d6ca3aafb0cdb61d83b8e02c2b19e5f3682ae6fb39248f51fa0339d9a6baeab689"::*u8, 276, false)) { ret 5; }
-    ret 0;
-}
-
-test ecdsa_p_521__openssl_sha_384_vectors {
-    val key0: *u8 = "040113318d9f0e598b5551e40d9ebedc9fbcb8178fffdfbb07c8450c06a0534a9774de48934d54b7b9b6c8018ece56f454778aaf473fd43068c4c5f5d33c1439a692c4015ff04530b6e21c36a86f6e715d6dc1b6e2234b083a101eb3b0595a87e89c42c99af267d940f282f7445954972d428a7179250928f32c0bef46f50806aa2f7bf6c2"::*u8;
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA384, key0, 266, ""::*u8, 0, "308187024200f1ab1890be41abc9a1061abd449c6dde06ef539566b4c05e04bc05e8a50b4f5014d4f05ad30b84a5d3eca432b42062abaa2b459fd9b8dc5b4019fc92ffc687d68902416a9796d83135ff62e7ecf3f9f842308339a2a4291e6c4efb540c0a972c7a9fccec878e526205a1d220d5233ed44d04912d7aa445ca46eca6197e3cd59e9b93a7b1"::*u8, 276, true))                                                                                                                                                                                                              { ret 1; }
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA384, key0, 266, "6d6163682d63727970746f"::*u8, 22, "3081870241754600f824c5540e65c1757c6af0110cfc7fdf1b9bd349932cd021a0fac3b78237e07a6698fd5c129cfdb30f07b0c8078b37882eb7efaf9b38924adda471a58e95024201756b4631aa3e7775233cf7fc5e205c0a4075f201ac06547c43204ae3fbd89623bdac640df4244609a6c6abdf2628949f4e811cab003e339df88d49abfb447c3a3a"::*u8, 276, true))                                                                                                                                                                                       { ret 2; }
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA384, key0, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "308188024200efc5ce4815c1c0f120588b9d2194c1d4fff8df5ee88bf6a333db5b97ebdb447cd88a86e3609785e4ee749cd84eef6b7a3190425f674f6a96e0a3d81f477899030d024201ca216fe2445c91c487a4d5c2934e1aafda7d7daeaf4719d72d6f9aa1f9d412f925fa064cd30c8fe0370ffbb2d74878e07756b1375134435d73960d510ecfd30fc9"::*u8, 278, true))  { ret 3; }
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA384, key0, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616264"::*u8, 200, "308188024200efc5ce4815c1c0f120588b9d2194c1d4fff8df5ee88bf6a333db5b97ebdb447cd88a86e3609785e4ee749cd84eef6b7a3190425f674f6a96e0a3d81f477899030d024201ca216fe2445c91c487a4d5c2934e1aafda7d7daeaf4719d72d6f9aa1f9d412f925fa064cd30c8fe0370ffbb2d74878e07756b1375134435d73960d510ecfd30fc9"::*u8, 278, false)) { ret 4; }
-    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA384, key0, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "308188024200efc5ce4815c1c0f120588b9d2194c1d4fff8df5ee88bf6a333db5b97ebdb447cd88a86e3609785e4ee749cd84eef6b7a3190425f674f6a96e0a3d81f477899030d024201ca216fe2445c91c487a4d5c2934e1aafda7d7daeaf4719d72d6f9aa1f9d412f925fa064cd30c8fe0370ffbb2d74878e07756b1375134435d73960d510ecfd30fc8"::*u8, 278, false)) { ret 5; }
+# pairings Wycheproof does not ship, one OpenSSL-compatible vector each, digest
+# longer than the order for p-256 and shorter for p-521, then a tampered signature
+test ecdsa__openssl_vectors_for_the_pairings_wycheproof_lacks {
+    val p256: *u8 = "0476dc67776cb013997928757aa93bc1e40053389e3e9ab8aadd56f2cbe60c4cf4e18b4044f6be0250d7fbac44fc583a8f7cd276e95cb83c93824443bebf80b0ac"::*u8;
+    if (!ecdsa_case(signature.CURVE_P256, signature.HASH_SHA384, p256, 130, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "3046022100fe67afd02759493853f08c6d2db0686f1c25e4cc5ce8c9405709881a9b6613c00221009c2a2e93ecf01c11d8c4f5e8e316c4552b2090eedf3cd78eceb434dddf26ef9b"::*u8, 144, true)) { ret 1; }
+    val p521_sha256: *u8 = "0401838db4de97cf8e1730b207d5b22ef3b7af4f2f85f3465687b2f1121e28f124b78aef0b6db3705187f85c803854b03b641baeeafad258a1704f45cb77d6d178d6760021169b27af9a9124b43e69c996fbe417de1e4dcee7875cdbc0a03683bf9e850b53fe562ce9d7ec314c4b5a9bedb23653ec402b28b9f621769682829ee8dae9bc67"::*u8;
+    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA256, p521_sha256, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "308187024201ab15596d6eb429c8ee9bd1247d3aa00c77191442e483a155eaf8b211e7d1b924e894920d44d933a1abf672d373733aea9a28228aeca36428a5aa7af6dd1fa44252024156ca1489a869e58ae12667dbcd04d0106780fea56deff09d80ec4d856fb89363d6ca3aafb0cdb61d83b8e02c2b19e5f3682ae6fb39248f51fa0339d9a6baeab688"::*u8, 276, true)) { ret 2; }
+    val p521_sha384: *u8 = "040113318d9f0e598b5551e40d9ebedc9fbcb8178fffdfbb07c8450c06a0534a9774de48934d54b7b9b6c8018ece56f454778aaf473fd43068c4c5f5d33c1439a692c4015ff04530b6e21c36a86f6e715d6dc1b6e2234b083a101eb3b0595a87e89c42c99af267d940f282f7445954972d428a7179250928f32c0bef46f50806aa2f7bf6c2"::*u8;
+    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA384, p521_sha384, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "308188024200efc5ce4815c1c0f120588b9d2194c1d4fff8df5ee88bf6a333db5b97ebdb447cd88a86e3609785e4ee749cd84eef6b7a3190425f674f6a96e0a3d81f477899030d024201ca216fe2445c91c487a4d5c2934e1aafda7d7daeaf4719d72d6f9aa1f9d412f925fa064cd30c8fe0370ffbb2d74878e07756b1375134435d73960d510ecfd30fc9"::*u8, 278, true))  { ret 3; }
+    if (!ecdsa_case(signature.CURVE_P521, signature.HASH_SHA384, p521_sha384, 266, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263"::*u8, 200, "308188024200efc5ce4815c1c0f120588b9d2194c1d4fff8df5ee88bf6a333db5b97ebdb447cd88a86e3609785e4ee749cd84eef6b7a3190425f674f6a96e0a3d81f477899030d024201ca216fe2445c91c487a4d5c2934e1aafda7d7daeaf4719d72d6f9aa1f9d412f925fa064cd30c8fe0370ffbb2d74878e07756b1375134435d73960d510ecfd30fc8"::*u8, 278, false)) { ret 4; }
     ret 0;
 }
 
@@ -1625,49 +1556,6 @@ test rsa_pkcs1__nist_cavp_sha_256_and_sha_384_verification {
     if (signature.verify_rsa_pkcs1_sha384(key384,
         contracts.Bytes{data: ?message384[0], len: 128},
         contracts.Bytes{data: ?encoded384[0], len: 256}) != contracts.OK) { ret 4; }
-    ret 0;
-}
-
-test rsa_pkcs1__openssl_sha_256_and_sha_384_vectors_preserve_inputs {
-    var modulus:    [256]u8;
-    var message:    [33]u8;
-    var encoded256: [256]u8;
-    var encoded384: [256]u8;
-    if (!decode_hex(
-        "cd0d4a9e79ece89342b35e97d4dfc9461b68b46cda89f0bc9681d7056ddaf8713b5ada74e9e26c5178e84f01ae2abb072b7591f6d0fb82d245dffc107eae711c1c966a3c1016e38a1cc3bd93daabbda4ecd5c6307813b9e5ac195a30a05debf13d83afa1bcd20d992b4c0634bfc6aeca3b0c21a2c89d914064848c724ccad4b31a3efede42a7de0f6cbedeee7a0cd9809e1052f7583ae9b81188b436b0f5da5bd94ca77cce5cb7ae5293937024660e63ca43a38d33d8a49a2133c426156a1860d2a6cf0253ca7cdcb66b4b0111f1107aeeece92d806d26626784016262ba1e9a1436ecac8fd1cccdb8e57f1a7e1da27200514fcd8fd399852fe745c239520ee1"::*u8,
-        512, ?modulus[0]) || !decode_hex(
-        "6d6163682072736120706b63733120636572746966696361746520766563746f72"::*u8,
-        66, ?message[0]) || !decode_hex(
-        "c447f3b9ffa9cf464eb8e63d48949081f198902121d0fc310079b981aa80d9bf3f781f9052f9f32ac55d5639d57f53b479702619ffdd57a565726e315c933ffc1a3be331568072efcf990f43e96663d13992ce942a79880b968ae45bb148354d42f6aaeb522249bd30c28efd983321f166f9d13c81d65ff9a92f23e98a4e44e8edce9e134f84059f28e0892ab6f9d91a0eed72c32142d6c34f6d8c58f4a231c3be8bf12373f7fb3b80a70004818cf779962a3174bbdcbf2ab7e770142193fabf20d394a66f928881519bb48eaed01603d517acb155fe4be54d34ee5836eef5cf11fe53a9f9af061585d95013fab3a0afe4f10f84d9f761bd4524cb859933c8ca"::*u8,
-        512, ?encoded256[0]) || !decode_hex(
-        "b8e7e3d3a50ef5feaac07b1319316b01b9e0ad28f985db9332b2bd309940363188b3d2d9029903e5909dbdf5f1315383fdb9c8a2c76b50148fe70c0b7a30298a5866758794ff21480d09fc24bac5bae365d0cc48edb469d209f584e5565eaa4d261da8389d596673e19d79ccfab6003cf4f0b3e93e25cebfa7ba65d80fff15c8da3a0a7f76fc2e41b74d0b86181c9685cd5be61050cbe95bc5a3eee6b154a74c660f10965a3a2a980aaab6c43fc0b86f77ada49980f7ed9c308f60140605ee225e1f23f41bf1e028f3374c4377ef05a0428c6f523b56b766c3ed9d02411663cb60f6b48550adfa5774898b80f020e86795a55df59d1e44dd0f7de4e92ab2ca7d"::*u8,
-        512, ?encoded384[0])) { ret 1; }
-    val exponent:   [3]u8                  = [3]u8{1, 0, 1};
-    val public_key: signature.RsaPublicKey = signature.RsaPublicKey{
-        modulus:  contracts.Bytes{data: ?modulus[0], len: 256},
-        exponent: contracts.Bytes{data: (?exponent[0]):~*u8, len: 3}
-    };
-    var modulus_snapshot:    [256]u8;
-    var exponent_snapshot:   [3]u8;
-    var message_snapshot:    [33]u8;
-    var encoded256_snapshot: [256]u8;
-    var encoded384_snapshot: [256]u8;
-    copy_public(?modulus_snapshot[0], ?modulus[0], 256);
-    copy_public(?exponent_snapshot[0], (?exponent[0]):~*u8, 3);
-    copy_public(?message_snapshot[0], ?message[0], 33);
-    copy_public(?encoded256_snapshot[0], ?encoded256[0], 256);
-    copy_public(?encoded384_snapshot[0], ?encoded384[0], 256);
-    if (signature.verify_rsa_pkcs1_sha256(public_key,
-        contracts.Bytes{data: ?message[0], len: 33},
-        contracts.Bytes{data: ?encoded256[0], len: 256}) != contracts.OK) { ret 2; }
-    if (signature.verify_rsa_pkcs1_sha384(public_key,
-        contracts.Bytes{data: ?message[0], len: 33},
-        contracts.Bytes{data: ?encoded384[0], len: 256}) != contracts.OK) { ret 3; }
-    if (!public_equal(?modulus[0], ?modulus_snapshot[0], 256) ||
-        !public_equal((?exponent[0]):~*u8, ?exponent_snapshot[0], 3) ||
-        !public_equal(?message[0], ?message_snapshot[0], 33) ||
-        !public_equal(?encoded256[0], ?encoded256_snapshot[0], 256) ||
-        !public_equal(?encoded384[0], ?encoded384_snapshot[0], 256)) { ret 4; }
     ret 0;
 }
 

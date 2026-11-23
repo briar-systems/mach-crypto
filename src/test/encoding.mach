@@ -83,7 +83,7 @@ fun probe_make(probe: *ProbeAllocator) secret.Allocator {
         i                = i + 1;
     }
     ret secret.Allocator{context: probe::ptr, secret_context: nil,
-        allocate_fn: probe_allocate, deallocate_fn: probe_deallocate,
+        fn_allocate: probe_allocate, fn_deallocate: probe_deallocate,
         initialized: true};
 }
 
@@ -118,6 +118,7 @@ fun secret_equal(left: *^u8, right: *^u8, len: usize) bool {
 }
 
 #[testing]
+#[constant_time("soft")]
 fun nibble(byte: u8) u8 {
     if (byte >= '0' && byte <= '9') { ret byte - '0'; }
     if (byte >= 'a' && byte <= 'f') { ret byte - 'a' + 10; }
@@ -140,7 +141,7 @@ fun decode_hex(text: *u8, text_len: usize, output: *u8) bool {
 }
 
 #[testing]
-#[oblivious]
+#[constant_time("soft")]
 fun decode_secret_hex(text: *u8, text_len: usize, output: *^u8) bool {
     if (text == nil || output == nil || text_len % 2 != 0) { ret false; }
     var i: usize = 0;
@@ -399,7 +400,7 @@ test keys__rfc_8410_ed25519_and_x25519_containers_are_exact_and_bounded {
         contracts.SecretBuffer{data: ?roundtrip[0], capacity: 48});
     if (written.error != contracts.OK || written.written != 48 ||
         !secret_equal(?roundtrip[0], input.data, 48)) { ret 4; }
-    if (keys.destroy_private(?key) != contracts.OK ||
+    if (keys.private_dnit(?key) != contracts.OK ||
         probe.zeroized_releases != 1 || probe.nonzero_releases != 0) { ret 5; }
 
     if (!set_x25519_pkcs8(?encoded[0]) ||
@@ -407,7 +408,7 @@ test keys__rfc_8410_ed25519_and_x25519_containers_are_exact_and_bounded {
         key.algorithm != keys.X25519 ||
         keys.private_bytes(?key, ?private_value) != contracts.OK ||
         private_value.data[0]:>u8 != 0x77 || private_value.data[31]:>u8 != 0x2a) { ret 6; }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 2) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 2) {
         ret 7;
     }
 
@@ -476,7 +477,7 @@ test keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree {
     var private_value: contracts.SecretBytes;
     if (keys.private_bytes(?key, ?private_value) != contracts.OK ||
         private_value.len != 32 || private_value.data[31]:>u8 != 1) { ret 3; }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 1) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 1) {
         ret 4;
     }
 
@@ -501,7 +502,7 @@ test keys__independent_p_256_sec1_pkcs8_and_spki_vectors_agree {
         keys.decode_pkcs8(contracts.SecretBytes{data: ?pkcs8[0], len: 138},
         ?owner, ?key) != contracts.OK || key.algorithm != keys.P256 ||
         key.container != keys.PKCS8 || key.encoded_len != 138) { ret 6; }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 2) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 2) {
         ret 7;
     }
 
@@ -711,7 +712,7 @@ test keys__openssl_rsa_containers_preserve_exact_public_and_private_parts {
         contracts.SecretBuffer{data: key.material.data,
         capacity: key.material.len}) != contracts.OK ||
         key.material.data[0]:>u8 != 0x37) { ret 7; }
-    if (keys.destroy_private(?key) != contracts.OK ||
+    if (keys.private_dnit(?key) != contracts.OK ||
         probe.zeroized_releases != 1 || probe.nonzero_releases != 0) { ret 8; }
 
     if (!set_rsa_pkcs8(?pkcs8[0]) ||
@@ -720,7 +721,7 @@ test keys__openssl_rsa_containers_preserve_exact_public_and_private_parts {
         ?owner, ?key) != contracts.OK || key.container != keys.RSA_PRIVATE) {
         ret 9;
     }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 2) {
+    if (keys.private_dnit(?key) != contracts.OK || probe.zeroized_releases != 2) {
         ret 10;
     }
 
@@ -792,10 +793,22 @@ test keys__pem_round_trips_once_owned_private_der_and_borrowed_public_der {
         contracts.SecretBuffer{data: ?in_place_pem[0], capacity: 128},
         ?secret_block) != contracts.OK || secret_block.der.len != 48 ||
         !secret_equal(?in_place_pem[0], ?private_der[0], 48)) { ret 14; }
-    if (keys.destroy_private(?private_key) != contracts.OK ||
+    if (keys.private_dnit(?private_key) != contracts.OK ||
         probe.zeroized_releases != 1) { ret 4; }
 
-    val attempts_before: usize = probe.allocation_attempts;
+    # a truncated header, body, footer or final dash fails before any allocation
+    val attempts_before: usize    = probe.allocation_attempts;
+    val cuts:            [4]usize = [4]usize{10, 40, 100, 117};
+    var c:               usize    = 0;
+    for (c < 4) {
+        if (keys.decode_private_pem(
+            contracts.SecretBytes{data: ?private_pem[0], len: cuts[c]},
+            ?owner, ?private_key) == contracts.OK ||
+            probe.allocation_attempts != attempts_before ||
+            secret.active(?private_key.material) ||
+            secret.cleanup_pending(?private_key.material)) { ret 15; }
+        c = c + 1;
+    }
     if (keys.decode_private_pem(
         contracts.SecretBytes{data: ?private_pem[0], len: 119},
         ?owner, ?private_key) != contracts.OK ||
@@ -807,7 +820,7 @@ test keys__pem_round_trips_once_owned_private_der_and_borrowed_public_der {
         private_value.data[0]:>u8 != 0x9d || private_value.data[31]:>u8 != 0x60) {
         ret 6;
     }
-    if (keys.destroy_private(?private_key) != contracts.OK ||
+    if (keys.private_dnit(?private_key) != contracts.OK ||
         probe.zeroized_releases != 2) { ret 7; }
 
     var public_der: [44]u8;
@@ -879,7 +892,7 @@ test keys__allocation_and_cleanup_failures_retain_exact_ownership {
         !secret.cleanup_pending(?key.material) || key.algorithm != 0 ||
         probe.zeroized_releases != 1) { ret 4; }
     probe.fail_deallocate_at = 0;
-    if (keys.destroy_private(?key) != contracts.OK ||
+    if (keys.private_dnit(?key) != contracts.OK ||
         secret.cleanup_pending(?key.material)) { ret 5; }
 
     owner = probe_make(?probe);
@@ -897,43 +910,13 @@ test keys__allocation_and_cleanup_failures_retain_exact_ownership {
         !secret.cleanup_pending(?key.material) || probe.zeroized_releases != 1 ||
         probe.nonzero_releases != 0) { ret 7; }
     probe.fail_deallocate_at = 0;
-    if (keys.destroy_private(?key) != contracts.OK) { ret 8; }
+    if (keys.private_dnit(?key) != contracts.OK) { ret 8; }
     ret 0;
 }
 
-test keys__private_pem_truncation_fails_before_allocation_at_every_boundary {
-    var der_input: [48]^u8;
-    if (!set_ed25519_pkcs8(?der_input[0])) { ret 1; }
-    var pem_input: [128]^u8;
-    val encoded:   contracts.Operation = pem.encode_secret(
-        contracts.Bytes{data: "PRIVATE KEY"::*u8, len: 11},
-        contracts.SecretBytes{data: ?der_input[0], len: 48},
-        contracts.SecretBuffer{data: ?pem_input[0], capacity: 128});
-    if (encoded.error != contracts.OK || encoded.written != 119) { ret 2; }
-    var probe: ProbeAllocator;
-    var owner: secret.Allocator = probe_make(?probe);
-    var key:   keys.PrivateKey  = keys.empty_private();
-    var i:     usize            = 0;
-    for (i < 118) {
-        if (keys.decode_private_pem(
-            contracts.SecretBytes{data: ?pem_input[0], len: i},
-            ?owner, ?key) == contracts.OK || probe.allocation_attempts != 0 ||
-            secret.active(?key.material) || secret.cleanup_pending(?key.material)) {
-            ret 3;
-        }
-        i = i + 1;
-    }
-    if (keys.decode_private_pem(
-        contracts.SecretBytes{data: ?pem_input[0], len: 118},
-        ?owner, ?key) != contracts.OK || probe.allocation_attempts != 1) { ret 4; }
-    if (keys.destroy_private(?key) != contracts.OK || probe.zeroized_releases != 1) {
-        ret 5;
-    }
-    ret 0;
-}
-
-# Mozilla/curl bundles use 76 columns; output remains canonical 64-column PEM.
-test pem__mime_wrapped_input_preserves_public_and_secret_der {
+# a body keeps the width of its first line, up to the mime limit of 76 columns
+# that Mozilla and curl bundles use. output remains canonical 64-column PEM
+test pem__body_width_follows_the_first_line_up_to_the_mime_limit {
     val input:   *u8   = "-----BEGIN TEST-----\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAA\n-----END TEST-----\n"::*u8;
     val length:  usize = 199;
     var decoded: [128]u8;
@@ -963,21 +946,15 @@ test pem__mime_wrapped_input_preserves_public_and_secret_der {
             contracts.Buffer{data: ?decoded[0], capacity: 128}, ?block) == contracts.OK) { ret 4; }
         i = i + 1;
     }
-    ret 0;
-}
 
-# a body keeps the width of its first line, up to the mime limit of 76 columns
-test pem__body_width_follows_the_first_line_up_to_the_mime_limit {
-    var decoded: [128]u8;
-    var block:   pem.Block;
     if (pem.decode(contracts.Bytes{data: "-----BEGIN TEST-----\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAA\n-----END TEST-----\n"::*u8, len: 191},
         contracts.Buffer{data: ?decoded[0], capacity: 128}, ?block) != contracts.OK ||
-        block.der.len != 111) { ret 1; }
+        block.der.len != 111) { ret 5; }
     if (pem.decode(contracts.Bytes{data: "-----BEGIN TEST-----\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n-----END TEST-----\n"::*u8, len: 121},
-        contracts.Buffer{data: ?decoded[0], capacity: 128}, ?block) == contracts.OK) { ret 2; }
+        contracts.Buffer{data: ?decoded[0], capacity: 128}, ?block) == contracts.OK) { ret 6; }
     if (pem.decode(contracts.Bytes{data: "-----BEGIN TEST-----\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAA\n-----END TEST-----\n"::*u8, len: 187},
-        contracts.Buffer{data: ?decoded[0], capacity: 128}, ?block) == contracts.OK) { ret 3; }
+        contracts.Buffer{data: ?decoded[0], capacity: 128}, ?block) == contracts.OK) { ret 7; }
     if (pem.decode(contracts.Bytes{data: "-----BEGIN TEST-----\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAA\n-----END TEST-----\n"::*u8, len: 195},
-        contracts.Buffer{data: ?decoded[0], capacity: 128}, ?block) == contracts.OK) { ret 4; }
+        contracts.Buffer{data: ?decoded[0], capacity: 128}, ?block) == contracts.OK) { ret 8; }
     ret 0;
 }

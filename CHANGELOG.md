@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-23
+
+### Added
+
+- Moved SHA-256 and SHA-384 hashing out of `std` into `crypto.hash` alongside HMAC and HKDF.
+- Added targets for Windows ARM64, Linux RISC-V 32, WASI Preview 1 (`wasi-wasm32`), and freestanding architectures.
+
+### Changed
+
+- **Breaking:** Migrated the library manifest and source code to Mach 7 and `std` `^10.0.0`.
+- **Breaking:** Unified lifecycle naming, prefixed callback struct fields with `fn_`, and split operating-system allocator and entropy surfaces into `crypto.system`.
+
+### Fixed
+
+- Added stack reservation settings on freestanding targets and verified constant-time assurance checks natively on AArch64 hardware.
+
 ## [0.29.0] - 2026-10-23
 
 ### Added

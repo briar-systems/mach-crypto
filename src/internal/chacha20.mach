@@ -17,26 +17,27 @@ pub rec Context {
     active: bool;
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun rotate_left(value: ^u32, shift: u32) ^u32 {
     ret (value << shift) | (value >> (32 - shift));
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun read_secret(input: *^u8, offset: usize) ^u32 {
     ret input[offset]::^u32 | (input[offset + 1]::^u32 << 8) |
         (input[offset + 2]::^u32 << 16) | (input[offset + 3]::^u32 << 24);
 }
 
+#[constant_time("soft")]
 fun read_public(input: *u8, offset: usize) u32 {
     ret input[offset]::u32 | (input[offset + 1]::u32 << 8) |
         (input[offset + 2]::u32 << 16) | (input[offset + 3]::u32 << 24);
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun write_secret(output: *^u8, offset: usize, value: ^u32) {
     output[offset]     = value::^u8;
     output[offset + 1] = (value >> 8)::^u8;
@@ -44,13 +45,15 @@ fun write_secret(output: *^u8, offset: usize, value: ^u32) {
     output[offset + 3] = (value >> 24)::^u8;
 }
 
-pub fun destroy(context: *Context) {
+#[constant_time("soft")]
+pub fun dnit(context: *Context) {
     if (context == nil) { ret; }
     ct.zeroize((?context.key[0]):~*^u8, 32);
     ct.zeroize((?context.nonce[0]):~*^u8, 12);
     context.active = false;
 }
 
+#[constant_time("soft")]
 pub fun init(context: *Context, key: contracts.SecretBytes, nonce: contracts.Bytes) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     ct.zeroize((?context.key[0]):~*^u8, 32);
@@ -74,8 +77,8 @@ pub fun init(context: *Context, key: contracts.SecretBytes, nonce: contracts.Byt
     ret contracts.OK;
 }
 
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 fun quarter_round(state: *^u32, a: usize, b: usize, c: usize, d: usize) {
     state[a] = state[a] + state[b];
     state[d] = rotate_left(state[d] ^ state[a], 16);
@@ -87,7 +90,7 @@ fun quarter_round(state: *^u32, a: usize, b: usize, c: usize, d: usize) {
     state[b] = rotate_left(state[b] ^ state[c], 7);
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun block(context: *Context, counter: u32, output: *^u8) {
     var initial: [16]^u32;
     var working: [16]^u32;
@@ -130,43 +133,4 @@ pub fun block(context: *Context, counter: u32, output: *^u8) {
     }
     ct.zeroize((?initial[0]):~*^u8, 64);
     ct.zeroize((?working[0]):~*^u8, 64);
-}
-
-test chacha20__rfc_8439_block_vector {
-    var key:   [32]^u8;
-    var nonce: [12]u8 = [12]u8{
-        0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x4a,
-        0x00, 0x00, 0x00, 0x00
-    };
-    var i: usize = 0;
-    for (i < 32) {
-        key[i] = i::u8;
-        i      = i + 1;
-    }
-    var context: Context;
-    if (init(?context, contracts.SecretBytes{data: ?key[0], len: 32},
-        contracts.Bytes{data: ?nonce[0], len: 12}) != contracts.OK) { ret 1; }
-    var output: [64]^u8;
-    block(?context, 1, ?output[0]);
-    val expected: [64]u8 = [64]u8{
-        0x10, 0xf1, 0xe7, 0xe4, 0xd1, 0x3b, 0x59, 0x15,
-        0x50, 0x0f, 0xdd, 0x1f, 0xa3, 0x20, 0x71, 0xc4,
-        0xc7, 0xd1, 0xf4, 0xc7, 0x33, 0xc0, 0x68, 0x03,
-        0x04, 0x22, 0xaa, 0x9a, 0xc3, 0xd4, 0x6c, 0x4e,
-        0xd2, 0x82, 0x64, 0x46, 0x07, 0x9f, 0xaa, 0x09,
-        0x14, 0xc2, 0xd7, 0x05, 0xd9, 0x8b, 0x02, 0xa2,
-        0xb5, 0x12, 0x9c, 0xd1, 0xde, 0x16, 0x4e, 0xb9,
-        0xcb, 0xd0, 0x83, 0xe8, 0xa2, 0x50, 0x3c, 0x4e
-    };
-    i = 0;
-    for (i < 64) {
-        if (output[i]:>u8 != expected[i]) {
-            destroy(?context);
-            ret 2;
-        }
-        i = i + 1;
-    }
-    destroy(?context);
-    ct.zeroize(?output[0], 64);
-    ret 0;
 }

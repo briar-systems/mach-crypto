@@ -11,7 +11,7 @@ pub rec Key {
     h: [2]^u64;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun read_secret_u64_be(input: *^u8, offset: usize) ^u64 {
     var value: ^u64  = 0;
     var i:     usize = 0;
@@ -23,18 +23,19 @@ fun read_secret_u64_be(input: *^u8, offset: usize) ^u64 {
 }
 
 # install the 16-byte subkey, e(k, 0^128)
-#[oblivious]
+#[constant_time("soft")]
 pub fun expand(key: *Key, subkey: *^u8) {
     key.h[0] = read_secret_u64_be(subkey, 0);
     key.h[1] = read_secret_u64_be(subkey, 8);
 }
 
+#[constant_time("soft")]
 pub fun wipe(key: *Key) {
     ct.zeroize((?key.h[0]):~*^u8, 16);
 }
 
 # multiply the accumulator by h in gf(2^128) one bit at a time
-#[oblivious]
+#[constant_time("soft")]
 fun multiply(key: *Key, accumulator: *^u64) {
     var product_high:  ^u64 = 0;
     var product_low:   ^u64 = 0;
@@ -63,6 +64,7 @@ fun multiply(key: *Key, accumulator: *^u64) {
     multiple_low   = 0;
 }
 
+#[constant_time("soft")]
 fun read_u64_be(input: *u8, offset: usize) u64 {
     var value: u64   = 0;
     var i:     usize = 0;
@@ -74,7 +76,7 @@ fun read_u64_be(input: *u8, offset: usize) u64 {
 }
 
 # absorb `blocks` whole 16-byte blocks of public data
-#[oblivious]
+#[constant_time("soft")]
 pub fun absorb(key: *Key, accumulator: *^u64, data: *u8, blocks: usize) {
     var block: usize = 0;
     for (block < blocks) {

@@ -15,22 +15,22 @@ pub val HARDWARE: u8 = $mach.build.ct_mul(low, 64);
 pub val HARDWARE_WIDE: u8 = $mach.build.ct_mul(low, 128);
 
 # 1 where the sum of two limbs would carry
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun carry_of(left: ^u64, right: ^u64, sum: ^u64) ^u64 {
     ret ((left & right) | ((left | right) & ~sum)) >> 63;
 }
 
 # 1 where left - right - borrow would borrow
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun borrow_of(left: ^u64, right: ^u64, difference: ^u64) ^u64 {
     ret ((~left & right) | ((~left | right) & difference)) >> 63;
 }
 
 # low 64 bits of left * right, for right below 2^bits
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
     $if (HARDWARE == 1) {
         val mask: u64 = 0xFFFFFFFFFFFFFFFF >> (64 - bits);
@@ -42,7 +42,7 @@ pub fun multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
 }
 
 # the bit-serial reference: a masked add per multiplier bit, on every target
-#[oblivious]
+#[constant_time("soft")]
 pub fun serial_multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
     var product:    ^u64  = 0;
     var shifted:    ^u64  = left;
@@ -60,8 +60,8 @@ pub fun serial_multiply(left: ^u64, right: ^u64, $bits: usize) ^u64 {
 }
 
 # the full 128-bit product left * right
-#[oblivious]
-#[inline]
+#[constant_time("soft")]
+#[inline("always")]
 pub fun multiply_wide(left: ^u64, right: ^u64) ^u128 {
     $if (HARDWARE_WIDE == 1) {
         ret (left::^u128) * (right::^u128);
@@ -72,7 +72,7 @@ pub fun multiply_wide(left: ^u64, right: ^u64) ^u128 {
 }
 
 # the bit-serial reference for the full product, on every target
-#[oblivious]
+#[constant_time("soft")]
 pub fun serial_multiply_wide(left: ^u64, right: ^u64) ^u128 {
     var product:    ^u128 = 0;
     var shifted:    ^u128 = left::^u128;

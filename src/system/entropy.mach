@@ -1,0 +1,29 @@
+# the operating system's entropy source
+#
+# fills secret storage from the system's cryptographic random source through
+# std.crypto.rand.fill_secret. this module needs the entropy capability
+
+use crypto.secret;
+use std.io.error;
+use std.system.capability;
+use std.types.bool.true;
+use std.types.error.err;
+use std.types.size.usize;
+
+$if (capability.HAS_ENTROPY) {
+    use std.crypto.rand;
+}
+$or {
+    $error("crypto.system.entropy needs the entropy capability (std.system.capability.HAS_ENTROPY)");
+}
+
+fun fill(context: ptr, secret_context: *^u8, destination: *^u8, len: usize) i64 {
+    val err_filled: err[error.Error] = rand.fill_secret(destination, len);
+    if (sel err_filled.err) { ret -1; }
+    ret 0;
+}
+
+# construct the operating-system entropy source
+pub fun make() secret.Entropy {
+    ret secret.Entropy{context: nil, secret_context: nil, fn_fill: fill, initialized: true};
+}

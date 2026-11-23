@@ -42,7 +42,7 @@ pub fun extract_sha256(salt: contracts.SecretBytes, ikm: contracts.SecretBytes,
     ct.zeroize(?prk[0], SHA256_PRK_SIZE);
     val updated: contracts.Error = core.update256_secret(?context, ikm.data, ikm.len);
     if (updated != contracts.OK) {
-        core.destroy256(?context);
+        core.dnit256(?context);
         ct.zeroize(?prk[0], SHA256_PRK_SIZE);
         ret failed(updated);
     }
@@ -78,7 +78,7 @@ pub fun extract_sha384(salt: contracts.SecretBytes, ikm: contracts.SecretBytes,
     ct.zeroize(?prk[0], SHA384_PRK_SIZE);
     val updated: contracts.Error = core.update384_secret(?context, ikm.data, ikm.len);
     if (updated != contracts.OK) {
-        core.destroy384(?context);
+        core.dnit384(?context);
         ct.zeroize(?prk[0], SHA384_PRK_SIZE);
         ret failed(updated);
     }
@@ -118,7 +118,7 @@ pub fun expand_sha256(prk: contracts.SecretBytes, info: contracts.Bytes,
     if (prk.data == nil)                     { ret failed(contracts.INVALID_INPUT); }
     if (info.len != 0 && info.data == nil)   { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity > SHA256_MAX_OUTPUT) { ret failed(contracts.INVALID_INPUT); }
-    if (info.len::u64 > lift.SHA256_MAX_BYTES - sha256.BLOCK_SIZE - SHA256_PRK_SIZE - 1) {
+    if (info.len::u64 > lift.SHA256_MAX_BYTES - sha256.BLOCK_SIZE::u64 - SHA256_PRK_SIZE::u64 - 1) {
         ret failed(contracts.INVALID_INPUT);
     }
     if (output.capacity == 0) {
@@ -155,7 +155,7 @@ pub fun expand_sha256(prk: contracts.SecretBytes, info: contracts.Bytes,
         if (error == contracts.OK) { error = core.update256_public(?context, ?counter[0], 1); }
         if (error == contracts.OK) { error = core.final256(?context, ?block[0]); }
         if (error != contracts.OK) {
-            core.destroy256(?context);
+            core.dnit256(?context);
             wipe256(?key[0], ?previous[0], ?block[0]);
             ret failed(error);
         }
@@ -189,7 +189,7 @@ pub fun expand_sha384(prk: contracts.SecretBytes, info: contracts.Bytes,
     if (prk.data == nil)                     { ret failed(contracts.INVALID_INPUT); }
     if (info.len != 0 && info.data == nil)   { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity > SHA384_MAX_OUTPUT) { ret failed(contracts.INVALID_INPUT); }
-    if (info.len::u64 > lift.SHA384_MAX_BYTES - sha512.BLOCK_SIZE - SHA384_PRK_SIZE - 1) {
+    if (info.len::u64 > lift.SHA384_MAX_BYTES - sha512.BLOCK_SIZE::u64 - SHA384_PRK_SIZE::u64 - 1) {
         ret failed(contracts.INVALID_INPUT);
     }
     if (output.capacity == 0) {
@@ -226,7 +226,7 @@ pub fun expand_sha384(prk: contracts.SecretBytes, info: contracts.Bytes,
         if (error == contracts.OK) { error = core.update384_public(?context, ?counter[0], 1); }
         if (error == contracts.OK) { error = core.final384(?context, ?block[0]); }
         if (error != contracts.OK) {
-            core.destroy384(?context);
+            core.dnit384(?context);
             wipe384(?key[0], ?previous[0], ?block[0]);
             ret failed(error);
         }

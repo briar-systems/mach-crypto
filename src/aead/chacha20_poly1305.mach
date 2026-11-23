@@ -10,7 +10,7 @@ pub val KEY_SIZE:   usize = 32;
 pub val NONCE_SIZE: usize = 12;
 pub val TAG_SIZE:   usize = 16;
 
-pub val MAX_PLAINTEXT_SIZE: usize = 274877906880;
+pub val MAX_PLAINTEXT_SIZE: u64 = 274877906880;
 
 # seal writes ciphertext followed by the complete tag
 pub def SealFun: fun(contracts.SecretBytes, contracts.Bytes, contracts.Bytes,
@@ -24,9 +24,10 @@ fun failed(error: contracts.Error) contracts.Operation {
     ret contracts.Operation{error: error, written: 0};
 }
 
+#[constant_time("soft")]
 fun wipe_contexts(chacha: *stream.Context, poly: *mac.Context, key_block: *^u8, tag: *^u8) {
-    stream.destroy(chacha);
-    mac.destroy(poly);
+    stream.dnit(chacha);
+    mac.dnit(poly);
     ct.zeroize(key_block, 64);
     ct.zeroize(tag, 16);
 }
@@ -36,7 +37,7 @@ fun wipe_contexts(chacha: *stream.Context, poly: *mac.Context, key_block: *^u8, 
 # nonce must be exactly 12 bytes. output capacity must cover plaintext plus the
 # 16-byte tag. aad and nonce may overlap output because both are consumed before
 # the first output write. secret and public buffers cannot alias by contract.
-#[oblivious]
+#[constant_time("soft")]
 pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
     plaintext: contracts.SecretBytes, output: contracts.Buffer) contracts.Operation {
     if (key.len != KEY_SIZE)                          { ret failed(contracts.INVALID_KEY); }
@@ -44,16 +45,16 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     if (nonce.len != NONCE_SIZE || nonce.data == nil) { ret failed(contracts.INVALID_INPUT); }
     if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
     if (plaintext.len != 0 && plaintext.data == nil)  { ret failed(contracts.INVALID_INPUT); }
-    if (plaintext.len > MAX_PLAINTEXT_SIZE)           { ret failed(contracts.INVALID_INPUT); }
+    if (plaintext.len::u64 > MAX_PLAINTEXT_SIZE)      { ret failed(contracts.INVALID_INPUT); }
+    if (output.capacity < TAG_SIZE || output.capacity - TAG_SIZE < plaintext.len) {
+        ret failed(contracts.OUTPUT_TOO_SMALL);
+    }
     val required: usize = plaintext.len + TAG_SIZE;
-    if (output.capacity < required) { ret failed(contracts.OUTPUT_TOO_SMALL); }
-    if (output.data == nil)         { ret failed(contracts.INVALID_INPUT); }
+    if (output.data == nil) { ret failed(contracts.INVALID_INPUT); }
 
-    ct.begin();
     var chacha:       stream.Context;
     val stream_ready: contracts.Error = stream.init(?chacha, key, nonce);
     if (stream_ready != contracts.OK) {
-        ct.end();
         ret failed(stream_ready);
     }
     var key_block: [64]^u8;
@@ -66,7 +67,6 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
         contracts.SecretBytes{data: ?key_block[0], len: 32});
     if (mac_ready != contracts.OK) {
         wipe_contexts(?chacha, ?poly, ?key_block[0], ?tag[0]);
-        ct.end();
         ret failed(mac_ready);
     }
     ct.zeroize(?key_block[0], 64);
@@ -98,7 +98,6 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
         i                              = i + 1;
     }
     wipe_contexts(?chacha, ?poly, ?key_block[0], ?tag[0]);
-    ct.end();
     ret contracts.Operation{error: contracts.OK, written: required};
 }
 
@@ -108,7 +107,7 @@ pub fun seal(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
 # before any decryption. authentication failure writes no plaintext and clears
 # exactly the ciphertext-length prefix of output. successful output may overlap
 # the secret key because the stream context snapshots it before plaintext release.
-#[oblivious]
+#[constant_time("soft")]
 pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.Bytes,
     input: contracts.Bytes, output: contracts.SecretBuffer) contracts.Operation {
     if (key.len != KEY_SIZE)                          { ret failed(contracts.INVALID_KEY); }
@@ -117,15 +116,13 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     if (aad.len != 0 && aad.data == nil)              { ret failed(contracts.INVALID_INPUT); }
     if (input.len < TAG_SIZE || input.data == nil)    { ret failed(contracts.INVALID_INPUT); }
     val ciphertext_len: usize = input.len - TAG_SIZE;
-    if (ciphertext_len > MAX_PLAINTEXT_SIZE)       { ret failed(contracts.INVALID_INPUT); }
+    if (ciphertext_len::u64 > MAX_PLAINTEXT_SIZE)  { ret failed(contracts.INVALID_INPUT); }
     if (output.capacity < ciphertext_len)          { ret failed(contracts.OUTPUT_TOO_SMALL); }
     if (ciphertext_len != 0 && output.data == nil) { ret failed(contracts.INVALID_INPUT); }
 
-    ct.begin();
     var chacha:       stream.Context;
     val stream_ready: contracts.Error = stream.init(?chacha, key, nonce);
     if (stream_ready != contracts.OK) {
-        ct.end();
         ret failed(stream_ready);
     }
     var key_block: [64]^u8;
@@ -141,7 +138,6 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     if (mac_ready != contracts.OK) {
         wipe_contexts(?chacha, ?poly, ?key_block[0], ?expected[0]);
         ct.zeroize(?provided[0], 16);
-        ct.end();
         ret failed(mac_ready);
     }
     ct.zeroize(?key_block[0], 64);
@@ -159,7 +155,6 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     if (authenticated:>u8 != 1) {
         ct.zeroize(output.data, ciphertext_len);
         wipe_contexts(?chacha, ?poly, ?key_block[0], ?expected[0]);
-        ct.end();
         ret failed(contracts.AUTH_FAILED);
     }
     ct.zeroize(?expected[0], 16);
@@ -182,6 +177,5 @@ pub fun open(key: contracts.SecretBytes, nonce: contracts.Bytes, aad: contracts.
     }
     ct.zeroize(?keystream[0], 64);
     wipe_contexts(?chacha, ?poly, ?key_block[0], ?expected[0]);
-    ct.end();
     ret contracts.Operation{error: contracts.OK, written: ciphertext_len};
 }

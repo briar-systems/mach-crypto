@@ -16,8 +16,6 @@ use crypto.hash.sha512;
 use crypto.internal.lift;
 use std.crypto.ct;
 use std.types.bool.bool;
-use std.types.bool.false;
-use std.types.bool.true;
 use std.types.size.usize;
 
 pub val SHA256_DIGEST_SIZE: usize = 32;
@@ -53,7 +51,7 @@ pub fun empty_sha256() Sha256 {
 
 pub fun empty_sha384() Sha384 {
     var context: Sha384;
-    sha512.destroy_secret384(?context.inner);
+    sha512.secret384_dnit(?context.inner);
     context.state = EMPTY;
     ret context;
 }
@@ -66,6 +64,7 @@ fun valid_sha256(context: *Sha256) bool {
         (context.inner.total % sha256.BLOCK_SIZE::u64)::usize;
 }
 
+#[constant_time("soft")]
 fun valid_sha384(context: *Sha384) bool {
     ret context != nil && context.state == ACTIVE &&
         context.inner.buf_len < sha512.BLOCK_SIZE &&
@@ -73,19 +72,19 @@ fun valid_sha384(context: *Sha384) bool {
         (context.inner.total % sha512.BLOCK_SIZE::u64)::usize;
 }
 
-pub fun init_sha256(context: *Sha256) contracts.Error {
+pub fun sha256_init(context: *Sha256) contracts.Error {
     if (context == nil)         { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
-    context.inner = sha256.init();
+    context.inner = sha256.make();
     context.state = ACTIVE;
     ret contracts.OK;
 }
 
-pub fun init_sha384(context: *Sha384) contracts.Error {
+pub fun sha384_init(context: *Sha384) contracts.Error {
     if (context == nil)         { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY) { ret contracts.INVALID_STATE; }
-    sha512.destroy_secret384(?context.inner);
-    context.inner = sha512.init_secret384();
+    sha512.secret384_dnit(?context.inner);
+    context.inner = sha512.secret384_init();
     context.state = ACTIVE;
     ret contracts.OK;
 }
@@ -130,7 +129,7 @@ pub fun snapshot_sha256(context: *Sha256,
     ret contracts.Operation{error: contracts.OK, written: SHA256_DIGEST_SIZE};
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun snapshot_sha384(context: *Sha384,
     output: contracts.Buffer) contracts.Operation {
     if (context == nil) {
@@ -148,13 +147,13 @@ pub fun snapshot_sha384(context: *Sha384,
     var copy:   sha512.SecretState384 = context.inner;
     var digest: [48]^u8;
     sha512.final_secret384(?copy, ?digest[0]);
-    sha512.destroy_secret384(?copy);
+    sha512.secret384_dnit(?copy);
     var i: usize = 0;
     for (i < SHA384_DIGEST_SIZE) {
         output.data[i] = digest[i]:>u8;
         i              = i + 1;
     }
-    ct.zeroize(?digest[0], SHA384_DIGEST_SIZE);
+    $zeroize(?digest[0], SHA384_DIGEST_SIZE);
     ret contracts.Operation{error: contracts.OK, written: SHA384_DIGEST_SIZE};
 }
 
@@ -167,17 +166,17 @@ pub fun final_sha256(context: *Sha256,
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun final_sha384(context: *Sha384,
     output: contracts.Buffer) contracts.Operation {
     val result: contracts.Operation = snapshot_sha384(context, output);
     if (result.error != contracts.OK) { ret result; }
-    sha512.destroy_secret384(?context.inner);
+    sha512.secret384_dnit(?context.inner);
     context.state = EMPTY;
     ret result;
 }
 
-pub fun destroy_sha256(context: *Sha256) contracts.Error {
+pub fun sha256_dnit(context: *Sha256) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     val valid: bool = context.state == EMPTY || context.state == ACTIVE;
     clear_sha256(?context.inner);
@@ -186,10 +185,10 @@ pub fun destroy_sha256(context: *Sha256) contracts.Error {
     ret contracts.OK;
 }
 
-pub fun destroy_sha384(context: *Sha384) contracts.Error {
+pub fun sha384_dnit(context: *Sha384) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     val valid: bool = context.state == EMPTY || context.state == ACTIVE;
-    sha512.destroy_secret384(?context.inner);
+    sha512.secret384_dnit(?context.inner);
     context.state = EMPTY;
     if (!valid) { ret contracts.INVALID_STATE; }
     ret contracts.OK;
@@ -228,13 +227,14 @@ pub fun empty_blake2b() Blake2b {
 
 pub fun empty_blake2b_secret() Blake2bSecret {
     var context: Blake2bSecret;
-    blake2b.destroy_secret(?context.inner);
+    blake2b.secret_dnit(?context.inner);
     context.state = EMPTY;
     ret context;
 }
 
 # the counter holds only compressed blocks, and a block is compressed only
 # when input follows it, so a state past its first block always holds input
+#[constant_time("soft")]
 fun valid_blake2b_inner[S](inner: *S) bool {
     ret inner.buf_len <= blake2b.BLOCK_SIZE && inner.digest_len >= 1 &&
         inner.digest_len <= blake2b.MAX_DIGEST_SIZE &&
@@ -247,17 +247,18 @@ fun valid_blake2b(context: *Blake2b) bool {
         valid_blake2b_inner[blake2b.State](?context.inner);
 }
 
+#[constant_time("soft")]
 fun valid_blake2b_secret(context: *Blake2bSecret) bool {
     ret context != nil && context.state == ACTIVE &&
         valid_blake2b_inner[blake2b.SecretState](?context.inner);
 }
 
 # activate an empty context with a parameter block, see `blake2b.params`
-pub fun init_blake2b(context: *Blake2b, params: blake2b.Params) contracts.Error {
+pub fun blake2b_init(context: *Blake2b, params: blake2b.Params) contracts.Error {
     if (context == nil)          { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY)  { ret contracts.INVALID_STATE; }
     if (!blake2b.valid(?params)) { ret contracts.INVALID_INPUT; }
-    context.inner = blake2b.init(?params);
+    context.inner = blake2b.make(?params);
     context.state = ACTIVE;
     ret contracts.OK;
 }
@@ -265,15 +266,15 @@ pub fun init_blake2b(context: *Blake2b, params: blake2b.Params) contracts.Error 
 # activate an empty secret context, keyed when the key is not empty
 #
 # the key is 0..64 bytes and is held as the first block until input follows
-pub fun init_blake2b_secret(context: *Blake2bSecret, params: blake2b.Params,
+pub fun blake2b_secret_init(context: *Blake2bSecret, params: blake2b.Params,
     key: contracts.SecretBytes) contracts.Error {
     if (context == nil)                  { ret contracts.INVALID_INPUT; }
     if (context.state != EMPTY)          { ret contracts.INVALID_STATE; }
     if (!blake2b.valid(?params))         { ret contracts.INVALID_INPUT; }
     if (key.len != 0 && key.data == nil) { ret contracts.INVALID_INPUT; }
     if (key.len > BLAKE2B_MAX_KEY_SIZE)  { ret contracts.INVALID_KEY; }
-    blake2b.destroy_secret(?context.inner);
-    context.inner = blake2b.init_secret(?params, key.data, key.len);
+    blake2b.secret_dnit(?context.inner);
+    context.inner = blake2b.secret_init(?params, key.data, key.len);
     context.state = ACTIVE;
     ret contracts.OK;
 }
@@ -318,7 +319,7 @@ pub fun snapshot_blake2b(context: *Blake2b,
 }
 
 # write the secret digest of the input so far without changing the context
-#[oblivious]
+#[constant_time("soft")]
 pub fun snapshot_blake2b_secret(context: *Blake2bSecret,
     output: contracts.SecretBuffer) contracts.Operation {
     if (context == nil)                             { ret failed(contracts.INVALID_INPUT); }
@@ -329,7 +330,7 @@ pub fun snapshot_blake2b_secret(context: *Blake2bSecret,
     var copy:       blake2b.SecretState = context.inner;
     var digest:     [64]^u8;
     blake2b.final_secret(?copy, ?digest[0]);
-    blake2b.destroy_secret(?copy);
+    blake2b.secret_dnit(?copy);
     var i: usize = 0;
     for (i < digest_len) {
         output.data[i] = digest[i];
@@ -348,17 +349,17 @@ pub fun final_blake2b(context: *Blake2b,
     ret result;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun final_blake2b_secret(context: *Blake2bSecret,
     output: contracts.SecretBuffer) contracts.Operation {
     val result: contracts.Operation = snapshot_blake2b_secret(context, output);
     if (result.error != contracts.OK) { ret result; }
-    blake2b.destroy_secret(?context.inner);
+    blake2b.secret_dnit(?context.inner);
     context.state = EMPTY;
     ret result;
 }
 
-pub fun destroy_blake2b(context: *Blake2b) contracts.Error {
+pub fun blake2b_dnit(context: *Blake2b) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     val valid: bool = context.state == EMPTY || context.state == ACTIVE;
     clear_blake2b(?context.inner);
@@ -367,10 +368,10 @@ pub fun destroy_blake2b(context: *Blake2b) contracts.Error {
     ret contracts.OK;
 }
 
-pub fun destroy_blake2b_secret(context: *Blake2bSecret) contracts.Error {
+pub fun blake2b_secret_dnit(context: *Blake2bSecret) contracts.Error {
     if (context == nil) { ret contracts.INVALID_INPUT; }
     val valid: bool = context.state == EMPTY || context.state == ACTIVE;
-    blake2b.destroy_secret(?context.inner);
+    blake2b.secret_dnit(?context.inner);
     context.state = EMPTY;
     if (!valid) { ret contracts.INVALID_STATE; }
     ret contracts.OK;
@@ -383,15 +384,15 @@ pub fun destroy_blake2b_secret(context: *Blake2bSecret) contracts.Error {
 pub fun digest_blake2b(params: blake2b.Params, input: contracts.Bytes,
     output: contracts.Buffer) contracts.Operation {
     var context:     Blake2b         = empty_blake2b();
-    val initialized: contracts.Error = init_blake2b(?context, params);
+    val initialized: contracts.Error = blake2b_init(?context, params);
     if (initialized != contracts.OK) { ret failed(initialized); }
     val updated: contracts.Error = update_blake2b(?context, input);
     if (updated != contracts.OK) {
-        destroy_blake2b(?context);
+        blake2b_dnit(?context);
         ret failed(updated);
     }
     val result: contracts.Operation = final_blake2b(?context, output);
-    destroy_blake2b(?context);
+    blake2b_dnit(?context);
     ret result;
 }
 
@@ -402,15 +403,15 @@ pub fun digest_blake2b(params: blake2b.Params, input: contracts.Bytes,
 pub fun mac_blake2b_secret(params: blake2b.Params, key: contracts.SecretBytes,
     message: contracts.Bytes, output: contracts.SecretBuffer) contracts.Operation {
     var context:     Blake2bSecret   = empty_blake2b_secret();
-    val initialized: contracts.Error = init_blake2b_secret(?context, params, key);
+    val initialized: contracts.Error = blake2b_secret_init(?context, params, key);
     if (initialized != contracts.OK) { ret failed(initialized); }
     val updated: contracts.Error = update_blake2b_public(?context, message);
     if (updated != contracts.OK) {
-        destroy_blake2b_secret(?context);
+        blake2b_secret_dnit(?context);
         ret failed(updated);
     }
     val result: contracts.Operation = final_blake2b_secret(?context, output);
-    destroy_blake2b_secret(?context);
+    blake2b_secret_dnit(?context);
     ret result;
 }
 

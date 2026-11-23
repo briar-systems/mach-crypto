@@ -1,0 +1,7 @@
+# the operating-system surface of mach-crypto: the locked secret allocators
+# need the pages capability and the entropy source the entropy capability
+
+use std.runtime;
+
+fwd crypto.system.allocator;
+fwd crypto.system.entropy;

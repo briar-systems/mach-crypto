@@ -48,6 +48,7 @@ pub fun cursor(input: contracts.Bytes) Cursor {
     ret Cursor{input: input, offset: 0, depth: 0};
 }
 
+#[constant_time("soft")]
 pub fun secret_cursor(input: contracts.SecretBytes) SecretCursor {
     ret SecretCursor{input: input, offset: 0, depth: 0};
 }
@@ -56,6 +57,7 @@ pub fun complete(value: *Cursor) bool {
     ret value != nil && value.offset == value.input.len;
 }
 
+#[constant_time("soft")]
 pub fun secret_complete(value: *SecretCursor) bool {
     ret value != nil && value.offset == value.input.len;
 }
@@ -105,7 +107,7 @@ fun valid_public_content(tag: Tag, data: *u8, len: usize) bool {
     ret true;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun valid_secret_content(tag: Tag, data: *^u8, len: usize) bool {
     if (len > 0 && data == nil) { ret false; }
     if (tag == BOOLEAN) {
@@ -170,7 +172,7 @@ fun read_length(data: *u8, available: usize, length: *usize,
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun read_secret_length(data: *^u8, available: usize, length: *usize,
     width: *usize) contracts.Error {
     if (available == 0 || data == nil || length == nil || width == nil) {
@@ -233,7 +235,7 @@ pub fun next(value: *Cursor, output: *Element) contracts.Error {
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun next_secret(value: *SecretCursor, output: *SecretElement) contracts.Error {
     if (value == nil || output == nil || value.offset > value.input.len ||
         value.depth > MAX_DEPTH) { ret contracts.INVALID_INPUT; }
@@ -282,7 +284,7 @@ fun validate_public_tree(input: contracts.Bytes, depth: usize) bool {
     ret true;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 fun validate_secret_tree(input: contracts.SecretBytes, depth: usize) bool {
     if (depth > MAX_DEPTH) { ret false; }
     var value: SecretCursor = secret_cursor(input);
@@ -311,7 +313,7 @@ pub fun exact(input: contracts.Bytes, output: *Element) contracts.Error {
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun exact_secret(input: contracts.SecretBytes,
     output: *SecretElement) contracts.Error {
     if (output == nil) { ret contracts.INVALID_INPUT; }
@@ -336,6 +338,7 @@ pub fun enter(parent: *Cursor, element: *Element,
     ret contracts.OK;
 }
 
+#[constant_time("soft")]
 pub fun enter_secret(parent: *SecretCursor, element: *SecretElement,
     child: *SecretCursor) contracts.Error {
     if (parent == nil || element == nil || child == nil ||
@@ -362,7 +365,7 @@ pub fun positive_integer(element: *Element, output: *contracts.Bytes) contracts.
     ret contracts.OK;
 }
 
-#[oblivious]
+#[constant_time("soft")]
 pub fun positive_secret_integer(element: *SecretElement,
     output: *contracts.SecretBytes) contracts.Error {
     if (element == nil || output == nil || element.tag != INTEGER ||

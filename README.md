@@ -8,7 +8,10 @@ state machines belong in protocol repositories such as `mach-tls`.
 ## Modules
 
 - `crypto.secret` owns allocated secret storage, bounded views, explicit moves,
-  allocating clones, entropy initialization, and deterministic destruction.
+  allocating clones, entropy initialization, and deterministic destruction,
+  over an allocator and entropy source the caller supplies.
+- `crypto.system.allocator` and `crypto.system.entropy` supply the operating
+  system's locked secret allocators and its entropy source.
 - `crypto.hash` provides incremental SHA-256 and SHA-384 transcript hashing,
   and BLAKE2b with keyed, salted, personalized and tree modes.
 - `crypto.hmac` provides one-shot HMAC-SHA-256 and HMAC-SHA-384, with public or
@@ -28,8 +31,20 @@ state machines belong in protocol repositories such as `mach-tls`.
 - `crypto.vectors` defines a common test vector contract.
 - `crypto.assurance` publishes the validation state of this package.
 
-`use crypto;` binds `crypto.lib.crypto`, which re-exports these modules for
-consumers that prefer one import.
+## What each module needs
+
+Every module but the two under `crypto.system` needs nothing but the processor
+and builds on every target the manifest declares, the freestanding and uefi
+targets included. `crypto.system.allocator` needs the pages capability and
+`crypto.system.entropy` the entropy capability (`std.system.capability`). On a
+target without one, the module refuses with a single diagnostic naming it, and
+no other module imports either, so a program that does not use them never
+reaches the operating system through this package. It touches no files.
+
+The `crypto` artifact (`crypto.lib.crypto`)
+re-exports the portable modules and builds for every declared target. The
+`system` artifact (`crypto.lib.system`) re-exports the two operating-system
+modules and builds for the targets that have both capabilities.
 
 ## Secret ownership
 
@@ -49,9 +64,9 @@ allocator `secret.init` zeroes the allocation.
 not outlive its owner or any move or destroy operation. Exactly one layer wipes
 each release. An allocator whose `wipes_on_release` is set wipes the whole span
 before every release attempt and leaves zeroed storage when the attempt fails,
-so `secret.destroy` hands it the storage untouched. The system allocators set
+so `secret.dnit` hands it the storage untouched. The system allocators set
 it, because `std.memory.secret` already wipes on release. For any other
-allocator `secret.destroy` wipes storage immediately before every release
+allocator `secret.dnit` wipes storage immediately before every release
 attempt, and if the deallocator mutates the allocation and fails while
 retaining ownership, wipes it again before returning. Either way the owner
 remains in a wiped cleanup-pending state, and a later destroy retries with
@@ -60,7 +75,7 @@ fully zeroed storage.
 `crypto.secret.SecretArray[T]` owns a dynamically sized typed allocation while
 preserving every field's secrecy shape. Initialize an owner with
 `secret.empty_array[T]`, construct the native allocator with
-`secret.system_array_allocator[T]`, and call `secret.init_array[T]` with the
+`crypto.system.allocator.make_array[T]` (or supply your own), and call `secret.array_init[T]` with the
 element count. `secret.array_data[T]` returns `*T` only while the owner is
 active. No raw pointer or declassification cast is needed for directly secret
 values or records with deeply nested secret fields.
@@ -68,17 +83,18 @@ values or records with deeply nested secret fields.
 Array initialization checks `count * $size_of(T)`, supplies `$align_of(T)` to
 the typed allocator, and returns the complete allocation zeroed, zeroing it
 itself unless the allocator sets `zeroes_on_allocate`. A zero-count
-array is active with nil data and acquires no allocation. `destroy_array[T]`
+array is active with nil data and acquires no allocation. `array_dnit[T]`
 splits the release wipe the same way. A wiping allocator zeroes every element
-itself, and for any other allocator `destroy_array[T]` wipes all elements before
+itself, and for any other allocator `array_dnit[T]` wipes all elements before
 every release attempt and rewipes any callback mutation after a failed one. A
 failed release then retains the typed pointer, count, byte size, allocator,
 and cleanup-pending state for retry. Custom `ArrayAllocator[T]` callbacks follow
 the same ownership contract. A nonnil output transfers the full requested
 allocation even when allocation reports failure.
 
-The native allocator and entropy source delegate to `mach-std` secret-welded OS
-primitives. Storage remains secret-welded through every native boundary,
+The native allocators (`crypto.system.allocator.make` and `make_array[T]`) and
+entropy source (`crypto.system.entropy.make`) delegate to `mach-std`
+secret-welded OS primitives. Storage remains secret-welded through every native boundary,
 std's allocation begins zeroed, which is the only allocation zeroing on this
 path, entropy fills are complete or leave a fully wiped
 destination, and std's release wipes before returning storage to the operating
@@ -131,9 +147,9 @@ the private exponent first, so private output may overlap the owning key.
 Overlapping public RSA outputs are rejected.
 
 Private keys are move-only by contract and must be released with
-`keys.destroy_private`. A failed allocation or parse normally leaves the output
+`keys.private_dnit`. A failed allocation or parse normally leaves the output
 empty. If cleanup deallocation fails, the output retains wiped cleanup-pending
-storage while the primary error is returned. Call `destroy_private` after that
+storage while the primary error is returned. Call `private_dnit` after that
 failure to retry release. Serialization reproduces the exact accepted DER, not
 a reconstructed variant. Public SPKI views borrow the caller's DER or PEM
 scratch buffer and must not outlive it.
@@ -154,7 +170,7 @@ writes the digest and consumes the state only after successful output.
 Validation, capacity, and length-overflow failures leave both state and output
 unchanged.
 
-`destroy_sha256` and `destroy_sha384` zeroize the complete state and are
+`sha256_dnit` and `sha384_dnit` zeroize the complete state and are
 idempotent. A destroyed state rejects update, snapshot, and final, but can be
 activated again with `init`. This supports the TLS HelloRetryRequest transcript
 rewrite without exposing the underlying state. State records are opaque and
@@ -175,12 +191,12 @@ not a truncation of a 64-byte digest. The byte counter is the full 128 bits of
 the specification, so no input length overflows it.
 
 `hash.Blake2b` hashes public input under any parameter block. It follows the
-transcript contract above: `empty_blake2b`, `init_blake2b`, `update_blake2b`,
-`snapshot_blake2b`, `final_blake2b` and `destroy_blake2b`. `snapshot` and
+transcript contract above: `empty_blake2b`, `blake2b_init`, `update_blake2b`,
+`snapshot_blake2b`, `final_blake2b` and `blake2b_dnit`. `snapshot` and
 `final` write exactly the configured digest length. `hash.digest_blake2b` is
 the one-shot form, and its output may overlap its input.
 
-`hash.Blake2bSecret` runs on the secret-typed state. `init_blake2b_secret`
+`hash.Blake2bSecret` runs on the secret-typed state. `blake2b_secret_init`
 takes a secret key of 0 to 64 bytes, where an empty key is unkeyed hashing of
 secret input. Longer keys are rejected with `INVALID_KEY`. Input arrives as
 secret bytes through `update_blake2b_secret` or as public bytes through
@@ -274,7 +290,7 @@ picks them where the processor has the extensions, which `std.system.cpu`
 reports (or the build target selects, in which case nothing is probed), and
 the AES and GHASH members are chosen independently. The hardware kernels are
 fixed instruction streams with no branch or secret address, checked by
-`#[oblivious]`, and GHASH reduces with shifts in the bit-reflected form of
+`#[constant_time("soft")]`, and GHASH reduces with shifts in the bit-reflected form of
 Intel's carry-less multiply white paper.
 
 ## AES block cipher
@@ -481,7 +497,7 @@ and independent review as distinct evidence layers.
 `tools/assurance run` is the fail-closed release evidence gate. It runs the
 functional, official-vector, differential, invalid-input, leakage, and
 zeroization layers independently. It then performs two clean builds of every
-project for all six targets in debug and release mode with verified IR and
+project for every declared target in debug and release mode with verified IR and
 emitted assembly. The two artifact sets must be byte-for-byte identical.
 
 A successful run publishes an immutable machine-readable evidence directory
