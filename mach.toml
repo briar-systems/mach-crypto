@@ -1,6 +1,6 @@
 [project]
 id = "crypto"
-version = "0.29.0"
+version = "0.30.0"
 mach = "^7.0.0-rc.1"
 src = "src"
 work = "out/{target.name}/{profile.name}"
@@ -144,4 +144,4 @@ simd = "scalarize"
 
 [dep.std]
 git = "https://github.com/briar-systems/mach-std"
-ref = "branch/dev"
+version = "^10.0.0"
